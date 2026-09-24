@@ -52,6 +52,9 @@ const LUCKY = [
   { name: 'Drive', draw: drawDriveLogo, speed: 560, life: 0.9, r: 13, hits: 2, every: 0.18, damage: 4, kb: { base: 30, growth: 55, angle: 40 } },
 ];
 
+// holding a grabbed target: both floating hands out in front, clamped on its near side (carry = where its bottom-centre goes)
+const A_HOLD = { rot: -0.04, swing: [1.35, 1.25], reach: [30, 4], legs: [[-3, 0], [-2, 0], [1, 0], [2, 0]], carry: [56, -4, 0] };
+
 const ANDROID_MOVESET = {
   movement: MOVESET.movement,
 
@@ -291,6 +294,105 @@ const ANDROID_MOVESET = {
         if (f >= 10) { const h = Math.sin(f * 0.5); p.sy += 0.012 * h; p.zap = f % 20 < 3 ? 0.4 : 0; } // humming, the odd crackle
         return { ...p, cable: Math.min(1, f / 8), batt: Math.min(1, Math.max(0, (f - 10) / 90)) }; // batt: the viewer's; the game shows the real level
       },
+    },
+  },
+
+  // grabs (G / U), laid out like Claw'd's: a grab that connects holds the target (carry = [dx, dy, rot] of its bottom-centre) until it
+  // breaks free; light pummels, a direction throws, letting go on the startup frame
+  grabs: {
+    grab: { // Circle to Search: the front hand loops a glowing scribble round whatever's just ahead, and it's caught
+      input: 'grab (G / U)', startup: 7, active: 4, endlag: 22, hitbox: { x: 16, y: -68, w: 60, h: 64 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [3, { x: -1, rot: -0.06, swing: [0.2, 2.3], reach: [0, 2] }],
+          [7, { x: 4, sx: 1.06, sy: 0.95, rot: 0.1, swing: [0.9, 1.9], reach: [10, 10], legs: [[-4, 0], [-3, 0], [2, 0], [4, 0]] }],
+          [11, { x: 4, sx: 1.05, sy: 0.96, rot: 0.09, swing: [0.9, 1.8], reach: [10, 9], legs: [[-4, 0], [-3, 0], [2, 0], [4, 0]] }],
+          [18, { x: 2, rot: 0.04, swing: [0.4, 1], reach: [3, 3] }],
+          [33, {}],
+        ]),
+        circle: [46, -36, 30, Math.min(1, Math.max(0, (f - 2) / 5)), f < 11 ? 1 : Math.max(0, 1 - (f - 11) / 8)],
+      }),
+    },
+    dashGrab: { // out of a run: lunges in circling as it goes, sliding on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 16, y: -68, w: 74, h: 64 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, { y: -3, rot: 0.12, legs: [[0, -2], [0, 3], [0, -2], [0, 3]] }], // = run frame 0
+          [5, { x: -2, sx: 1.06, sy: 0.92, rot: -0.04, swing: [0.2, 2.3], reach: [0, 2] }],
+          [9, { x: 12, y: -2, sx: 1.18, sy: 0.86, rot: 0.18, swing: [1, 1.9], reach: [12, 12], legs: [[-10, 2], [-8, 2], [3, 2], [6, 1]] }],
+          [12, { x: 14, sx: 1.16, sy: 0.87, rot: 0.16, swing: [1, 1.8], reach: [12, 11], legs: [[-10, 1], [-8, 1], [3, 1], [6, 0]] }],
+          [24, { x: 8, sx: 1.04, sy: 0.96, rot: 0.06, swing: [0.4, 0.9], reach: [4, 3] }],
+          [40, {}],
+        ]),
+        circle: [54, -36, 32, Math.min(1, Math.max(0, (f - 4) / 5)), f < 13 ? 1 : Math.max(0, 1 - (f - 13) / 8)],
+        speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null,
+      }),
+    },
+    hold: { // got it: both floating hands clamped on the front of it, leaning back a little
+      input: 'grab connects', frames: 60, breakFree: 90, perDmg: 1.2,
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return { ...A_HOLD, rot: -0.04 + 0.02 * b, sy: 1 - 0.012 * b, carry: [56, -4 + b, 0] };
+      },
+    },
+    pummel: { // reCAPTCHA: the front hand comes down and stamps an "I'm not a robot" box onto it, ticked
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      anim: f => ({
+        ...tween(f, [
+          [0, A_HOLD],
+          [4, { ...A_HOLD, rot: -0.1, swing: [1.35, 2.7], reach: [30, 4], arm: [0, -6] }],
+          [5, { ...A_HOLD, rot: 0.08, sy: 0.95, swing: [1.35, 1.5], reach: [30, 14], carry: [58, -2, 0.04] }],
+          [16, A_HOLD],
+        ]),
+        captcha: [56, -46, f < 5 ? 0 : Math.min(1, (f - 5) / 3), Math.max(0, Math.min(1, f / 2, (16 - f) / 4)), f < 5 ? 1.35 - 0.07 * f : 1],
+      }),
+    },
+    forwardThrow: { // next tab: a Chrome tab strip pops up over it, and a forward swipe flicks it on into the next tab
+      input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['Ctrl+Tab', '→ next tab'], keys: [
+        [0, A_HOLD],
+        [7, { x: -4, rot: -0.16, sx: 0.95, sy: 1.05, swing: [1, 0.5], reach: [18, -6], legs: legsAll(2, 0), carry: [42, -8, -0.12] }],
+        [10, { x: 6, rot: 0.2, sx: 1.16, sy: 0.88, swing: [1.8, 1.8], reach: [40, 16], legs: [[-8, 0], [-6, 0], [2, 0], [4, 0]], carry: [86, -14, 0.2] }],
+        [16, { x: 5, rot: 0.14, sx: 1.1, sy: 0.92, swing: [1.6, 1.6], reach: [30, 10] }],
+        [29, {}],
+      ], extra: f => ({ tabs: [56, -114, Math.min(1, Math.max(0, (f - 7) / 5)), Math.max(0, Math.min(1, f / 3, (26 - f) / 6))], speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
+    },
+    backThrow: { // previous tab: hoists it overhead and swipes it back over into the tab behind
+      input: 'back (holding)', startup: 14, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: throwAnim({ at: 14, n: 35, fly: [-12, -4, -0.15], say: ['Ctrl+Shift+Tab', '← previous tab'], keys: [
+        [0, A_HOLD],
+        [6, { rot: -0.1, sx: 0.92, sy: 1.1, swing: [2.6, 2.6], reach: [20, -4], carry: [24, -62, -0.6] }],
+        [11, { rot: -0.3, sx: 0.96, sy: 1.06, swing: [3.6, 3.6], reach: [8, -10], carry: [-30, -58, -2] }],
+        [14, { rot: -0.42, sx: 1.08, sy: 0.92, swing: [4.3, 4.3], reach: [0, -14], carry: [-64, -18, -3] }],
+        [20, { rot: -0.28, sx: 1.06, sy: 0.94, swing: [3.4, 3.4], reach: [0, -8] }],
+        [35, {}],
+      ], extra: f => ({ tabs: [0, -174, -Math.min(1, Math.max(0, (f - 8) / 6)), Math.max(0, Math.min(1, f / 3, (30 - f) / 6))] }) }),
+    },
+    upThrow: { // Drive upload: hoists it overhead under a Drive cloud, the upload bar fills, and it's backed up straight into the sky
+      input: 'up (holding)', startup: 18, active: 1, endlag: 18, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: throwAnim({ at: 18, n: 37, fly: [0, -14, 0.05], say: ['Backing up…', '✓ Backed up'], keys: [
+        [0, A_HOLD],
+        [6, { sx: 0.94, sy: 1.08, swing: [2.9, 2.9], reach: [18, -18], carry: [0, -66, 0] }],
+        [15, { sx: 0.95, sy: 1.07, swing: [2.95, 2.95], reach: [18, -18], carry: [0, -68, 0] }],
+        [18, { y: -3, sx: 0.88, sy: 1.14, swing: [3.1, 3.1], reach: [20, -20], zap: 1, carry: [0, -86, 0] }],
+        [24, { sx: 0.96, sy: 1.05, swing: [2.6, 2.6], reach: [12, -12], zap: 0.3 }],
+        [37, {}],
+      ], extra: f => ({ cloud: [0, -204, Math.min(1, Math.max(0, (f - 6) / 12)), Math.max(0, Math.min(1, (f - 2) / 4, (34 - f) / 6))] }) }),
+    },
+    downThrow: { // Uninstall: a trash can pops up in front, Android lifts it high and slams it in, and it bounces back out
+      input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['Uninstall?', '🗑 Uninstalled'], keys: [
+        [0, A_HOLD],
+        [6, { y: -6, sx: 0.9, sy: 1.12, swing: [2.8, 2.8], reach: [20, -6], carry: [36, -64, 0] }],
+        [11, { y: -10, sx: 0.92, sy: 1.1, swing: [2.9, 2.9], reach: [20, -6], carry: [46, -74, 0.1] }],
+        [14, { rot: 0.15, sx: 1.25, sy: 0.75, swing: [1.2, 1.2], reach: [30, 10], carry: [64, -8, 0] }],
+        [22, { rot: 0.05, sx: 1.08, sy: 0.92, swing: [1, 1], reach: [14, 4] }],
+        [35, {}],
+      ], extra: f => ({
+        trash: [64, 0, f < 4 ? f / 4 : f < 14 ? 1 : f < 17 ? 0 : 0.25 * Math.max(0, 1 - (f - 17) / 6), Math.max(0, Math.min(1, f / 3, (32 - f) / 5))],
+        puff: f >= 14 ? (f - 14) / 10 : null,
+      }) }),
     },
   },
 

@@ -8,6 +8,10 @@
 //   bar = [length px, typed 0 … 1, query] a Google search bar held out past the front fist, its query typed that far
 //   item = [x, y, spin, which] a Google app held (I'm Feeling Lucky), centre x, y px from the feet: which indexes ANDROID_ITEMS
 //   chrome = spin: curled up into a rolling Chrome ball instead (side special) · vanish = 0 … 1 thinned out to nothing (warping)
+//   grab / throw props, each at [x, y] px from the feet (facing its way, not leaning with the body), then:
+//     circle = [x, y, r, drawn 0 … 1, alpha] a Circle to Search scribble · captcha = [x, y, tick 0 … 1, alpha, scale] a reCAPTCHA box
+//     tabs = [x, y, slide -1 … 1, alpha] a Chrome tab strip, the open tab sliding that far (+ = forward) · cloud = [x, y, upload 0 … 1, alpha]
+//     a Drive cloud over an upload bar · trash = [x, y, lid 0 … 1 open, alpha] a trash can, bottom-centre at x, y
 //   cable = 0 … 1 a USB-C cable plugging into its back · batt = 0 … 1 a battery over its head (bigger, with a bolt, while plugged in)
 //   dino = [x, y, alpha] the Chrome T-rex, bottom-centre x, y px from the feet (it doesn't lean with the body)
 //   earth = 0 … 1 a shockwave spreading along the floor both ways, throwing up map tiles (past 1: settling, gone at 1.8)
@@ -70,6 +74,83 @@ function drawAndroid(cx, bottom, pose = {}, face = 1) {
   ctx.restore();
   if (pose.dino?.[2] > 0) drawDino(cx + pose.dino[0] * face, bottom + pose.dino[1], face, pose.dino[2]);
   if (pose.item) ANDROID_ITEMS[pose.item[3] || 0](cx + pose.item[0] * face, bottom + pose.item[1], 12, pose.item[2] * face);
+  const at = ([x, y, ...rest]) => [cx + x * face, bottom + y, ...rest]; // a prop's spot, facing Android's way
+  if (pose.trash) drawTrash(...at(pose.trash));
+  if (pose.circle) drawSearchCircle(...at(pose.circle));
+  if (pose.captcha) drawCaptcha(...at(pose.captcha));
+  if (pose.tabs) { const [x, y, slide, a] = at(pose.tabs); drawTabStrip(x, y, slide * face, a); }
+  if (pose.cloud) drawDriveCloud(...at(pose.cloud));
+}
+
+// Circle to Search: a glowing scribble in Google's colours looping round x, y, drawn that far (a little past a full turn), over a white glow
+function drawSearchCircle(x, y, r, drawn, alpha = 1) {
+  if (drawn <= 0 || alpha <= 0) return;
+  const pts = [], end = drawn * 2.25 * Math.PI;
+  for (let a = 0; a <= end; a += 0.12) { const k = r * (1 + 0.07 * Math.sin(3 * a) + 0.04 * a); pts.push([x + Math.cos(a - 2) * k, y + Math.sin(a - 2) * k * 0.9]); }
+  if (pts.length < 2) return;
+  const g = ctx.createConicGradient(0, x, y);
+  [GOOGLE[0], GOOGLE[1], GOOGLE[2], GOOGLE[3], GOOGLE[0]].forEach((c, i) => g.addColorStop(i / 4, c));
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.lineCap = ctx.lineJoin = 'round';
+  for (const [lw, st] of [[8, 'rgba(255,255,255,0.8)'], [3.6, g]]) {
+    ctx.lineWidth = lw; ctx.strokeStyle = st; ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// the reCAPTCHA box, centred at x, y: a checkbox (ticked that far, in green), "I'm not a robot", the blue swirl; scale > 1 = stamping down
+function drawCaptcha(x, y, tick, alpha = 1, scale = 1) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.fillStyle = '#f9f9f9'; ctx.strokeStyle = '#b8b8b8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(-32, -10, 64, 20, 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#8a8a8a'; ctx.beginPath(); ctx.roundRect(-28, -5, 10, 10, 1.5); ctx.fill(); ctx.stroke();
+  if (tick > 0) { // the tick draws in: down the short stroke, up the long one
+    const p = [[-26.5, 0], [-23.5, 3], [-17, -6]], k = Math.min(1, tick) * 2;
+    ctx.strokeStyle = '#0f9d58'; ctx.lineWidth = 2.4; ctx.lineCap = ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(...p[0]);
+    ctx.lineTo(p[0][0] + (p[1][0] - p[0][0]) * Math.min(1, k), p[0][1] + (p[1][1] - p[0][1]) * Math.min(1, k));
+    if (k > 1) ctx.lineTo(p[1][0] + (p[2][0] - p[1][0]) * (k - 1), p[1][1] + (p[2][1] - p[1][1]) * (k - 1));
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#333'; ctx.font = '5.5px sans-serif'; ctx.textBaseline = 'middle'; ctx.fillText("I'm not a robot", -14, 0.5);
+  ctx.strokeStyle = GOOGLE[0]; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(24, -1, 3.5, 0.3, 5.2); ctx.stroke();
+  ctx.restore();
+}
+
+// a Chrome tab strip centred at x, y: three tabs with coloured favicons, the open (white) one slid slide tabs from the middle
+function drawTabStrip(x, y, slide, alpha = 1) {
+  if (alpha <= 0) return;
+  const tab = cx => { ctx.beginPath(); ctx.moveTo(cx - 15, 6); ctx.lineTo(cx - 11, -6); ctx.lineTo(cx + 11, -6); ctx.lineTo(cx + 15, 6); };
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#dee1e6'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(-44, -8, 88, 16, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; tab(slide * 26); ctx.fill(); ctx.lineWidth = 1.2; ctx.stroke(); // the open tab
+  for (const [i, c] of [[-1, GOOGLE[1]], [0, GOOGLE[0]], [1, GOOGLE[3]]]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(i * 26 - 6, 0, 2.6, 0, 6.28); ctx.fill(); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(i * 26 - 1, -1, 9, 2); }
+  ctx.restore();
+}
+
+// a Drive cloud centred at x, y with an upload arrow, over a progress bar filled to upload
+function drawDriveCloud(x, y, upload, alpha = 1) {
+  if (alpha <= 0) return;
+  const puffs = [[-13, 4, 9], [0, -3, 13], [13, 4, 9]], blob = () => { ctx.beginPath(); for (const [dx, dy, r] of puffs) { ctx.moveTo(dx + r, dy); ctx.arc(dx, dy, r, 0, 6.28); } ctx.roundRect(-22, 2, 44, 11, 5); };
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y);
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; blob(); ctx.stroke(); ctx.fillStyle = '#fff'; blob(); ctx.fill(); // outline under the fill = one outline round the union
+  ctx.strokeStyle = GOOGLE[0]; ctx.lineWidth = 2.6; ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(0, -6); ctx.moveTo(-5, -1); ctx.lineTo(0, -6); ctx.lineTo(5, -1); ctx.stroke();
+  ctx.fillStyle = '#e8eaed'; ctx.beginPath(); ctx.roundRect(-24, 19, 48, 6, 3); ctx.fill();
+  ctx.fillStyle = GOOGLE[0]; ctx.beginPath(); ctx.roundRect(-24, 19, 48 * Math.min(1, upload), 6, 3); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(-24, 19, 48, 6, 3); ctx.stroke();
+  ctx.restore();
+}
+
+// a grey trash can standing with its bottom-centre at x, y, its lid swung open by lid (hinged at the back)
+function drawTrash(x, y, lid, alpha = 1) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#5f6368'; path([[-17, -30], [17, -30], [14, 0], [-14, 0]]); ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 2; for (const dx of [-7, 0, 7]) { ctx.beginPath(); ctx.moveTo(dx, -25); ctx.lineTo(dx * 0.85, -5); ctx.stroke(); }
+  ctx.translate(-19, -31); ctx.rotate(-lid * 1.3); // the lid, hinged at its back corner
+  ctx.fillStyle = '#5f6368'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(0, -5, 38, 5, 1.5); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(14, -9, 10, 4, 1.5); ctx.fill(); ctx.stroke();
+  ctx.restore();
 }
 
 // a battery icon centred at x, y, filled to level 0 … 1 (red when nearly empty), with a lightning bolt while charging

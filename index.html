@@ -56,7 +56,7 @@ const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+let GR; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // the fighter's grabs (else Claw'd's) · holding the bag: hold / pummel / throws
 // the fighter's specials (else Claw'd's). Ones with frame data are ordinary attacks usable on the ground and in the air, so they live
 // in both maps; a held charge (Claw'd's think harder, Android's fast charge) is its own state. The up special is its own state too:
 // Claw'd's MCP tether runs off P.teth, a warp (Android's Maps pin) off P.warp
@@ -64,7 +64,7 @@ let NEUTRAL_B, SIDE_B, DOWN_B, US;
 let ATK, AIR, MOVES; // attack states are named after their move: the fighter's own, else Claw'd's (a group it doesn't have is off anyway)
 function bindMoves(set) {
   const own = g => ({ ...MOVESET[g], ...set[g] });
-  ({ neutralSpecial: NEUTRAL_B, sideSpecial: SIDE_B, downSpecial: DOWN_B, upSpecial: US } = own('specials'));
+  ({ neutralSpecial: NEUTRAL_B, sideSpecial: SIDE_B, downSpecial: DOWN_B, upSpecial: US } = own('specials')); GR = own('grabs');
   const both = { sideSpecial: SIDE_B, ...(DOWN_B.charge ? {} : { downSpecial: DOWN_B }), ...(NEUTRAL_B.startup != null ? { neutralSpecial: NEUTRAL_B } : {}) };
   ATK = { ...own('groundAttacks'), ...own('smashAttacks'), ...both, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...own('aerials'), ...both };
