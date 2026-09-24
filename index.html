@@ -86,9 +86,9 @@ const CONTROLS = [
    ['grab', [['G / U', 'grab · running: dash grab'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
    ['menu', [['Esc', 'pause']]]],
 ];
-let paused = true, sel = 0, showControls = false, over = false, home = true, menu = HOME_MENU; // boots to the home screen
+let paused = true, sel = 0, showControls = false, over = false, home = true, picking = false, menu = HOME_MENU; // boots to the home screen · picking = character select (after play)
 function setPaused(on) {
-  paused = on; sel = 0; showControls = false; over = false; home = false; menu = MENU;
+  paused = on; sel = 0; showControls = false; over = false; home = false; picking = false; menu = MENU;
   for (const k in keys) keys[k] = false; jumpQ = downQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = grabQ = techQ = techLock = false;
 }
 function gameOver() { setPaused(true); over = true; menu = ['restart', 'quit']; }
@@ -97,17 +97,20 @@ function restart() {
   stocks = STOCKS; fx.length = shots.length = 0; sub = null; Object.assign(bag, BAG_SPAWN);
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
+function fight() { restart(); setPaused(false); } // leaves character select: Claw'd is the only fighter so far
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'moves.html'; // storyboard of every move
+  else if (menu[i] === 'play') picking = true; // character select first
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
-  if (e.code === 'Escape') { e.preventDefault(); if (showControls) showControls = false; else if (!over && !home) setPaused(!paused); return; }
+  if (e.code === 'Escape') { e.preventDefault(); if (showControls) showControls = false; else if (picking) picking = false; else if (!over && !home) setPaused(!paused); return; }
   if (paused) {
     const a = KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
     if (showControls) { if (ok) showControls = false; }
+    else if (picking) { if (ok) fight(); else return; }
     else if (a === 'up') sel = (sel + menu.length - 1) % menu.length;
     else if (a === 'down') sel = (sel + 1) % menu.length;
     else if (ok) choose(sel);
@@ -143,14 +146,22 @@ addEventListener('keyup', e => {
 });
 addEventListener('blur', () => { if (!over && !home) setPaused(true); });
 // mouse: hover highlights, click picks (items drawn in drawPause)
+const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 function menuAt(e) {
-  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
-  const i = Math.floor((y - (H / 2 - 26)) / 52);
-  return paused && !showControls && Math.abs(x - W / 2) < 120 && i >= 0 && i < menu.length ? i : -1;
+  const [x, y] = at(e), i = Math.floor((y - (H / 2 - 26)) / 52);
+  return paused && !showControls && !picking && Math.abs(x - W / 2) < 120 && i >= 0 && i < menu.length ? i : -1;
 }
-cv.addEventListener('mousemove', e => { const i = menuAt(e); if (i >= 0) sel = i; cv.style.cursor = i >= 0 ? 'pointer' : ''; });
+// character select hot spots (drawn in drawSelect): 0 = Claw'd's card, 1 = back
+function pickAt(e) {
+  const [x, y] = at(e);
+  if (!picking) return -1;
+  if (Math.abs(x - cardX(0)) < CARD.w / 2 && y > CARD.y && y < CARD.y + CARD.h) return 0;
+  return x < 170 && y < 90 ? 1 : -1;
+}
+cv.addEventListener('mousemove', e => { const i = menuAt(e); if (i >= 0) sel = i; cv.style.cursor = i >= 0 || pickAt(e) >= 0 ? 'pointer' : ''; });
 cv.addEventListener('click', e => {
   if (paused && showControls) { showControls = false; return; }
+  if (picking) { const p = pickAt(e); if (p === 0) { fight(); cv.style.cursor = ''; } else if (p === 1) picking = false; return; }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
 });
 
@@ -741,6 +752,7 @@ function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
   if (home) ctx.drawImage(paper, 0, 0, W, H);
   else { ctx.fillStyle = `rgba(38,35,31,${showControls ? 0.94 : 0.8})`; ctx.fillRect(0, 0, W, H); } // near-solid behind the dense controls text
+  if (picking) return drawSelect(t);
   ctx.fillStyle = ctx.strokeStyle = home ? INK : '#efe7d6'; ctx.textAlign = 'center';
   if (home && !showControls) {
     ctx.save(); ctx.translate(W / 2, H / 2 - 52); ctx.scale(1.5, 1.5); drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }); ctx.restore();
@@ -757,6 +769,29 @@ function drawPause(t) {
   }
   ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive'; // key hints (none on the home screen)
   if (showControls || !home) ctx.fillText(showControls ? 'Esc / Enter / click  back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 250);
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+}
+
+// character select: Claw'd's card (the pick) beside locked slots for fighters still to come
+const CARD = { w: 220, h: 300, y: 190 }, CARDS = 3, cardX = i => W / 2 + (i - 1) * 260;
+function drawSelect(t) {
+  ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
+  ctx.font = '700 72px Caveat, cursive'; ctx.fillText('choose your fighter', W / 2, 120);
+  for (let i = 0; i < CARDS; i++) {
+    const cx = cardX(i), x = cx - CARD.w / 2, y = CARD.y, r = [[x, y], [x + CARD.w, y], [x + CARD.w, y + CARD.h], [x, y + CARD.h]];
+    ctx.strokeStyle = ctx.fillStyle = INK;
+    if (i) { // locked
+      ctx.globalAlpha = 0.4; hatch(r, 14, 0.3); ctx.lineWidth = 2; poly(r, 1.2);
+      ctx.font = '700 96px Caveat, cursive'; ctx.fillText('?', cx, y + CARD.h / 2 + 30); ctx.globalAlpha = 1; continue;
+    }
+    ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
+    ctx.strokeStyle = CLAWD; ctx.lineWidth = 3.2; poly(r, 1.4);
+    ctx.save(); ctx.translate(cx, y + 205); ctx.scale(2, 2); drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }); ctx.restore();
+    ctx.fillStyle = INK; ctx.font = '700 44px Caveat, cursive'; ctx.fillText("Claw'd", cx, y + CARD.h - 30);
+  }
+  ctx.font = '600 32px Caveat, cursive'; ctx.textAlign = 'left'; ctx.fillText('‹ back', 40, 60);
+  ctx.globalAlpha = 0.6; ctx.textAlign = 'center'; ctx.font = '600 22px Caveat, cursive';
+  ctx.fillText('Enter / Space / click  fight · Esc  back', W / 2, H - 60);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
 }
 
