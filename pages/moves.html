@@ -73,6 +73,8 @@
 <script src="../src/characters/grok.js"></script>
 <script src="../src/characters/wumpus.js"></script>
 <script src="../src/characters/android.js"></script>
+<script src="../src/characters/duo.js"></script>
+<script src="../src/characters/snoo.js"></script>
 <script>
 const VW = 480, VH = 270, SCALE = 2, GROUND = 200;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -93,6 +95,8 @@ const FIGHTERS = {
   grok: { name: 'Grok Bot', moves: todo, draw: drawGrok },
   wumpus: { name: 'Wumpus', moves: todo, draw: drawWumpus },
   android: { name: 'Android', moves: todo, draw: drawAndroid },
+  duo: { name: 'Duo', moves: todo, draw: drawDuo },
+  snoo: { name: 'Snoo', moves: todo, draw: drawSnoo },
 };
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait
