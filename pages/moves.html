@@ -94,12 +94,13 @@ const title = k => k.replace(/([A-Z]|\d+)/g, ' $1').replace(/^./, c => c.toUpper
 // bounces instead of walking and Duo flies: grok-moveset.js, duo-moveset.js), and get the rest of his move list, all still to do
 const todo = Object.fromEntries(Object.entries(MOVESET).map(([g, moves]) => [g, Object.fromEntries(Object.keys(moves).map(k => [k, {}]))]));
 const basic = { ...todo, movement: MOVESET.movement };
+const withTodo = set => ({ ...todo, ...Object.fromEntries(Object.entries(set).map(([g, m]) => [g, { ...todo[g], ...m }])) }); // a fighter's moves, the rest still to do
 const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
-  grok: { name: 'Grok Bot', moves: { ...todo, ...GROK_MOVESET }, draw: drawGrok, fx: drawClawdFx },
+  grok: { name: 'Grok Bot', moves: withTodo(GROK_MOVESET), draw: drawGrok, fx: drawClawdFx, hurt: grokHurtbox },
   wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
-  duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
+  duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
 };
 
@@ -167,8 +168,9 @@ function select(i) {
     : `<div class="none" style="flex:1">no frame data · looping ${total}f</div>`) + '<div class="head" id="head"></div>';
   $('boardwrap').hidden = !move.anim;
 
+  const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
   $('data').innerHTML = Object.entries(move).filter(([k]) => k !== 'input').map(([k, v]) =>
-    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}: ${b ?? '—'}`).join(' · ') : v}</dd>`).join('');
+    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? show(v) : v}</dd>`).join('');
 }
 
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
