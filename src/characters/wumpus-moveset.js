@@ -1,6 +1,6 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. Groups not here yet (specials, grabs, defense, ledge) are still to build.
+// Fields are as in clawd-moveset.js. Groups not here yet (grabs, defense, ledge) are still to build.
 let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
@@ -174,24 +174,23 @@ const WUMPUS_MOVESET = {
         return { ...p, speed: f >= 15 && f < 25 ? 1 - (f - 15) / 10 : 0, dust: f >= 15 && f < 27 ? (f - 15) / 12 : null };
       },
     },
-    upSmash: { // Server Boost: squat over a pink boost gem glowing at its feet (brighter with the charge), then it rockets straight up
-      // past its face, Wumpus hopping after it, and bursts overhead
+    upSmash: { // Speaking: breathe in deep (puffing up fuller with the charge), then shout: green rings of voice (Discord's speaking
+      // green) pulse up off its head
       input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 22, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
-      hitbox: { x: -12, y: -134, w: 52, h: 124 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      hitbox: { x: -44, y: -150, w: 88, h: 100 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => {
-        const up = { sx: 0.9, sy: 1.14, rot: -0.1, ears: 2.8, arms: 1.7, legs: legsAll(0, 3) };
+        const shout = { y: -4, sx: 0.9, sy: 1.14, rot: 0.04, arms: 1.6, ears: 2.4, shout: 1, legs: legsAll(0, 3) };
         const p = tween(f, [
-          [0, { gem: [24, -4, 0, 0] }],
-          [6, { sx: 1.12, sy: 0.86, rot: 0.08, ears: 0.4, arms: 0.1, gem: [24, -9, 9, 0.3] }],
-          [11, { sx: 1.15, sy: 0.84, rot: 0.1, ears: 0.5, arms: 0.1, gem: [24, -9, 10, 0.5] }],
-          [12, { ...up, y: -6, sx: 0.88, sy: 1.16, rot: -0.08, ears: 2.6, arms: 1.6, gem: [16, -70, 12, 1] }],
-          [18, { ...up, y: -5, gem: [10, -118, 13, 1] }],
-          [30, { sx: 0.97, sy: 1.03, ears: 1, arms: 0.6, gem: [8, -128, 13, 0.4] }],
-          [40, { gem: [8, -128, 13, 0] }],
+          [0, {}],
+          [6, { sx: 1.08, sy: 1.04, rot: -0.06, arms: 0.8, ears: 0.6 }], // the breath in
+          [11, { sx: 1.12, sy: 1.06, rot: -0.08, arms: 0.9, ears: 0.7 }],
+          [12, shout],
+          [18, { ...shout, y: -3, sx: 0.92, sy: 1.12, ears: 2.3 }],
+          [30, { sx: 0.98, sy: 1.03, arms: 0.6, ears: 0.8, shout: 0.3 }],
+          [40, {}],
         ]);
-        if (f >= 8 && f < 12) { p.gem[2] += 2 * c; p.gem[3] = Math.min(1, p.gem[3] + 0.5 * c); }
-        p.gem = f < 29 ? [...p.gem.slice(0, 4), f >= 17 ? (f - 17) / 12 : 0] : null;
-        return { ...p, puff: f === 12 ? 0 : f > 12 && f < 24 ? (f - 12) / 12 : null };
+        if (f >= 8 && f < 12) { p.sx += 0.08 * c; p.sy += 0.04 * c; } // fuller the longer it holds its breath
+        return { ...p, rings: f >= 12 && f < 32 ? (f - 12) / 20 : null, puff: f === 12 ? 0 : null };
       },
     },
     downSmash: { // Pin Message: rear up tall with a giant pushpin raised point-down (bigger with the charge), then drive it into the floor
@@ -215,6 +214,86 @@ const WUMPUS_MOVESET = {
         if (f >= 9 && f < 13) p.pin[2] += 6 * c;
         return { ...p, puff: f === 13 ? 0 : f > 13 && f < 25 ? (f - 13) / 12 : null, say: sayW('pinned a message', f, 13, 36) };
       },
+    },
+  },
+  specials: { // plain moves (usable on the ground and in the air), with a few extras the game runs: sweet = a stronger inner hitbox, nelly spawns her on the startup
+    // frame, launch = upward speed given on the startup frame, helpless = specialFall after, counter = the move a hit during the active
+    // frames turns into (the hit does nothing). Things it hands to the world are only in the pose until they're let go
+    neutralSpecial: { // Airhorn (Discord's old soundboard bot): pull out an air horn, brace, and blast a cone of sound ahead. Point blank
+      // (sweet) it launches; farther out it's just a shove
+      input: 'special', startup: 12, active: 6, endlag: 24, damage: 3, kb: { base: 45, growth: 20, angle: 20 }, landingLag: 14,
+      hitbox: { x: 26, y: -86, w: 120, h: 76 }, sweet: { x: 26, y: -72, w: 42, h: 50, damage: 10, kb: { base: 38, growth: 95, angle: 35 } },
+      anim: f => {
+        const p = tween(f, [
+          [0, { horn: [18, -30, 0] }],
+          [7, { sx: 0.97, sy: 1.03, arms: 1.2, ears: 0.3, horn: [26, -44, 1] }],
+          [11, { x: -2, sx: 0.95, sy: 1.05, rot: -0.1, arms: 1.3, ears: 0.4, legs: legsAll(3, 0), horn: [28, -46, 1] }],
+          [12, { x: -5, sx: 1.06, sy: 0.95, rot: -0.18, arms: 1.4, ears: [1.3, -0.5], legs: legsAll(5, 0), horn: [27, -46, 1.08] }],
+          [18, { x: -6, sx: 1.05, sy: 0.96, rot: -0.16, arms: 1.4, ears: [1.4, -0.4], legs: legsAll(5, 0), horn: [27, -46, 1.05] }],
+          [30, { x: -2, rot: -0.04, arms: 1.1, ears: 0.3, horn: [26, -44, 1] }],
+          [42, { horn: [18, -30, 0] }],
+        ]);
+        p.horn = [...p.horn, f >= 12 && f < 30 ? (f - 12) / 18 : null]; // blasting, ears blown back, rocked back a step by its own noise
+        return { ...p, speed: f >= 12 && f < 24 ? -0.4 : 0, say: sayW('!airhorn', f, 12, 34) };
+      },
+    },
+    sideSpecial: { // Slowmode: set Nelly the snail down in front. She crawls ahead on her own (dropped, in the air) and the first thing she
+      // touches takes a little hit and goes into slowmode: half speed, knockback and all, for slow seconds (one Nelly out at a time)
+      input: 'special + ← →', startup: 12, active: 1, endlag: 16, landingLag: 10,
+      nelly: { x: 34, speed: 70, life: 5, damage: 3, kb: { base: 12, growth: 10, angle: 50 }, slow: 5 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [5, { sx: 0.97, sy: 1.03, rot: -0.05, arms: 1.1, ears: 0.3 }],
+          [11, { x: 3, sx: 1.08, sy: 0.9, rot: 0.3, arms: 0.8, ears: -0.1, legs: [[-4, 0], [0, 0], [0, 0], [2, 0]] }],
+          [15, { x: 3, sx: 1.06, sy: 0.92, rot: 0.26, arms: 0.7, legs: [[-4, 0], [0, 0], [0, 0], [2, 0]] }],
+          [29, {}],
+        ]),
+        nelly: f < 12 ? [22 + 12 * Math.min(1, f / 11), -22 * (1 - Math.min(1, f / 11)), f / 60] : null, // held out in front, set down on the floor
+        say: sayW('slowmode enabled', f, 12, 36),
+      }),
+    },
+    upSpecial: { // Nitro: a Nitro tank on its back fires and launches it straight up in a stream of pink sparkles (steer with ← →), hitting anything on the way.
+      // Helpless once it burns out
+      input: 'special + ↑', startup: 6, active: 16, endlag: 18, damage: 8, kb: { base: 35, growth: 70, angle: 80 }, landingLag: 14,
+      hitbox: { x: -26, y: -76, w: 52, h: 84 }, launch: 1150, helpless: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, { rocket: 0 }],
+          [5, { sx: 1.12, sy: 0.86, arms: 0.2, ears: 0.4, rocket: 0.2, legs: legsAll(0, 0) }],
+          [6, { y: -4, sx: 0.88, sy: 1.16, arms: 0, ears: -0.25, rocket: 1, legs: legsAll(0, 4) }],
+          [22, { sx: 0.92, sy: 1.1, arms: 0.3, ears: -0.1, rocket: 0.8, legs: legsAll(0, 3) }],
+          [40, { arms: 1, ears: 0.6, rocket: 0, legs: legsAll(0, 2) }],
+        ]),
+        speed: 0, fallLines: f >= 6 && f < 22 ? 0.6 : 0,
+        trail: f >= 6 && f < 34 ? [Math.min(1, (34 - f) / 12), f / 4] : null,
+        say: sayW('Nitro activated', f, 6, 30),
+      }),
+    },
+    downSpecial: { // Deafen: clamp on the headphones. A hit while they're on does nothing: it turns straight into downSpecialHit
+      input: 'special + ↓', startup: 4, active: 24, endlag: 18, landingLag: 10, counter: 'downSpecialHit',
+      anim: f => tween(f, [
+        [0, {}],
+        [4, { sx: 1.04, sy: 0.94, arms: 1.2, ears: -0.25, headphones: 1 }],
+        [28, { sx: 1.04, sy: 0.94, arms: 1.1, ears: -0.25, headphones: 1 }],
+        [36, { arms: 0.4, headphones: 0.6 }],
+        [46, {}],
+      ]),
+    },
+    downSpecialHit: { // …undeafened: tears the headphones off and the hit comes back out as a blast of sound, both ways
+      input: 'hit during Deafen', startup: 4, active: 4, endlag: 18, damage: 10, kb: { base: 40, growth: 90, angle: 45 },
+      hitbox: { x: -80, y: -96, w: 160, h: 104 }, both: true, intangible: [0, 12], landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, { sx: 1.04, sy: 0.94, arms: 1.1, ears: -0.25, headphones: 1 }],
+          [3, { sx: 1.12, sy: 0.86, arms: 0.6, ears: -0.3, headphones: 1 }],
+          [4, { y: -3, sx: 0.9, sy: 1.14, arms: 1.7, ears: 2.4, headphones: 0 }],
+          [8, { y: -3, sx: 0.91, sy: 1.12, arms: 1.7, ears: 2.3 }],
+          [26, {}],
+        ]),
+        waves: f >= 4 && f < 20 ? (f - 4) / 16 : null,
+        say: sayW('undeafened', f, 4, 24),
+      }),
     },
   },
   aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose

@@ -6,10 +6,13 @@
 //   ears = radians each ear swings out and up from hanging (π = straight up), or [back, front]
 //   props, placed like hitboxes (px from bottom-centre + x / y, facing right, not rotated or stretched with the body):
 //   emoji = [x, y, radius, burst 0 … 1, kind = index into EMOJIS] a big emoji, bursting into a super-reaction sparkle ring (forward smash)
-//   gem = [x, y, size, glow 0 … 1, burst 0 … 1] a pink server-boost gem (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
+//   rings = 0 … 1 green voice rings rising off its head (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
+//   horn = [x, y (centre), size, blast 0 … 1 or null] an air horn, blasting sound (neutral special) · nelly = [x, y (bottom), t] Nelly the snail in its paws (side special)
+//   waves = 0 … 1 sound rings bursting off its head (the down special's counter)
+//   worn with the body: shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
 //   legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
-const BOOST = '#ff73fa', BOOST_LIT = '#ffc4fd', PIN = '#ed4245', PEPE = '#4a8f3c';
+const BOOST = '#ff73fa', SPEAK = '#23a55a', NITRO = '#8d5cf6', PIN = '#ed4245', PEPE = '#4a8f3c';
 
 function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.save();
@@ -18,6 +21,15 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
 
   const pair = v => Array.isArray(v) ? v : [v || 0, v || 0];
+  if (pose.rocket != null) { // Nitro tank on its back, behind everything: Nitro's pink → purple, NITRO down the side, fins, a pink-purple flame
+    const fl = pose.rocket, nitro = ctx.createLinearGradient(0, -45, 0, -5); nitro.addColorStop(0, NITRO); nitro.addColorStop(1, BOOST);
+    if (fl > 0) for (const [w, c, len] of [[7, NITRO, 50], [4.5, BOOST, 34], [2, '#fff', 16]]) { // flame: purple, pink, white-hot core
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(-21 - w, -5); ctx.quadraticCurveTo(-21, -5 + len * fl * 1.6, -21 + w, -5); ctx.fill(); if (c === NITRO) ctx.stroke();
+    }
+    ctx.fillStyle = NITRO; path([[-29, -14], [-36, -4], [-29, -7]]); ctx.fill(); ctx.stroke(); path([[-13, -14], [-6, -4], [-13, -7]]); ctx.fill(); ctx.stroke(); // fins
+    rbox(-21, -25, 17, 40, 8, nitro, 2);
+    ctx.save(); ctx.translate(-21, -19); ctx.scale(face, 1); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#fff'; ctx.font = 'italic 800 8px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('NITRO', 0, 0.5); ctx.restore(); // lettering kept below the head's overhang, and unmirrored facing left
+  }
   const arm = pair(pose.arm), swing = pair(pose.arms), reach = Array.isArray(pose.reach) ? pose.reach : [0, pose.reach || 0], ears = pair(pose.ears), feet = [pose.legs?.[0] || [0, 0], pose.legs?.[3] || [0, 0]];
   for (const [i, lx] of [-6, 6].entries()) { const [dx, dy] = feet[i]; rbox(lx + dx, -8 + dy / 2, 7, 12 + dy, 3.5, WUMPUS, 2); rbox(lx + 1 + dx, -3 + dy, 11, 6, 3, WUMPUS, 2); } // legs + feet
   for (const [i, s] of [-1, 1].entries()) if (!reach[i]) { // stubby arms, behind the body, swinging from the shoulder
@@ -37,9 +49,15 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   for (const nx of [0, 8]) { ctx.beginPath(); ctx.roundRect(nx - 2, -46, 4, 2.4, 1.2); ctx.fill(); }
   ctx.lineWidth = 2;
   for (const ex of [-12, 19]) { ctx.beginPath(); ctx.arc(ex, -53, 3.2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+  if (pose.shout) { ctx.fillStyle = WUMPUS_INK; ctx.beginPath(); ctx.ellipse(5, -36.5, 5, 3.4 * pose.shout, 0, 0, Math.PI * 2); ctx.fill(); } // mouth open under the snout
+  if (pose.headphones) { // deafened: headphones clamped over the ears, with Discord's red slash through them
+    ctx.save(); ctx.globalAlpha *= pose.headphones; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -52, 27, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+    for (const s of [-1, 1]) rbox(s * 26, -50, 10, 17, 4, '#4e5058', 2);
+    ctx.strokeStyle = PIN; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(-18, -80); ctx.lineTo(18, -62); ctx.stroke(); ctx.restore();
+  }
   ctx.restore();
 
-  if (!pose.emoji && !pose.gem && !pose.pin) return;
+  if (!pose.emoji && pose.rings == null && !pose.pin && !pose.horn && !pose.nelly && !pose.waves && !pose.trail) return;
   ctx.save(); ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face, 1);
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
   if (pose.emoji) {
@@ -51,20 +69,24 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
       ctx.lineWidth = 2; e.face(r); ctx.restore();
     }
   }
-  if (pose.gem) {
-    const [x, y, sz, glow = 0, b = 0] = pose.gem;
-    if (b) sparkles(x, y, sz * (1.4 + 2.2 * b), 1 - b, BOOST);
-    if (b < 1 && sz > 0.5) {
-      ctx.save(); ctx.globalAlpha *= 1 - b; ctx.translate(x, y);
-      if (glow) { ctx.fillStyle = BOOST; ctx.globalAlpha *= 0.25 * glow; ctx.beginPath(); ctx.arc(0, 0, sz * (1.5 + 0.5 * glow), 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha /= 0.25 * glow; }
-      const g = [[-0.8, -0.35], [-0.45, -0.8], [0.45, -0.8], [0.8, -0.35], [0, 0.9]].map(([u, v]) => [u * sz, v * sz]);
-      ctx.fillStyle = BOOST; ctx.lineWidth = 2.2; path(g); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = BOOST_LIT; ctx.beginPath(); ctx.moveTo(-0.45 * sz, -0.8 * sz); ctx.lineTo(-0.2 * sz, -0.35 * sz); ctx.lineTo(0.2 * sz, -0.35 * sz); ctx.lineTo(0.45 * sz, -0.8 * sz); ctx.closePath(); ctx.fill(); // lit crown facet
-      ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-0.8 * sz, -0.35 * sz); ctx.lineTo(0.8 * sz, -0.35 * sz); ctx.moveTo(-0.2 * sz, -0.35 * sz); ctx.lineTo(0, 0.9 * sz); ctx.lineTo(0.2 * sz, -0.35 * sz); ctx.stroke();
-      ctx.restore();
-    }
+  if (pose.rings != null) { // voice rings pulsing up off the head, widening and fading as they rise
+    ctx.save(); ctx.strokeStyle = SPEAK; ctx.lineWidth = 3.5;
+    for (let k = 0; k < 3; k++) { const u = Math.min(1, Math.max(0, pose.rings * 1.5 - k * 0.25)); if (!u || u >= 1) continue;
+      ctx.globalAlpha = 1 - u; ctx.beginPath(); ctx.ellipse(0, -74 - 80 * u, 22 + 18 * u, 7 + 4 * u, 0, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
   }
   if (pose.pin) drawPin(...pose.pin);
+  if (pose.horn) drawHorn(...pose.horn);
+  if (pose.trail) { // Nitro sparkles pouring out under the tank, shrinking and fading the farther they fall behind
+    const [a, ph] = pose.trail;
+    for (let k = 0; k < 5; k++) { const u = (k + ph) % 5 / 5; ctx.save(); ctx.globalAlpha *= a * (1 - u); ctx.fillStyle = k % 2 ? BOOST : NITRO; ctx.lineWidth = 1.4; star(-21 + (k % 2 ? 7 : -7) * (1 - u * 0.5), 14 + 90 * u, 6 * (1 - u * 0.6)); ctx.restore(); }
+  }
+  if (pose.nelly) drawNelly(...pose.nelly, 1);
+  if (pose.waves) { // sound rings off the head
+    const w = pose.waves; ctx.save(); ctx.globalAlpha *= 1 - w; ctx.lineWidth = 3;
+    for (let k = 0; k < 3; k++) { const rr = 22 + (40 + 16 * k) * w; ctx.beginPath(); ctx.arc(0, -46, rr, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -75,6 +97,34 @@ function drawPin(x, y, sz, a = 1) {
   rbox(0, -1.15 * sz, 1.3 * sz, 0.28 * sz, 0.12 * sz, PIN, 2); // collar
   rbox(0, -1.45 * sz, 0.7 * sz, 0.45 * sz, 0.12 * sz, PIN, 2); // stem
   ctx.fillStyle = PIN; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(0, -1.85 * sz, 0.6 * sz, 0.32 * sz, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // head
+  ctx.restore();
+}
+
+// Airhorn (neutral special): a can with a red horn flaring forward, centre (x, y), size k; blast = 0 … 1 sound rings pouring out of the bell
+function drawHorn(x, y, k, blast) {
+  if (k < 0.05) return;
+  ctx.save(); ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
+  if (blast != null) { // arcs fanning out of the bell, oldest farthest and faintest
+    ctx.lineWidth = 3;
+    for (let n = 0; n < 4; n++) { const u = (blast * 1.6 + n / 4) % 1, rr = 18 + 90 * u; ctx.globalAlpha = (1 - u) * Math.min(1, (1 - blast) * 3); ctx.beginPath(); ctx.arc(10 * k, 0, rr, -0.5, 0.5); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  ctx.scale(k, k);
+  rbox(-8, 6, 13, 22, 4, '#e3e5e8', 2); rbox(-8, 6, 13, 6, 1, PIN, 1.4); rbox(-8, -6.5, 7, 4, 1.5, '#4e5058', 1.6); // can, label band, nozzle button
+  ctx.fillStyle = PIN; ctx.lineWidth = 2; path([[-4, -3], [14, -9], [16, 5], [-4, 1]]); ctx.fill(); ctx.stroke(); // the horn, flaring out to…
+  ctx.beginPath(); ctx.ellipse(15, -2, 3.2, 8, 0.12, 0, Math.PI * 2); ctx.fillStyle = '#b8232a'; ctx.fill(); ctx.stroke(); // …the bell
+  ctx.restore();
+}
+
+// Nelly, Discord's snail (side special), bottom-centre (x, y), crawling toward face; t = seconds, for the crawl
+function drawNelly(x, y, t = 0, face = 1) {
+  const c = Math.sin(t * 9); // body stretches and bunches as it crawls
+  ctx.save(); ctx.translate(x, y); ctx.scale(face, 1); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = 2;
+  ctx.fillStyle = '#ffd89e'; ctx.beginPath(); ctx.moveTo(-15 - c, 0); ctx.quadraticCurveTo(-4, -9, 8, -8); ctx.quadraticCurveTo(13 + c, -20, 17 + c, -14); // body, head up at the front
+  ctx.quadraticCurveTo(20 + c, -6, 15 + c, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  for (const [ex, ey] of [[14, -23], [19, -21]]) { ctx.beginPath(); ctx.moveTo(15 + c, -15); ctx.lineTo(ex + c, ey); ctx.stroke(); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(ex + c, ey, 1.8, 0, Math.PI * 2); ctx.fill(); } // eye stalks
+  ctx.fillStyle = '#eb459e'; ctx.beginPath(); ctx.arc(-3, -13, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // shell
+  ctx.lineWidth = 1.6; ctx.beginPath(); for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 3.2, rr = 7.5 * (1 - k / 28); k ? ctx.lineTo(-3 + Math.cos(a) * rr, -13 + Math.sin(a) * rr) : ctx.moveTo(-3 + rr, -13); } ctx.stroke(); // spiral
   ctx.restore();
 }
 
@@ -137,10 +187,10 @@ const scaled = (r, pts) => pts.map(([x, y]) => [x * r, y * r]);
 // a super-reaction burst: little four-point sparkles flying out on a ring of radius r
 function sparkles(x, y, r, alpha, fill) {
   ctx.save(); ctx.globalAlpha *= Math.max(0, alpha); ctx.fillStyle = fill; ctx.lineWidth = 1.6;
-  for (let k = 0; k < 8; k++) {
-    const a = k / 8 * Math.PI * 2 + 0.2, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r, s = k % 2 ? 4 : 6;
-    ctx.beginPath(); ctx.moveTo(px, py - s); ctx.lineTo(px + s * 0.3, py - s * 0.3); ctx.lineTo(px + s, py); ctx.lineTo(px + s * 0.3, py + s * 0.3);
-    ctx.lineTo(px, py + s); ctx.lineTo(px - s * 0.3, py + s * 0.3); ctx.lineTo(px - s, py); ctx.lineTo(px - s * 0.3, py - s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
-  }
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; star(x + Math.cos(a) * r, y + Math.sin(a) * r, k % 2 ? 4 : 6); }
   ctx.restore();
+}
+function star(x, y, s) { // one four-point sparkle, in the current fill
+  ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.3, y - s * 0.3); ctx.lineTo(x + s, y); ctx.lineTo(x + s * 0.3, y + s * 0.3);
+  ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.3, y + s * 0.3); ctx.lineTo(x - s, y); ctx.lineTo(x - s * 0.3, y - s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
 }

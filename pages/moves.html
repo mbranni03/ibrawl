@@ -205,6 +205,7 @@ function drawFigure(fr) {
   if (phaseAt(fr) === 'active' && move.hitbox) { // hitbox is relative to the fighter's bottom-center, facing right
     const hb = move.hitbox;
     drawRect({ x: x + hb.x, y: y + hb.y, w: hb.w, h: hb.h }, BOX, 'rgba(224,82,58,0.18)');
+    const sw = move.sweet; if (sw) drawRect({ x: x + sw.x, y: y + sw.y, w: sw.w, h: sw.h }, BOX, 'rgba(224,82,58,0.3)'); // the stronger spot inside it
   }
 }
 
