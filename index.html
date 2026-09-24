@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ibrawl</title>
+<title>Mascot Smackdown</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -151,7 +151,7 @@ addEventListener('blur', () => { if (!over && !home) setPaused(true); });
 // mouse: hover highlights, click picks (items drawn in drawPause)
 const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 function menuAt(e) {
-  const [x, y] = at(e), i = Math.floor((y - (H / 2 - 26)) / 52);
+  const [x, y] = at(e), i = Math.floor((y - (menuY() - 36)) / 52);
   return paused && !showControls && !picking && Math.abs(x - W / 2) < 120 && i >= 0 && i < menu.length ? i : -1;
 }
 // character select hot spots (drawn in drawSelect): 0 = Claw'd's card, 1 = back
@@ -751,6 +751,25 @@ function drawHealth() {
   }
 }
 
+const menuY = () => home ? H / 2 + 160 : H / 2 + 10; // first menu row's baseline (home: below the title and lineup)
+
+// home title: MASCOT over a tilted, ink-shadowed SMACKDOWN, then the fighters squaring off on a ground line
+function drawTitle(t) {
+  ctx.save(); ctx.translate(W / 2, 215); ctx.rotate(-0.035);
+  ctx.font = '700 44px Caveat, cursive'; ctx.letterSpacing = '14px'; ctx.fillStyle = INK; ctx.fillText('MASCOT', 7, -112);
+  ctx.letterSpacing = '0px'; ctx.font = '700 132px Caveat, cursive';
+  ctx.fillText('SMACKDOWN', 5, 5); ctx.fillStyle = CLAWD; ctx.fillText('SMACKDOWN', 0, 0);
+  ctx.strokeStyle = INK; ctx.lineWidth = 3; line(-250, 22, 250, 18, 2, 2); // scribbled underline
+  ctx.restore();
+  const gy = H / 2 + 85, blink = Math.floor(t * 60) % 180 < 8 ? 1 : 0;
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; line(W / 2 - 370, gy, W / 2 + 370, gy, 1.2, 1);
+  for (const [x, draw] of [[-290, () => drawWumpus(0, 0, {}, 1)], [-135, () => drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }, 1)],
+    [135, () => drawGrok(0, 0, { blink }, -1)], [290, () => drawAndroid(0, 0, {}, -1)]]) {
+    ctx.save(); ctx.translate(W / 2 + x, gy); ctx.scale(1.6, 1.6); draw(); ctx.restore();
+  }
+  ctx.fillStyle = INK; ctx.font = '700 56px Caveat, cursive'; ctx.fillText('vs', W / 2, gy - 22);
+}
+
 function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
   if (home) ctx.drawImage(paper, 0, 0, W, H);
@@ -758,16 +777,14 @@ function drawPause(t) {
   if (picking) return drawSelect(t);
   ctx.fillStyle = ctx.strokeStyle = home ? INK : '#efe7d6'; ctx.textAlign = 'center';
   if (home && !showControls) {
-    ctx.save(); ctx.translate(W / 2, H / 2 - 52); ctx.scale(1.5, 1.5); drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }); ctx.restore();
-    ctx.strokeStyle = INK; ctx.lineWidth = 2; line(W / 2 - 110, H / 2 - 50, W / 2 + 110, H / 2 - 50, 1.2, 1);
-    ctx.fillStyle = INK;
+    drawTitle(t);
   } else if (!showControls) { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? 'game over' : 'paused', W / 2, H / 2 - 70); }
   if (showControls) drawControls(home ? INK : '#efe7d6');
   else {
     ctx.font = '600 40px Caveat, cursive';
     menu.forEach((m, i) => {
       ctx.globalAlpha = i === sel ? 1 : 0.5;
-      ctx.fillText((i === sel ? '›  ' : '') + m + (i === sel ? '  ‹' : ''), W / 2, H / 2 + 10 + i * 52);
+      ctx.fillText((i === sel ? '›  ' : '') + m + (i === sel ? '  ‹' : ''), W / 2, menuY() + i * 52);
     });
   }
   ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive'; // key hints (none on the home screen)
