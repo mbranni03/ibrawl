@@ -8,9 +8,11 @@ const duoFeet = (back, front) => [back, [0, 0], [0, 0], front];
 const duoSay = (text, f, a, b) => f >= a && f < b ? [text, Math.min(1, (f - a) / 3, (b - f) / 5)] : null;
 const DUO_GA = MOVESET.groundAttacks, DUO_AA = MOVESET.aerials; // frame data starts as Claw'd's; the hitboxes and poses are Duo's
 const DUO_AIR = { arm: -12, legs: duoFeet([1, -2], [-1, -2]) }; // wings half out, feet tucked: the plain airborne pose aerials start and end on
+// Claw'd's arm swings are sized for his little nubs: the movement Duo borrows from him swings its wings 4x as far
+const duoWings = m => m.anim ? { ...m, anim: (f, n) => { const p = m.anim(f, n); return p.arm == null ? p : { ...p, arm: Array.isArray(p.arm) ? p.arm.map(a => 4 * a) : 4 * p.arm }; } } : m;
 const DUO_MOVESET = {
   movement: {
-    ...MOVESET.movement,
+    ...Object.fromEntries(Object.entries(MOVESET.movement).map(([k, m]) => [k, duoWings(m)])),
     doubleJump: {
       input: 'jump (airborne) · up to 5 times', frames: 30,
       anim: f => tween(f, [ // wings sweep up, beat down hard to pop it up a little way, then it drops toward the next beat
