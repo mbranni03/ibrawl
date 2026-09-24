@@ -963,8 +963,9 @@ function drawSelect(t) {
   { // Random: a big question mark; picking it rolls one of the fighters
     const x = tileX(ROSTER.length), y = TILE.y, on = !onBand && focus === ROSTER.length, r = rect(x, y, TILE.w, TILE.h);
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill(); ctx.strokeStyle = INK; hatch(r, 12, 0.15);
-    ctx.save(); ctx.translate(x + TILE.w / 2, y + 92); ctx.rotate(Math.sin(t * 3) * 0.12); ctx.textAlign = 'center'; ctx.font = '700 96px Caveat, cursive';
-    ctx.fillStyle = INK; ctx.fillText('?', 3, 3); ctx.fillStyle = CLAWD; ctx.fillText('?', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(x + TILE.w / 2, y + (TILE.h - 34) / 2); ctx.rotate(-0.2 + Math.sin(t * 3) * 0.06); ctx.textAlign = 'left'; ctx.font = '700 96px Caveat, cursive'; // Caveat's ? slants right: stood upright, wobbling a little
+    const m = ctx.measureText('?'), qx = (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2, qy = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2; // centre the glyph's ink, above the name
+    ctx.fillStyle = INK; ctx.fillText('?', qx + 3, qy + 3); ctx.fillStyle = CLAWD; ctx.fillText('?', qx, qy); ctx.restore();
     ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
     ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText('Random', x + TILE.w / 2, y + TILE.h - 12);
   }
