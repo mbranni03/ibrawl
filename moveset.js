@@ -535,8 +535,46 @@ const MOVESET = {
         dust: f >= 14 && f < 26 ? (f - 14) / 12 : null,
       }),
     },
-    upSmash:     { input: 'hard up + A (hold)',       anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, chargeFrames: null, chargeMult: null },
-    downSmash:   { input: 'hard down + A (hold)',     anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, chargeFrames: null, chargeMult: null },
+    upSmash: { // terminal uppercut: crouch with the terminal held low in front (charge holds here), then spring up and swing it over the head, front to back
+      input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 22, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
+      hitbox: { x: -50, y: -125, w: 112, h: 85 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: f => ({ // term = [dx, dy from body centre, tilt, size] of the swung terminal
+        ...tween(f, [
+          [0, {}],
+          [6, { sx: 1.12, sy: 0.88, rot: 0.1, arm: [4, 8], legs: legsAll(0, 0), term: [44, -4, 0.35, 0.7] }],
+          [11, { sx: 1.15, sy: 0.85, rot: 0.12, arm: [5, 9], legs: legsAll(0, 0), term: [46, -3, 0.4, 0.72] }],
+          [12, { y: -6, sx: 0.86, sy: 1.2, rot: -0.1, arm: [-14, -24], reach: 4, legs: legsAll(0, 3), term: [24, -58, 0.25, 0.8] }],
+          [15, { y: -6, sx: 0.86, sy: 1.2, rot: -0.14, arm: [-20, -22], reach: 2, legs: legsAll(0, 3), term: [-6, -70, -0.15, 0.8] }],
+          [18, { y: -4, sx: 0.88, sy: 1.16, rot: -0.16, arm: [-22, -16], legs: legsAll(0, 2), term: [-32, -52, -0.55, 0.8] }],
+          [30, { sx: 0.96, sy: 1.04, rot: -0.06, arm: [-10, -8], term: [-22, -44, -0.3, 0.74] }],
+          [40, {}],
+        ]),
+        swoosh: f >= 12 && f < 21 ? 1 - (f - 12) / 9 : 0,
+        puff: f === 12 ? 0 : null,
+      }),
+    },
+    downSmash: { // /compact: squash down flat as a pancake (flatter the longer it charges), then spring back up and the pressure bursts out along
+      // the floor both ways. Hits both sides; knockback goes away from Claw'd
+      input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 22, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
+      hitbox: { x: -90, y: -24, w: 180, h: 24 }, both: true, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none)
+        const p = tween(f, [
+          [0, {}],
+          [8, { sx: 1.34, sy: 0.56, arm: 6, legs: [[-4, 0], [-2, 0], [2, 0], [4, 0]] }],
+          [11, { sx: 1.36, sy: 0.55, arm: 6, legs: [[-4, 0], [-2, 0], [2, 0], [4, 0]] }],
+          [12, { y: -4, sx: 0.84, sy: 1.24, arm: [-10, -10], legs: legsAll(0, 2) }],
+          [16, { y: -2, sx: 0.9, sy: 1.14, arm: [-6, -6] }],
+          [26, { sx: 1.04, sy: 0.96 }],
+          [38, {}],
+        ]);
+        if (f >= 8 && f < 12) { p.sx += 0.14 * c; p.sy -= 0.12 * c; }
+        return {
+          ...p, squint: f >= 3 && f < 12,
+          say: f < 12 ? (f >= 2 ? ['> /compact', Math.min(1, (f - 2) / 3)] : null) : f < 32 ? ['✓ compacted', 1 - (f - 12) / 20] : null,
+          compact: f >= 12 && f < 28 ? (f - 12) / 16 : null, puff: f === 12 ? 0 : null,
+        };
+      },
+    },
   },
 
   // landingLag = frames stuck on the ground if you land mid-attack
@@ -648,8 +686,40 @@ const MOVESET = {
         return p;
       },
     },
-    upSpecial:      { input: 'up + B',                anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'recovery move; helpless after' },
-    downSpecial:    { input: 'down + B',              anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'counter / reflector / etc.' },
+    upSpecial: { // MCP tether: fling a plug on a cord up and ahead. If it catches the stage's lip, Claw'd reels itself straight onto the
+      // ledge; a miss pulls the cord back and leaves Claw'd falling helpless ("connection refused") until it lands or catches a ledge
+      input: 'up + B (V / L), ground or air · + ← → aims it lower and farther', startup: 7, active: 16, endlag: 10, damage: 5, kb: { base: 25, growth: 40, angle: 70 },
+      hitbox: null, landingLag: 16, pop: 300, gravity: 0.35, reach: 300, reel: 1100, aim: [72, 45], cone: 25, // pop = px/s up on use, then gravity is scaled while the cord is out · reach = cord px (all out at the end of active) · reel = px/s pulled in · aim = degrees above level: ↑ alone, ↑ + ← → · a lip within cone degrees of the aim and inside the cord's length catches
+      anim: f => {
+        const p = tween(f, [
+          [0, AIRBORNE],
+          [5, { sx: 1.1, sy: 0.9, rot: 0.1, arm: [2, 6], reach: -2, legs: TUCK }], // coil, plug hand low
+          [7, { sx: 0.92, sy: 1.12, rot: -0.18, arm: [2, -16], reach: 10, legs: legsAll(-2, 4) }], // fling it up
+          [23, { sx: 0.94, sy: 1.1, rot: -0.14, arm: [2, -14], reach: 8, legs: legsAll(-2, 4) }],
+          [33, AIRBORNE],
+        ]);
+        const out = f < 7 ? 0 : f < 23 ? (f - 7) / 16 : Math.max(0, 1 - (f - 23) / 10);
+        if (out) p.tether = [60 * out, 72 * Math.PI / 180]; // preview only; in the game the cord runs out to reach
+        return { ...p, air: -40 };
+      },
+      reelPose: { sx: 0.88, sy: 1.16, rot: -0.22, arm: [4, -18], reach: 12, legs: legsAll(-5, 6) }, // plugged in: stretched toward the ledge
+    },
+    downSpecial: { // spawn a subagent: claws up, then push a little Claw'd out in front. It runs off on its own (dropped, in the air),
+      // bonks the first thing it reaches, then reports back with a toast and poofs
+      input: 'down + B (V / L), ground or air · one subagent out at a time', startup: 14, active: 2, endlag: 16, damage: 4, kb: { base: 30, growth: 35, angle: 55 },
+      hitbox: null, landingLag: 10, sub: { scale: 0.5, x: 40, speed: 380, life: 1.6, report: 0.8 }, // scale of Claw'd · spawn px ahead · run px/s · seconds before it gives up · seconds the toast stays
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [9, { sx: 0.92, sy: 1.1, rot: -0.06, arm: [-12, -12], legs: legsAll(0, 1) }], // claws up: summoning
+          [13, { sx: 0.9, sy: 1.12, rot: -0.08, arm: [-14, -14], legs: legsAll(0, 1) }],
+          [14, { x: 3, sx: 1.14, sy: 0.88, rot: 0.1, reach: 10, arm: [2, 4], legs: legsAll(-3, 0) }], // push it out
+          [18, { x: 3, sx: 1.12, sy: 0.89, rot: 0.09, reach: 9, arm: [2, 4], legs: legsAll(-3, 0) }],
+          [32, {}],
+        ]),
+        squint: f >= 4 && f < 14,
+      }),
+    },
   },
 
   grabs: {
