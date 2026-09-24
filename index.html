@@ -83,6 +83,7 @@ const FIGHTER = {
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: { movement: MOVESET.movement } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
+  random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
 const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo']; // select screen order (LOGOS follows it)
 ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(x, y, { ...idleAt(t, k), ...p }, f)); // each a little out of step
@@ -91,10 +92,10 @@ fighter = FIGHTER.clawd;
 // fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
 const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
 const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
-let targets = [], foes = [], cpus = []; // cpus = fighter ids picked as enemies · foes = their targets, kept for the hud once out of lives
+let targets = [], foes = [], cpus = [], rolled = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled) · foes = their targets, kept for the hud once out of lives
 function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
 function makeTargets() {
-  targets = (cpus.length ? cpus : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
+  targets = (rolled.length ? rolled : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
   foes = targets.filter(b => b.lives != null);
 }
 const heldBag = () => targets.find(b => b.held);
@@ -131,7 +132,9 @@ function restart() {
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
-function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[p1]; M = fighter.set.movement; [P.w, P.h] = fighter.box; } // character picked: the vs screen, then the fight
+// character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
+const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
+function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box; }
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -861,7 +864,7 @@ function drawVersus(s) {
   ctx.fillStyle = INK; path(right); ctx.fill(); ctx.strokeStyle = PAPER; hatch(right, 16, 0.08);
   const glow = ctx.createRadialGradient(W * 0.73, H * 0.58, 10, W * 0.73, H * 0.58, 190); glow.addColorStop(0, 'rgba(242,237,226,0.22)'); glow.addColorStop(1, 'rgba(242,237,226,0)');
   ctx.fillStyle = glow; ctx.fillRect(W / 2, 0, W / 2, H); // a spotlight on them
-  const foes = cpus.length ? cpus : ['bag'], n = foes.length, k = [3, 2.3, 1.8][n - 1], gap = [0, 200, 160][n - 1];
+  const foes = rolled.length ? rolled : ['bag'], n = foes.length, k = [3, 2.3, 1.8][n - 1], gap = [0, 200, 160][n - 1];
   foes.forEach((id, i) => {
     ctx.save(); ctx.translate(W * 0.73 + (i - (n - 1) / 2) * gap, H * 0.7); ctx.scale(k, k);
     FIGHTER[id].draw(0, 0, { rot: id === 'bag' ? Math.sin(s * 3) * 0.04 : 0 }, -1, s); ctx.restore();
@@ -927,8 +930,8 @@ function selectAt(x, y) {
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
-const addCpu = i => { if (cpus.length < MAX_CPUS) cpus.push(ROSTER[i]); };
-const pickTile = i => { if (i === ROSTER.length) i = Math.floor(Math.random() * ROSTER.length); p1 ? addCpu(i) : p1 = ROSTER[i]; }; // the first pick is P1's fighter, the rest are CPUs; Random rolls one
+const addCpu = id => { if (cpus.length < MAX_CPUS) cpus.push(id); };
+const pickTile = i => { const id = i === ROSTER.length ? 'random' : ROSTER[i]; p1 ? addCpu(id) : p1 = id; }; // the first pick is P1's fighter, the rest are CPUs
 function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick
   const n = TILES;
   if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
@@ -943,6 +946,18 @@ function tag(x, y, text, fill, right) { // a little filled label, e.g. P1 / CPU 
   ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x0, y, w, 24, 5); ctx.fill();
   ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(text, x0 + 7, y + 18);
 }
+// the P1 / CPU badges on a roster tile picked by them
+function pickTags(x, y, id) {
+  const n = cpus.filter(c => c === id).length;
+  if (id === p1) tag(x + TILE.w - 8, y + 8, 'P1', CLAWD, true);
+  if (n) tag(x + TILE.w - 8, y + (id === p1 ? 36 : 8), n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
+}
+// a big orange question mark (a Random pick) centred on the origin; Caveat's ? slants right, so it's stood upright, wobbling a little
+function drawQuestion(size, t) {
+  ctx.save(); ctx.rotate(-0.2 + Math.sin(t * 3) * 0.06); ctx.textAlign = 'left'; ctx.font = `700 ${size}px Caveat, cursive`;
+  const m = ctx.measureText('?'), qx = (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2, qy = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2; // centre the glyph's ink
+  ctx.fillStyle = INK; ctx.fillText('?', qx + size / 32, qy + size / 32); ctx.fillStyle = CLAWD; ctx.fillText('?', qx, qy); ctx.restore();
+}
 function drawSelect(t) {
   ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
   ctx.font = '700 56px Caveat, cursive'; ctx.fillText(p1 ? 'now pick your opponents' : 'choose your fighter', W / 2, 74);
@@ -956,18 +971,15 @@ function drawSelect(t) {
     ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
     ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + TILE.w / 2, y + TILE.h - 12);
     ctx.save(); ctx.translate(x + 9, y + 9); ctx.scale(0.8, 0.8); LOGOS[i](); ctx.restore();
-    const n = cpus.filter(c => c === id).length;
-    if (id === p1) tag(x + TILE.w - 8, y + 8, 'P1', CLAWD, true);
-    if (n) tag(x + TILE.w - 8, y + (id === p1 ? 36 : 8), n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
+    pickTags(x, y, id);
   });
   { // Random: a big question mark; picking it rolls one of the fighters
     const x = tileX(ROSTER.length), y = TILE.y, on = !onBand && focus === ROSTER.length, r = rect(x, y, TILE.w, TILE.h);
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill(); ctx.strokeStyle = INK; hatch(r, 12, 0.15);
-    ctx.save(); ctx.translate(x + TILE.w / 2, y + (TILE.h - 34) / 2); ctx.rotate(-0.2 + Math.sin(t * 3) * 0.06); ctx.textAlign = 'left'; ctx.font = '700 96px Caveat, cursive'; // Caveat's ? slants right: stood upright, wobbling a little
-    const m = ctx.measureText('?'), qx = (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2, qy = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2; // centre the glyph's ink, above the name
-    ctx.fillStyle = INK; ctx.fillText('?', qx + 3, qy + 3); ctx.fillStyle = CLAWD; ctx.fillText('?', qx, qy); ctx.restore();
+    ctx.save(); ctx.translate(x + TILE.w / 2, y + (TILE.h - 34) / 2); drawQuestion(96, t); ctx.restore(); // above the name
     ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
     ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText('Random', x + TILE.w / 2, y + TILE.h - 12);
+    pickTags(x, y, 'random');
   }
 
   // READY TO FIGHT: a slightly slanted orange band right across
