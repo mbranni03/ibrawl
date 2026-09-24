@@ -75,7 +75,7 @@ const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; /
 const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
 const D = MOVESET.defense, DODGES = ['spotDodge', 'rollForward', 'rollBack'], AD = D.airDodge, SB = D.shieldBreak;
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
-const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
+const intangible = () => { if (P.state === 'tunnel') return true; const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
 const P = { x: 610, y: 380, w: 60, h: 50, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, think: 0 }; // think = neutral special effort tier reached (0 … 3), kept until KO
 const GROUNDED = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWalk', 'crouchUp', 'squat', 'land', 'landLag', 'shield', 'shieldDrop', 'knockdown', 'getup', 'tech', 'hold', 'pummel', ...THROWS, ...DODGES, ...Object.keys(ATK).filter(k => !(k in AIR))];
@@ -102,7 +102,7 @@ ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(
 fighter = FIGHTER.clawd;
 // punching targets: the CPUs picked on the select screen as dummies, or the training bag if none. Each takes hits and knockback like a
 // fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
-const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
+const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false, carted: false, sticker: null }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
 const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
 let targets = [], foes = [], cpus = [], rolled = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled) · foes = their targets, kept for the hud once out of lives
 function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
@@ -392,6 +392,7 @@ function stepPlayer(dt) {
   if (P.toastT != null && ++P.toastT >= TOAST) P.toastT = null;
   const dir = keys.left && keys.right ? lastDir : (keys.right ? 1 : 0) - (keys.left ? 1 : 0); // both held: newest wins
   let s = P.state;
+  if (s === 'tunnel') return tunnelStep(dir, dt);
   if (s === 'ride') { // in the vehicle: stepCart places it. Jump bails out with a hop, keeping the air jumps (the recovery)
     if (jumpQ) { jumpQ = 0; P.vy = -AIRJUMP; P.fastFall = false; P.airDodged = false; P.ground = false; setState('air'); puff(); }
     else if (!cart) setState(P.ground ? 'idle' : 'air');
@@ -406,8 +407,10 @@ function stepPlayer(dt) {
       P.held = P.held && keys.heavy;
       if (P.held && P.f > m.chargeAt && P.chg < m.chargeFrames) { P.f = m.chargeAt; P.chg++; }
     }
-    if (attackQ && i >= 0 && i < 2 && !tiltQ && !keys.up && !keys.down) { P.nextJab = true; attackQ = 0; } // light during a jab queues the next one (a held direction is fine); a fresh tilt input waits for the cancel window instead
-    if (P.nextJab && P.f >= done) { P.nextJab = false; setState(JABS[i + 1]); }
+    if (m.burrow) { if (P.f >= end) burrowIn(m.burrow); } // drilled in: underground from here (no cancelling out of it)
+    else if (attackQ && i >= 0 && i < 2 && !tiltQ && !keys.up && !keys.down) { P.nextJab = true; attackQ = 0; } // light during a jab queues the next one (a held direction is fine); a fresh tilt input waits for the cancel window instead
+    if (m.burrow) {}
+    else if (P.nextJab && P.f >= done) { P.nextJab = false; setState(JABS[i + 1]); }
     else if (P.f >= end || (P.f >= end - rec * CANCEL && (dir || jumpQ || attackQ || heavyQ || specialQ || dodgeQ || keys.down)) || (P.landed && P.f >= done && jumpQ)) {
       if (keys.down) { P.state = 'crouch'; P.f = 5; } // still holding down: stay crouched
       else setState(s === 'downTilt' ? 'crouchUp' : 'idle');
@@ -549,11 +552,14 @@ function stepPlayer(dt) {
   if (m?.hitbox) {
     const hb = m.hitbox, ox = P.ledge ? 0 : clawdPose().x || 0; // on the ledge, ledgePlace already moved P by the pose's x
     const box = { x: P.face > 0 ? cx + ox + hb.x : cx - ox - hb.x - hb.w, y: P.y + P.h + hb.y, w: hb.w, h: hb.h };
+    // multi-hit (every = frames between hits): each hit is its own, and the last one is the finisher's damage / kb if it has one
+    const n = m.every ? Math.floor((P.f - m.startup) / m.every) : 0, key = P.state + n, h = m.finisher && n === Math.ceil(m.active / m.every) - 1 ? m.finisher : m;
     if (P.f >= m.startup && P.f < m.startup + m.active) for (const b of targets) {
-      if (b.hit === P.state || !overlaps(box, b)) continue;
-      b.hit = P.state; P.landed = true;
+      if (b.hit === key || !overlaps(box, b)) continue;
+      b.hit = key; P.landed = true;
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
-      hitBag(b, m.damage * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), m.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      hitBag(b, h.damage * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      if (m.sticker) b.sticker = { t: 0, ...m.sticker }; // e.g. a community note stuck on it
     }
   }
   if (!m || P.f < m.startup) { for (const b of targets) b.hit = null; P.landed = false; }
@@ -577,6 +583,22 @@ function stepPlayer(dt) {
   if (out(P)) ko();
 }
 
+// burrowing (Grok's down smash): under the surface it drilled into, steered with ← → (it turns to face the way it goes). Left alone
+// it digs on ahead dist px; it pops out (the out move) then, on attack / heavy / special / jump, or after max frames. Can't be hurt,
+// and can't dig past either end of the surface
+function burrowIn(bw) { setState('tunnel'); P.tun = { bw, steered: false, dist: 0 }; P.vx = P.vy = 0; }
+function tunnelStep(dir, dt) {
+  const T = P.tun, bw = T.bw, on = P.on || stage;
+  if (dir) { T.steered = true; P.face = dir; }
+  const v = dir ? dir * bw.speed : T.steered ? 0 : P.face * bw.speed;
+  const x0 = P.x; P.x = Math.max(on.x, Math.min(on.x + on.w - P.w, P.x + v * dt)); T.dist += Math.abs(P.x - x0);
+  P.vx = P.vy = 0;
+  if (P.x !== x0 && P.f % 6 === 0) dust(-P.face * 16, -P.face); // dirt thrown up behind the mound
+  if (attackQ || heavyQ || specialQ || jumpQ || P.f >= bw.max || (!T.steered && T.dist >= bw.dist)) {
+    attackQ = heavyQ = specialQ = jumpQ = 0; setState(bw.out); puff();
+  }
+}
+
 function stepWorld(dt) {
   // sparks fly straight until they hit a target or the stage, or run out of range
   for (let i = shots.length - 1; i >= 0; i--) {
@@ -592,6 +614,7 @@ function stepWorld(dt) {
 
   for (const b of targets) {
     b.hitT = Math.max(0, b.hitT - dt);
+    if (b.sticker && (b.sticker.t += dt) > b.sticker.secs) b.sticker = null;
     if (b.held || b.pinned || b.carted) continue; // Claw'd (or its ride) places it
     b.vy = Math.min(b.vy + G * dt, 950);
     b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx), (b.ground ? 1800 : 250) * dt); // floor friction / air drag
@@ -736,6 +759,7 @@ function clawdPose() {
     case 'getup': case 'tech': return R[P.state].anim(Math.min(f, R[P.state].frames - 1));
     case 'respawn': return { ...M.idle.anim(f % 120, 120), pad: 1, say: [R.respawn.say, Math.min(1, f / 10)] };
     case 'specialFall': return M.fall.anim(f % 40, 40); // helpless
+    case 'tunnel': return { mound: f, moving: P.tun.steered ? !!(keys.left || keys.right) : true };
   }
   if (P.glide) return M.glide.anim(f % 48, 48);
   if (P.fastFall) return M.fastFall.anim(f % 24, 24);
@@ -833,6 +857,7 @@ function drawTargets(t) {
   for (const b of targets) {
     const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh, by = b.y + b.h;
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
+    if (b.sticker) b.sticker.draw(bx, b.y + b.h * 0.45, b.rot, Math.min(1, (b.sticker.secs - b.sticker.t) / 0.3)); // fades at the end
     if (b.id !== 'bag') continue;
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
     const pct = Math.round(b.dmg) + '%';

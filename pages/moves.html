@@ -168,7 +168,7 @@ function select(i) {
     : `<div class="none" style="flex:1">no frame data · looping ${total}f</div>`) + '<div class="head" id="head"></div>';
   $('boardwrap').hidden = !move.anim;
 
-  const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
+  const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'function' ? 'ƒ' : typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
   $('data').innerHTML = Object.entries(move).filter(([k]) => k !== 'input').map(([k, v]) =>
     `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? show(v) : v}</dd>`).join('');
 }

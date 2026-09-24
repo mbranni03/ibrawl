@@ -150,6 +150,96 @@ const GROK_MOVESET = {
     },
   },
 
+  // hold to charge (chargeFrames, chargeMult, chargeAt as Claw'd's): the anim gets the charge held so far, c = 0 … 1
+  smashAttacks: {
+    forwardSmash: { // Community Note: rear back while a note types itself out overhead (more of it the longer the charge), then headbutt
+      // the card into them. The hitbox is the card, reaching past the ball; it stays stuck on whoever it hits for a moment
+      input: 'heavy (X / K), hold to charge', step: 240, startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 100, angle: 38 },
+      hitbox: { x: 24, y: -64, w: 66, h: 50 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 10,
+      sticker: { secs: 1.2, draw: (x, y, rot, a) => drawStuckNote(x, y, rot, a) },
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [10, { x: -6, sx: 0.92, sy: 1.1, rot: -0.25 }],
+          [15, { x: -8, sx: 0.9, sy: 1.12, rot: -0.3 }],
+          [16, { x: 12, sx: 1.26, sy: 0.82, rot: 0.28 }],
+          [20, { x: 12, sx: 1.24, sy: 0.83, rot: 0.26 }],
+          [32, { x: 6, sx: 1.06, sy: 0.95, rot: 0.08 }],
+          [50, {}],
+        ]);
+        const k = tween(f, [ // the card: [dx, dy, tilt, _, size]
+          [0, { note: [6, -80, -0.1, 0, 0] }],
+          [6, { note: [8, -86, -0.08, 0, 1.08] }],
+          [8, { note: [10, -84, -0.08, 0, 1] }],
+          [15, { note: [0, -80, -0.14, 0, 1] }], // pulled back…
+          [16, { note: [58, -42, 0.14, 0, 1] }], // …slammed forward
+          [22, { note: [64, -42, 0.16, 0, 1] }],
+          [30, { note: [66, -36, 0.2, 0, 0] }],
+        ]).note;
+        k[3] = Math.min(1, f / 16 + c);
+        return { ...p, note: f < 30 ? k : null, squint: f >= 14 && f < 24, speed: f >= 16 && f < 22 ? 0.7 : 0 };
+      },
+    },
+    upSmash: { // Trending: squash down, then spray a fountain of X posts up out of its top. Anyone above gets carried up the column
+      // by a hit every `every` frames (damage / kb), and the last one (finisher) launches them
+      input: 'up + heavy (X / K), hold to charge', startup: 10, active: 25, every: 5, endlag: 22, damage: 1.5, kb: { base: 22, growth: 0, angle: 90 },
+      finisher: { damage: 6, kb: { base: 34, growth: 100, angle: 90 } },
+      hitbox: { x: -38, y: -160, w: 76, h: 130 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 7,
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [7, { sx: 1.24 + 0.08 * c, sy: 0.74 - 0.06 * c }], // squashes lower the longer it charges
+          [10, { y: -4, sx: 0.84, sy: 1.24, rot: -0.12 }],
+          [35, { y: -3, sx: 0.86, sy: 1.2, rot: -0.1 }],
+          [40, { sx: 0.96, sy: 1.05 }],
+          [47, {}],
+        ]);
+        if (f >= 10 && f < 35) p.sy += 0.04 * Math.sin(f * 1.6); // shuddering as they pour out
+        return {
+          ...p, squint: f >= 4 && f < 38, posts: f >= 10 && f < 44 ? [f - 10, Math.min(1, (f - 10) / 3, (44 - f) / 6)] : null,
+          say: f >= 10 && f < 40 ? ['#1 trending', Math.min(1, (f - 10) / 3, (40 - f) / 4)] : null,
+        };
+      },
+    },
+    downSmash: { // The Boring Company: spin up like a drill (faster with charge) and screw down into the floor, spraying dirt both ways
+      // (a small hit), then tunnel: steered with ← →, or left alone it digs on ahead; pops out as tunnelOut (burrow: in index.html)
+      input: 'down + heavy (X / K), hold to charge · ← → steer underground, attack / jump to pop out', startup: 12, active: 4, endlag: 8,
+      damage: 4, kb: { base: 40, growth: 30, angle: 75 }, hitbox: { x: -56, y: -22, w: 112, h: 22 }, both: true,
+      chargeFrames: 60, chargeMult: 1.4, chargeAt: 7, burrow: { out: 'tunnelOut', speed: 300, dist: 200, max: 90 }, // px/s · px dug if not steered · frames under at most
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [7, { sx: 1.12, sy: 0.88 }],
+          [10, { sx: 0.88, sy: 1.1 }],
+          [24, { sx: 0.84, sy: 1.12, sink: 60 }],
+        ]);
+        return {
+          ...p, sink: f < 10 ? 0 : p.sink, rot: f < 7 ? f * 0.08 : 0.56 + (f - 7) * 0.9 + 14 * c, // spins up, and keeps spinning while charged
+          squint: f >= 5, debris: f >= 12 && f < 26 ? (f - 12) / 14 : null, puff: f >= 12 && f < 20 ? (f - 12) / 8 : null,
+        };
+      },
+    },
+    tunnelOut: { // bursting back up out of the tunnel with an uppercut, both sides; keeps the down smash's charge
+      input: 'end of the down smash tunnel', startup: 4, active: 5, endlag: 26, damage: 13, kb: { base: 32, growth: 98, angle: 80 },
+      hitbox: { x: -34, y: -84, w: 68, h: 84 }, both: true, chargeFrames: 60, chargeMult: 1.4,
+      anim: f => {
+        const p = tween(f, [
+          [0, { sx: 0.84, sy: 1.2, sink: 40 }],
+          [4, { y: -30, sx: 0.82, sy: 1.26 }],
+          [9, { y: -40, sx: 0.9, sy: 1.12 }],
+          [16, { sx: 1.2, sy: 0.8 }],
+          [22, { sx: 0.96, sy: 1.04 }],
+          [35, {}],
+        ]);
+        const e = Math.min(1, f / 12);
+        return {
+          ...p, rot: Math.PI * 2 * (1 - (1 - e) ** 2), squint: f < 12,
+          debris: f < 14 ? f / 14 : null, puff: f < 8 ? f / 8 : f >= 16 && f < 24 ? (f - 16) / 8 : null,
+        };
+      },
+    },
+  },
+
   // drawn with a preview-only air: -40 like Claw'd's; rot always ends on a whole turn so the eyes land back on the front
   aerials: {
     neutralAir: { // spin in place twice, fast then easing off: the whole ball is the hitbox
