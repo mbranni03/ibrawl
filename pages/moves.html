@@ -71,9 +71,11 @@
 <script src="../src/characters/clawd.js"></script>
 <script src="../src/characters/clawd-moveset.js"></script>
 <script src="../src/characters/grok.js"></script>
+<script src="../src/characters/grok-moveset.js"></script>
 <script src="../src/characters/wumpus.js"></script>
 <script src="../src/characters/android.js"></script>
 <script src="../src/characters/duo.js"></script>
+<script src="../src/characters/duo-moveset.js"></script>
 <script src="../src/characters/snoo.js"></script>
 <script>
 const VW = 480, VH = 270, SCALE = 2, GROUND = 200;
@@ -88,15 +90,17 @@ board.width = BW * dpr; board.height = PH * 2 * dpr;
 const boardPaper = makePaper(BW, PH * 2, dpr);
 const title = k => k.replace(/([A-Z]|\d+)/g, ' $1').replace(/^./, c => c.toUpperCase());
 
-// every fighter: how to draw it, and its moveset. The others have none yet, so they get Claw'd's move list, all still to do
+// every fighter: how to draw it, and its moveset. The others move like Claw'd (their draw functions take his pose fields; Grok
+// bounces instead of walking and Duo flies: grok-moveset.js, duo-moveset.js), and get the rest of his move list, all still to do
 const todo = Object.fromEntries(Object.entries(MOVESET).map(([g, moves]) => [g, Object.fromEntries(Object.keys(moves).map(k => [k, {}]))]));
+const basic = { ...todo, movement: MOVESET.movement };
 const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
-  grok: { name: 'Grok Bot', moves: todo, draw: drawGrok },
-  wumpus: { name: 'Wumpus', moves: todo, draw: drawWumpus },
-  android: { name: 'Android', moves: todo, draw: drawAndroid },
-  duo: { name: 'Duo', moves: todo, draw: drawDuo },
-  snoo: { name: 'Snoo', moves: todo, draw: drawSnoo },
+  grok: { name: 'Grok Bot', moves: { ...todo, ...GROK_MOVESET }, draw: drawGrok, fx: drawClawdFx },
+  wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
+  android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
+  duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
+  snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
 };
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait

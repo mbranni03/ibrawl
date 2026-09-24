@@ -22,6 +22,8 @@
 <script src="src/characters/duo.js"></script>
 <script src="src/characters/snoo.js"></script>
 <script src="src/characters/clawd-moveset.js"></script>
+<script src="src/characters/grok-moveset.js"></script>
+<script src="src/characters/duo-moveset.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -47,7 +49,10 @@ const ATTACK_FROM = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWal
 // shield: holding it wears it down, letting go lets it grow back; blocking a hit costs a chunk. Emptied = it breaks (stun), and comes back at SHIELD_MIN
 const SHIELD_DRAIN = 1 / 240, SHIELD_REGEN = 1 / 360, SHIELD_HIT = 0.3, SHIELD_MIN = 0.3;
 let hitstop = 0;
-const M = MOVESET.movement, L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
+const has = group => !!fighter.set[group];
+const AIR_JUMPS = () => fighter.jumps || 1;
+const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -67,26 +72,30 @@ const STOCKS = 3; let stocks = STOCKS;
 const fx = []; // dust clouds left in the world: { x, y, dir, t }
 const shots = []; // thrown sparks in flight: { x, y, vx, t, m }
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
-// every fighter's look: name, collision box [w, h] when it's a dummy, and how to draw it standing (bottom-centre at x, y; t = seconds, for idling)
-const blinkAt = t => Math.floor(t * 60) % 180 < 8 ? 1 : 0;
+// every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
+// doesn't have yet (attacks, specials, grabs, defense, ledge) is simply off for it · jumps = air jumps · flap = air jump speed ·
+// glide = max fall speed holding jump. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
 const FIGHTER = {
-  clawd: { name: "Claw'd", box: [60, 50], draw: (x, y, p, f, t) => drawClawd(x, y, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0, ...p }, f) },
-  grok: { name: 'Grok Bot', box: [52, 56], draw: (x, y, p, f, t) => drawGrok(x, y, { blink: blinkAt(t), ...p }, f) },
-  wumpus: { name: 'Wumpus', box: [50, 64], draw: (x, y, p, f) => drawWumpus(x, y, p, f) },
-  android: { name: 'Android', box: [50, 64], draw: (x, y, p, f) => drawAndroid(x, y, p, f) },
-  duo: { name: 'Duo', box: [60, 61], draw: (x, y, p, f, t) => drawDuo(x, y, { blink: blinkAt(t + 1.3), ...p }, f) },
-  snoo: { name: 'Snoo', box: [46, 76], draw: (x, y, p, f) => drawSnoo(x, y, p, f) },
+  clawd: { name: "Claw'd", box: [60, 50], art: drawClawd, set: MOVESET },
+  grok: { name: 'Grok Bot', box: [52, 56], art: drawGrok, set: GROK_MOVESET },
+  wumpus: { name: 'Wumpus', box: [50, 64], art: drawWumpus, set: { movement: MOVESET.movement } },
+  android: { name: 'Android', box: [50, 64], art: drawAndroid, set: { movement: MOVESET.movement } },
+  duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
+  snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: { movement: MOVESET.movement } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
+  random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
 const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo']; // select screen order (LOGOS follows it)
+ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(x, y, { ...idleAt(t, k), ...p }, f)); // each a little out of step
+fighter = FIGHTER.clawd;
 // punching targets: the CPUs picked on the select screen as dummies, or the training bag if none. Each takes hits and knockback like a
 // fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
 const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
 const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
-let targets = [], foes = [], cpus = []; // cpus = fighter ids picked as enemies · foes = their targets, kept for the hud once out of lives
+let targets = [], foes = [], cpus = [], rolled = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled) · foes = their targets, kept for the hud once out of lives
 function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
 function makeTargets() {
-  targets = (cpus.length ? cpus : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
+  targets = (rolled.length ? rolled : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
   foes = targets.filter(b => b.lives != null);
 }
 const heldBag = () => targets.find(b => b.held);
@@ -122,8 +131,10 @@ function restart() {
   stocks = STOCKS; fx.length = shots.length = 0; sub = null; makeTargets();
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
-function fight() { restart(); setPaused(false); } // leaves the vs screen: Claw'd is the only fighter so far
-function versus() { picking = false; vsT = performance.now(); } // character picked: the vs screen, then the fight
+function fight() { restart(); setPaused(false); } // leaves the vs screen
+// character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
+const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
+function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box; }
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -189,7 +200,7 @@ cv.addEventListener('click', e => {
   if (vsT != null) { fight(); return; }
   if (picking) { // character select hot spots (drawn in drawSelect)
     const p = selectAt(...at(e));
-    if (p?.back) picking = false; else if (p?.tile != null) addCpu(p.tile); else if (p?.slot) cpus.splice(p.slot - 1, 1); else if (p?.ready) { versus(); cv.style.cursor = ''; }
+    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.slot) cpus.splice(p.slot - 1, 1); else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
     return;
   }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
@@ -206,7 +217,7 @@ function land(surface, wasGround) {
     if (P.state === 'shieldBreak') puff(); // still stunned through the landing
     else if (P.state === 'tumble' || (P.state === 'airDodge' && P.fromTumble && techQ)) { // tech (+ ← → tech roll), else slammed onto its back (dodging out of a tumble right before landing still techs)
       const d = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      if (techQ) { techQ = dodgeQ = 0; setState(d ? (d === P.face ? 'rollForward' : 'rollBack') : 'tech'); } else setState('knockdown');
+      if (techQ) { techQ = dodgeQ = 0; setState(d && has('defense') ? (d === P.face ? 'rollForward' : 'rollBack') : 'tech'); } else setState('knockdown');
       puff();
     }
     else if (P.state === 'hitstun') {} // flinches through the landing
@@ -220,11 +231,11 @@ function land(surface, wasGround) {
 // ledges: falling past a stage corner (not holding down) catches it. While on it, the ledge moves' x / air place Claw'd
 // (measured from standing at the lip); P.ledge = which corner, -1 left / 1 right
 function grabLedge() {
-  if (P.regrab > 0 || keys.down || P.vy < 0 || !(['air', 'djump', 'upSpecial', 'specialFall'].includes(P.state) || (P.state === 'tumble' && P.f >= P.stun))) return;
+  if (!has('ledge') || P.regrab > 0 || keys.down || P.vy < 0 || !(['air', 'djump', 'upSpecial', 'specialFall'].includes(P.state) || (P.state === 'tumble' && P.f >= P.stun))) return;
   for (const side of [-1, 1]) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, gap = side < 0 ? lx - (P.x + P.w) : P.x - lx;
     if (gap >= 0 && gap < 24 && P.y > stage.y - 40 && P.y < stage.y + 16) {
-      Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: 1, airDodged: false }); // catching refreshes the double jump
+      Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
       return setState('ledgeGrab');
     }
   }
@@ -240,7 +251,7 @@ function ledgeInput(dir) {
     else if (keys.down || dir === -P.face) { P.ledge = 0; P.regrab = 0.4; setState('ledgeDrop'); }
   }
   else if (s === 'ledgeGetup' && P.f >= L.ledgeGetup.frames) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
-  else if (s === 'ledgeJump' && P.f >= L.ledgeJump.launchAt) { P.ledge = 0; P.regrab = 0.4; P.vy = -JUMP; P.jumps = 1; setState('air'); }
+  else if (s === 'ledgeJump' && P.f >= L.ledgeJump.launchAt) { P.ledge = 0; P.regrab = 0.4; P.vy = -JUMP; P.jumps = AIR_JUMPS(); setState('air'); }
   else if (s === 'ledgeRoll' && P.f >= L.ledgeRoll.frames) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
   else if (s === 'ledgeAttack' && P.f >= L.ledgeAttack.startup + L.ledgeAttack.active + L.ledgeAttack.endlag) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
   else if ((s === 'ledgeGetup' && P.f === 19) || (s === 'ledgeAttack' && P.f === 15) || (s === 'ledgeRoll' && P.f === 26)) puff(); // feet hit the stage
@@ -264,7 +275,7 @@ function tetherStep(dt) {
     const tx = lx - T.side * (P.w / 2 + g.x) - P.w / 2, ty = stage.y + g.air - P.h, dx = tx - P.x, dy = ty - P.y, d = Math.hypot(dx, dy), step = US.reel * dt;
     P.vx = P.vy = 0;
     if (d > step) { P.x += dx / d * step; P.y += dy / d * step; return; }
-    Object.assign(P, { x: tx, y: ty, ledge: T.side, face: -T.side, fastFall: false, jumps: 1, airDodged: false }); // catching refreshes the double jump
+    Object.assign(P, { x: tx, y: ty, ledge: T.side, face: -T.side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
     return setState('ledgeGrab');
   }
   if (T.link != null) return linkStep(T, ax, ay, dt);
@@ -338,7 +349,7 @@ function ko() {
 }
 function respawn() {
   if (--stocks <= 0) return gameOver();
-  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: 1, inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, toastT: null });
+  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, toastT: null });
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -400,7 +411,7 @@ function stepPlayer(dt) {
     else if (s === 'knockdown') { // lying there: any input gets up (← → rolls away instead), or it gets up by itself
       if (P.f >= R.knockdown.frames || (P.f >= R.knockdown.bounce && (dir || keys.up || jumpQ || attackQ || heavyQ || specialQ || dodgeQ))) {
         const atk = attackQ || heavyQ; jumpQ = attackQ = heavyQ = specialQ = dodgeQ = 0;
-        setState(atk ? 'getupAttack' : dir ? (dir === P.face ? 'rollForward' : 'rollBack') : 'getup');
+        setState(atk && has('groundAttacks') ? 'getupAttack' : dir && has('defense') ? (dir === P.face ? 'rollForward' : 'rollBack') : 'getup');
       }
     }
     else if (DODGES.includes(s)) { if (P.f >= D[s].frames) setState('idle'); }
@@ -412,25 +423,25 @@ function stepPlayer(dt) {
       else if (!keys.shield) setState('shieldDrop');
     }
     else if (s === 'shieldDrop' && P.f < 7) {} // lowering it
-    else if (grabQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide)
+    else if (grabQ && has('grabs') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide)
       grabQ = 0; const dash = s === 'dash' || s === 'run'; if (dir && !dash) P.face = dir; setState(dash ? 'dashGrab' : 'grab');
     }
-    else if (dodgeQ && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
+    else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
-    else if (heavyQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
-    else if (specialQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
-    else if (attackQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
+    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
+    else if (specialQ && has('specials') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab
       const atk = keys.up ? 'upTilt' : keys.down ? 'downTilt' : s === 'dash' || s === 'run' ? 'dashAttack' : dir && tiltQ ? 'forwardTilt' : 'jab1';
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if (keys.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
-    else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = 1; setState('drop'); } // tapped ↓: through the platform
+    else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
-      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = 1; setState('air'); puff(); }
+      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = AIR_JUMPS(); setState('air'); puff(); }
     }
     else if (s === 'skid') { // braking slide; pressing the other way at any point turns it into a turnaround
       if (dir === -P.face) P.turn = true;
@@ -452,7 +463,7 @@ function stepPlayer(dt) {
     else if (dashQ || (s === 'dash' && dir !== P.face)) { P.face = dir; P.state = 'dash'; P.f = 0; } // turning mid-dash restarts it
     else if (s !== 'dash') { P.face = dir; setState('walk'); }
   } else {
-    if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, 1); setState('air'); s = 'air'; } // walked off an edge
+    if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, AIR_JUMPS()); setState('air'); s = 'air'; } // walked off an edge
     if (s in AIR) { // aerial: drift freely the whole time; free once it ends, or early like ground attacks
       const m = AIR[s], done = m.startup + m.active, rec = m.endlag * (P.landed ? HIT_REC : 1), end = done + rec;
       if (P.f >= end || (P.f >= end - rec * CANCEL && (jumpQ || attackQ)) || (P.landed && P.f >= done && jumpQ)) { setState('air'); s = 'air'; }
@@ -461,17 +472,17 @@ function stepPlayer(dt) {
     if (s === 'hitstun' && !stunned) { setState('air'); s = 'air'; }
     if (s === 'upSpecial') tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
     const free = ['air', 'djump', 'drop', 'ledgeDrop'].includes(s) || (s === 'tumble' && !stunned); // tumble: acts once the hitstun runs out
-    if ((attackQ || heavyQ) && free) { // aerial picked by the held direction (back = away from facing); heavy does the same in the air
+    if ((attackQ || heavyQ) && free && has('aerials')) { // aerial picked by the held direction (back = away from facing); heavy does the same in the air
       attackQ = heavyQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
     }
-    else if (specialQ && free) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
-    else if (dodgeQ && free && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
+    else if (specialQ && free && has('specials')) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (dodgeQ && free && has('defense') && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
       const dx = dir, dy = keys.up ? -1 : keys.down ? 1 : 0, n = Math.hypot(dx, dy) || 1;
       dodgeQ = 0; P.airDodged = true; P.fastFall = false; P.fromTumble = s === 'tumble'; P.dodgeV = [dx / n * AD.speed, dy / n * AD.speed]; setState('airDodge');
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
     }
     else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
-    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -AIRJUMP; P.jumps = 0; P.fastFall = false; setState('djump'); }
+    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
     if (ffQ && P.vy > -150 && !stunned && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
@@ -496,6 +507,8 @@ function stepPlayer(dt) {
 
   P.vy += G * dt * (P.state === 'upSpecial' ? US.gravity : 1);
   P.vy = Math.min(P.vy, P.fastFall ? 1500 : 950);
+  P.glide = fighter.glide && keys.jump && P.vy > 0 && !P.fastFall && ['air', 'djump'].includes(P.state); // holding jump on the way down
+  if (P.glide) P.vy = Math.min(P.vy, fighter.glide);
   if (P.fastFall) P.vy = Math.max(P.vy, 1100);
   if (P.state === 'airDodge' && P.f <= AD.burst) { // the dodge burst ignores gravity and steering, then eases off
     const k = P.f === AD.burst ? 0.4 : 1;
@@ -663,6 +676,7 @@ function clawdPose() {
     case 'respawn': return { ...M.idle.anim(f % 120, 120), pad: 1, say: [R.respawn.say, Math.min(1, f / 10)] };
     case 'specialFall': return M.fall.anim(f % 40, 40); // helpless
   }
+  if (P.glide) return M.glide.anim(f % 48, 48);
   if (P.fastFall) return M.fastFall.anim(f % 24, 24);
   if (P.vy > 450) return M.fall.anim(f % 40, 40);
   // rising / floating: pick the jump-arc frame from vertical speed (stretched going up, tucked at the peak, reaching down)
@@ -721,12 +735,15 @@ function render(t) {
   for (const d of fx) drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
   if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawClawd(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
 
   // hud
   drawHealth(t);
   if (paused) drawPause(t);
 }
+
+// the fighter in play; anyone but Claw'd is drawn inside his effects (speed lines, dizzy stars, respawn pad…), stretched to its height
+const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawClawd ? p : { ...p, sy: (p.sy ?? 1) * fighter.box[1] / 50, body: () => fighter.art(cx, b, p, face) }, face);
 
 // the up special's toasts ("connection refused" on a miss, "mcp connected" plugging into the bag): stay up TOAST frames whatever
 // Claw'd does next (landing, getting up…). P.toastMsg = OOPS index or [headline, detail], P.toastOk = success style
@@ -740,12 +757,12 @@ function powered(pose) {
   return { aura: P.think, sx: (pose.sx ?? 1) * g, sy: (pose.sy ?? 1) * g };
 }
 
-// the subagent: Claw'd at half size, popping in, running (or falling); once done just its toast, over where it poofed
+// the subagent: the fighter at half size, popping in, running (or falling); once done just its toast, over where it poofed
 function drawSub() {
   const S = DOWN_B.sub, bx = sub.x + sub.w / 2, by = sub.y + sub.h, fr = Math.floor(sub.t * 60);
   if (sub.done) return drawOops(bx, sub.y - 4, Math.min(1, sub.done / 0.1, (S.report - sub.done) / 0.2), DONE, true);
   const k = S.scale * Math.min(1, 0.4 + sub.t / 0.15), pose = sub.ground ? M.run.anim(fr % 24, 24) : M.fall.anim(fr % 40, 40);
-  ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; drawClawd(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
+  ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; fighter.art(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
 }
 
 // the targets (dummies turned to face Claw'd), shaking when hit; only the training bag floats its damage % above it
@@ -763,11 +780,11 @@ function drawTargets(t) {
 
 // hud: Claw'd's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
 function drawHealth(t) {
-  badge(W - 120, P.dmg, P.hitT, () => drawClawd(0, 5 * CV / 2), stocks);
+  const portrait = (F, face) => () => { const h = F.box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
+  badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1), stocks);
   foes.forEach((b, i) => {
-    const h = FIGHTER[b.id].box[1], k = Math.min(1, 44 / h / 0.8); // fit the taller fighters in the circle
     ctx.globalAlpha = b.lives ? 1 : 0.35; // faded once out
-    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, () => { ctx.scale(k, k); FIGHTER[b.id].draw(0, h / 2, {}, -1, t); }, b.lives);
+    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, portrait(FIGHTER[b.id], -1), b.lives);
   });
   ctx.globalAlpha = 1;
 }
@@ -800,13 +817,14 @@ function drawTitle(t) {
   ctx.fillText('SMACKDOWN', 5, 5); ctx.fillStyle = CLAWD; ctx.fillText('SMACKDOWN', 0, 0);
   ctx.strokeStyle = INK; ctx.lineWidth = 3; line(-250, 22, 250, 18, 2, 2); // scribbled underline
   ctx.restore();
-  const gy = H / 2 + 85, blink = Math.floor(t * 60) % 180 < 8 ? 1 : 0;
+  const gy = H / 2 + 85;
   ctx.strokeStyle = INK; ctx.lineWidth = 2; line(W / 2 - 390, gy, W / 2 + 390, gy, 1.2, 1);
-  for (const [x, draw] of [[-325, () => drawWumpus(0, 0, {}, 1)], [-195, () => drawGrok(0, 0, { blink }, 1)], [-65, () => drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }, 1)],
-    [65, () => drawSnoo(0, 0, {}, -1)], [195, () => drawAndroid(0, 0, {}, -1)], [325, () => drawDuo(0, 0, { blink }, -1)]]) {
-    ctx.save(); ctx.translate(W / 2 + x, gy); ctx.scale(1.4, 1.4); draw(); ctx.restore();
-  }
+  [[-325, drawWumpus, 1], [-195, drawGrok, 1], [-65, drawClawd, 1], [65, drawSnoo, -1], [195, drawAndroid, -1], [325, drawDuo, -1]].forEach(([x, draw, face], i) => {
+    ctx.save(); ctx.translate(W / 2 + x, gy); ctx.scale(1.4, 1.4); draw(0, 0, idleAt(t, i), face); ctx.restore();
+  });
 }
+// Claw'd's idle loop (every fighter can pose it) at time t, the k-th fighter out of step with the others so they don't breathe in unison
+const idleAt = (t, k = 0) => M.idle.anim((Math.floor(t * 60) + 47 * k) % 120, 120);
 
 function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
@@ -839,14 +857,14 @@ function drawVersus(s) {
   const left = [[0, 0], [W / 2 + cut, 0], [W / 2 - cut, H], [0, H]], right = [[W / 2 + cut, 0], [W, 0], [W, H], [W / 2 - cut, H]];
   ctx.save(); ctx.translate(-(1 - slide) * W / 2, 0);
   ctx.fillStyle = '#f3cdb9'; path(left); ctx.fill(); ctx.strokeStyle = CLAWD; hatch(left, 16, 0.35);
-  ctx.save(); ctx.translate(W * 0.27, H * 0.7); ctx.scale(3.4, 3.4); drawClawd(0, 0, { ...M.idle.anim(Math.floor(s * 60) % 120, 120), x: 0 }, 1); ctx.restore();
-  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 76px Caveat, cursive'; ctx.fillText("Claw'd", W * 0.27, H * 0.88);
+  ctx.save(); ctx.translate(W * 0.27, H * 0.7); ctx.scale(3.4, 3.4); fighter.draw(0, 0, {}, 1, s); ctx.restore();
+  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 76px Caveat, cursive'; ctx.fillText(fighter.name, W * 0.27, H * 0.88);
   ctx.restore();
   ctx.save(); ctx.translate((1 - slide) * W / 2, 0);
   ctx.fillStyle = INK; path(right); ctx.fill(); ctx.strokeStyle = PAPER; hatch(right, 16, 0.08);
   const glow = ctx.createRadialGradient(W * 0.73, H * 0.58, 10, W * 0.73, H * 0.58, 190); glow.addColorStop(0, 'rgba(242,237,226,0.22)'); glow.addColorStop(1, 'rgba(242,237,226,0)');
   ctx.fillStyle = glow; ctx.fillRect(W / 2, 0, W / 2, H); // a spotlight on them
-  const foes = cpus.length ? cpus : ['bag'], n = foes.length, k = [3, 2.3, 1.8][n - 1], gap = [0, 200, 160][n - 1];
+  const foes = rolled.length ? rolled : ['bag'], n = foes.length, k = [3, 2.3, 1.8][n - 1], gap = [0, 200, 160][n - 1];
   foes.forEach((id, i) => {
     ctx.save(); ctx.translate(W * 0.73 + (i - (n - 1) / 2) * gap, H * 0.7); ctx.scale(k, k);
     FIGHTER[id].draw(0, 0, { rot: id === 'bag' ? Math.sin(s * 3) * 0.04 : 0 }, -1, s); ctx.restore();
@@ -897,27 +915,29 @@ const LOGOS = [
     ctx.fillStyle = '#ff4500'; for (const ex of [10.5, 17.5]) { ctx.beginPath(); ctx.arc(ex, 16, 1.5, 0, 6.28); ctx.fill(); }
   },
 ];
-// character select, Smash style: the roster along the top (click / Enter adds that fighter as a CPU dummy), a READY TO FIGHT band,
-// and the player slots along the bottom: P1 (Claw'd, the only one with moves so far) and up to three CPUs (click one to remove it).
-// No CPUs: the fight is against the training bag, shown faded in the first CPU slot
-const MAX_CPUS = 3, TILE = { w: 168, h: 150, y: 104 }, tileX = i => W / 2 + (i - (ROSTER.length - 1) / 2) * 182 - TILE.w / 2;
+// character select, Smash style: the roster along the top (click / Enter picks your fighter, then CPU dummies), a READY TO FIGHT band,
+// and the player slots along the bottom: P1 (the first pick) and up to three CPUs (the picks after it; click a slot to clear it).
+// No CPUs: the fight is against the training bag, shown faded in the first CPU slot once P1 has picked
+const MAX_CPUS = 3, TILES = ROSTER.length + 1, TILE = { w: 160, h: 150, y: 104 }, tileX = i => W / 2 + (i - (TILES - 1) / 2) * 172 - TILE.w / 2; // the last tile is Random
 const BAND = { y: 280, h: 50 }, SLOT = { w: 280, h: 320, y: 368 }, slotX = i => W / 2 + (i - 1.5) * 300 - SLOT.w / 2;
 let focus = 0, onBand = false; // keyboard focus: a roster tile, or the READY band
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function selectAt(x, y) {
   if (x < 170 && y < 90) return { back: true };
-  for (let i = 0; i < ROSTER.length; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
+  for (let i = 0; i < TILES; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
   if (y > BAND.y && y < BAND.y + BAND.h) return { ready: true };
+  if (p1 && x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: true }; // clears the pick
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
-const addCpu = i => { if (cpus.length < MAX_CPUS) cpus.push(ROSTER[i]); };
-function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space add or fight · Backspace drops the last CPU
-  const n = ROSTER.length;
+const addCpu = id => { if (cpus.length < MAX_CPUS) cpus.push(id); };
+const pickTile = i => { const id = i === ROSTER.length ? 'random' : ROSTER[i]; p1 ? addCpu(id) : p1 = id; }; // the first pick is P1's fighter, the rest are CPUs
+function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick
+  const n = TILES;
   if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
   else if (a === 'down' || a === 'up') onBand = a === 'down';
-  else if (code === 'Enter' || code === 'Space') onBand ? versus() : addCpu(focus);
-  else if (code === 'Backspace' || code === 'Delete') cpus.pop();
+  else if (code === 'Enter' || code === 'Space') onBand ? p1 && versus() : pickTile(focus);
+  else if (code === 'Backspace' || code === 'Delete') cpus.length ? cpus.pop() : p1 = null;
   else return false;
   return true;
 }
@@ -926,12 +946,24 @@ function tag(x, y, text, fill, right) { // a little filled label, e.g. P1 / CPU 
   ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x0, y, w, 24, 5); ctx.fill();
   ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(text, x0 + 7, y + 18);
 }
+// the P1 / CPU badges on a roster tile picked by them
+function pickTags(x, y, id) {
+  const n = cpus.filter(c => c === id).length;
+  if (id === p1) tag(x + TILE.w - 8, y + 8, 'P1', CLAWD, true);
+  if (n) tag(x + TILE.w - 8, y + (id === p1 ? 36 : 8), n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
+}
+// a big orange question mark (a Random pick) centred on the origin; Caveat's ? slants right, so it's stood upright, wobbling a little
+function drawQuestion(size, t) {
+  ctx.save(); ctx.rotate(-0.2 + Math.sin(t * 3) * 0.06); ctx.textAlign = 'left'; ctx.font = `700 ${size}px Caveat, cursive`;
+  const m = ctx.measureText('?'), qx = (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2, qy = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2; // centre the glyph's ink
+  ctx.fillStyle = INK; ctx.fillText('?', qx + size / 32, qy + size / 32); ctx.fillStyle = CLAWD; ctx.fillText('?', qx, qy); ctx.restore();
+}
 function drawSelect(t) {
   ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
-  ctx.font = '700 56px Caveat, cursive'; ctx.fillText('choose your fighter', W / 2, 74);
+  ctx.font = '700 56px Caveat, cursive'; ctx.fillText(p1 ? 'now pick your opponents' : 'choose your fighter', W / 2, 74);
   ctx.font = '600 32px Caveat, cursive'; ctx.textAlign = 'left'; ctx.fillText('‹ back', 40, 60);
 
-  ROSTER.forEach((id, i) => { // roster tiles: portrait, name, logo, and a CPU badge once picked
+  ROSTER.forEach((id, i) => { // roster tiles: portrait, name, logo, and a P1 / CPU badge once picked
     const x = tileX(i), y = TILE.y, on = !onBand && focus === i, r = rect(x, y, TILE.w, TILE.h);
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
     ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 2, TILE.w - 4, TILE.h - 4); ctx.clip(); // keep antennae / ears inside
@@ -939,23 +971,30 @@ function drawSelect(t) {
     ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
     ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + TILE.w / 2, y + TILE.h - 12);
     ctx.save(); ctx.translate(x + 9, y + 9); ctx.scale(0.8, 0.8); LOGOS[i](); ctx.restore();
-    const n = cpus.filter(c => c === id).length;
-    if (n) tag(x + TILE.w - 8, y + 8, n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
+    pickTags(x, y, id);
   });
+  { // Random: a big question mark; picking it rolls one of the fighters
+    const x = tileX(ROSTER.length), y = TILE.y, on = !onBand && focus === ROSTER.length, r = rect(x, y, TILE.w, TILE.h);
+    ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill(); ctx.strokeStyle = INK; hatch(r, 12, 0.15);
+    ctx.save(); ctx.translate(x + TILE.w / 2, y + (TILE.h - 34) / 2); drawQuestion(96, t); ctx.restore(); // above the name
+    ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
+    ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText('Random', x + TILE.w / 2, y + TILE.h - 12);
+    pickTags(x, y, 'random');
+  }
 
   // READY TO FIGHT: a slightly slanted orange band right across
-  const br = [[0, BAND.y + 6], [W, BAND.y - 6], [W, BAND.y + BAND.h - 6], [0, BAND.y + BAND.h + 6]], txt = onBand ? '›  READY TO FIGHT  ‹' : 'READY TO FIGHT';
+  const br = [[0, BAND.y + 6], [W, BAND.y - 6], [W, BAND.y + BAND.h - 6], [0, BAND.y + BAND.h + 6]], txt = !p1 ? 'PICK YOUR FIGHTER' : onBand ? '›  READY TO FIGHT  ‹' : 'READY TO FIGHT';
   ctx.fillStyle = CLAWD; path(br); ctx.fill(); ctx.strokeStyle = INK; hatch(br, 14, 0.18); ctx.lineWidth = onBand ? 3.4 : 2; poly(br, 1.2);
   ctx.save(); ctx.translate(W / 2, BAND.y + BAND.h / 2 + 15); ctx.rotate(-0.01); ctx.textAlign = 'center'; ctx.font = '700 46px Caveat, cursive';
   ctx.fillStyle = INK; ctx.fillText(txt, 3, 3); ctx.fillStyle = PAPER; ctx.fillText(txt, 0, 0); ctx.restore();
 
   for (let i = 0; i <= MAX_CPUS; i++) { // player slots: P1, then the CPUs
-    const x = slotX(i), y = SLOT.y, id = i ? cpus[i - 1] ?? (i === 1 && !cpus.length ? 'bag' : null) : 'clawd', ghost = id === 'bag', r = rect(x, y, SLOT.w, SLOT.h);
+    const x = slotX(i), y = SLOT.y, id = i ? cpus[i - 1] ?? (i === 1 && !cpus.length && p1 ? 'bag' : null) : p1, ghost = id === 'bag', r = rect(x, y, SLOT.w, SLOT.h);
     ctx.textAlign = 'center';
-    if (!id) { // empty CPU slot
-      ctx.globalAlpha = 0.4; ctx.strokeStyle = ctx.fillStyle = INK; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.strokeRect(x, y, SLOT.w, SLOT.h); ctx.setLineDash([]);
-      ctx.font = '700 44px Caveat, cursive'; ctx.fillText('+ CPU', x + SLOT.w / 2, y + SLOT.h / 2);
-      ctx.font = '600 22px Caveat, cursive'; ctx.fillText('pick a fighter above', x + SLOT.w / 2, y + SLOT.h / 2 + 32); ctx.globalAlpha = 1; continue;
+    if (!id) { // empty slot: P1 waiting for its pick, or room for a CPU
+      ctx.globalAlpha = i ? 0.4 : 0.8; ctx.strokeStyle = ctx.fillStyle = i ? INK : CLAWD; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.strokeRect(x, y, SLOT.w, SLOT.h); ctx.setLineDash([]);
+      ctx.font = '700 44px Caveat, cursive'; ctx.fillText(i ? '+ CPU' : 'P1', x + SLOT.w / 2, y + SLOT.h / 2);
+      ctx.font = '600 22px Caveat, cursive'; ctx.fillText(i ? (p1 ? 'pick a fighter above' : 'after your fighter') : 'pick your fighter above', x + SLOT.w / 2, y + SLOT.h / 2 + 32); ctx.globalAlpha = 1; continue;
     }
     ctx.globalAlpha = ghost ? 0.5 : 1;
     ctx.fillStyle = i ? '#d6d2c9' : '#f3cdb9'; path(r); ctx.fill(); ctx.strokeStyle = i ? INK : CLAWD; hatch(r, 16, 0.12);
@@ -965,7 +1004,7 @@ function drawSelect(t) {
     ctx.fillStyle = PAPER; ctx.font = '700 40px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + SLOT.w / 2, y + SLOT.h - 18);
     ctx.strokeStyle = i ? INK : CLAWD; ctx.lineWidth = i ? 2.4 : 3.4; poly(r, 1.2);
     tag(x + 10, y + 10, i ? (ghost ? 'no CPUs' : `CPU ${i}`) : 'P1', i ? '#6b7280' : CLAWD);
-    if (i && !ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
+    if (!ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
     ctx.globalAlpha = 1;
   }
   ctx.textAlign = 'left';
