@@ -60,7 +60,7 @@ const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
-let ATK, AIR, MOVES; // attack states are named after their move · bound to the fighter in play by bindMoves (below)
+let ATK, AIR, MOVES, FLY = {}; // FLY = rocket-style up specials by state (the flight, and its charge: state + 'Charge') · attack states are named after their move · bound to the fighter in play by bindMoves (below)
 const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
 const US = MOVESET.specials.upSpecial; // MCP tether: its own state, runs off P.teth
 // a fighter's own attack groups, Claw'd's for any it doesn't have (has() keeps those off anyway)
@@ -69,7 +69,22 @@ function bindMoves(set) {
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), sideSpecial: sb, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), sideSpecial: sb, downSpecial: DOWN_B };
   MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
+  // a fighter's own specials run as their own states (m.state, or the move's name for extra ones like Grok's neuralZap), so they stay
+  // clear of Claw'd's hard-wired neutral / up / down special states. Flights steer themselves, so they're kept out of ATK / AIR
+  FLY = {};
+  if (set !== MOVESET) for (const [k, m] of Object.entries(set.specials || {})) {
+    if (k === 'sideSpecial') continue;
+    const st = m.state || k; MOVES[st] = m;
+    if (m.flight) FLY[st] = FLY[st + 'Charge'] = m; else ATK[st] = AIR[st] = m;
+  }
 }
+// B pressed: the fighter's own special if it has one (see bindMoves), else Claw'd's think / tether / subagent
+function upB(dir) {
+  const m = fighter.set.specials.upSpecial; if (!m.state) return tetherUp(dir);
+  if (dir) P.face = dir; specialQ = 0; P.fastFall = false; P.chg = 0; P.aim = 0; setState(m.flight ? m.state + 'Charge' : m.state);
+}
+function downB() { const m = fighter.set.specials.downSpecial; setState(!m.state ? 'downSpecial' : m.zap && targets.some(b => b.sticker?.chip) ? m.zap : m.state); } // a chip planted: zap it instead
+function neutralB() { const m = fighter.set.specials.neutralSpecial; if (!m.state) return think(); P.held = true; P.chg = 0; setState(m.state); }
 bindMoves(MOVESET);
 const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; // resume from the last checkpoint reached
 const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
@@ -82,6 +97,7 @@ const GROUNDED = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWalk',
 const STOCKS = 3; let stocks = STOCKS;
 const fx = []; // dust clouds left in the world: { x, y, dir, t }
 const shots = []; // thrown sparks in flight: { x, y, vx, t, m }
+let wreck = null; // a rocket-style up special's ship once the rider's off it: { x, y (its middle), vx, vy, t, m, boom = 0 … 1 once it's blowing up }
 let cart = null; // a ride special's vehicle (Grok's Cybertruck), Steve minecart style: { x, y, w, h, vx, vy, face, t, ground, on, m = the move, dist = px driven, bag = target scooped into it, bagT, done }
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
 // every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
@@ -140,7 +156,7 @@ function setPaused(on) {
 function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
-  stocks = STOCKS; fx.length = shots.length = 0; sub = cart = null; makeTargets();
+  stocks = STOCKS; fx.length = shots.length = 0; sub = cart = wreck = null; makeTargets();
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
@@ -233,8 +249,9 @@ function land(surface, wasGround) {
       puff();
     }
     else if (P.state === 'hitstun') {} // flinches through the landing
-    else if (P.state in AIR || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? AD : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
-    else if (P.state === 'neutralSpecial') {} // keeps thinking through the landing
+    else if ((P.state in AIR && !AIR[P.state].keepOnLand) || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? AD : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
+    else if (P.state === 'neutralSpecial' || AIR[P.state]?.keepOnLand || (FLY[P.state] && P.state !== FLY[P.state].state)) {} // keeps thinking (charging) through the landing
+    else if (FLY[P.state]) { const m = FLY[P.state]; blowWreck(P.x + P.w / 2, P.y + P.h - m.wreck.mid, m); P.lag = m.landingLag; setState('landLag'); } // flew into the floor
     else if (P.vy > 300) { setState('land'); puff(); } else setState('idle');
   }
   P.vy = 0; P.ground = true; P.on = surface; P.jumps = 2; P.airDodged = false;
@@ -403,10 +420,7 @@ function stepPlayer(dt) {
   if (P.ground && s in ATK) { // locked in until the recovery can be cancelled
     const m = ATK[s], i = JABS.indexOf(s), done = m.startup + m.active;
     const rec = m.endlag * (P.landed ? HIT_REC : 1), end = done + rec;
-    if (m.chargeAt != null) { // smashes: holding heavy freezes the wind-up at chargeAt, up to chargeFrames
-      P.held = P.held && keys.heavy;
-      if (P.held && P.f > m.chargeAt && P.chg < m.chargeFrames) { P.f = m.chargeAt; P.chg++; }
-    }
+    charge(m);
     if (m.burrow) { if (P.f >= end) burrowIn(m.burrow); } // drilled in: underground from here (no cancelling out of it)
     else if (attackQ && i >= 0 && i < 2 && !tiltQ && !keys.up && !keys.down) { P.nextJab = true; attackQ = 0; } // light during a jab queues the next one (a held direction is fine); a fresh tilt input waits for the cancel window instead
     if (m.burrow) {}
@@ -422,7 +436,7 @@ function stepPlayer(dt) {
   if (s === 'respawn') respawnStep(dir);
   else if (P.ledge) ledgeInput(dir);
   else if (P.ground) {
-    if (s in ATK) {}
+    if (s in ATK || FLY[s]) {}
     else if (s === 'shieldBreak') { if (P.f >= SB.frames) { P.shield = Math.max(P.shield, SHIELD_MIN); setState('idle'); } } // dizzy: no control
     else if (s === 'landLag') { if (P.f >= P.lag) setState('idle'); }
     else if (s === 'hitstun') { if (!stunned) setState('idle'); }
@@ -451,7 +465,7 @@ function stepPlayer(dt) {
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
     else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
-    else if (specialQ && hasSpecial(dir) && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (specialQ && hasSpecial(dir) && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) upB(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? downB() : dir ? setState('sideSpecial') : neutralB(); } }
     else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab
       const atk = keys.up ? 'upTilt' : keys.down ? 'downTilt' : s === 'dash' || s === 'run' ? 'dashAttack' : dir && tiltQ ? 'forwardTilt' : 'jab1';
@@ -487,6 +501,7 @@ function stepPlayer(dt) {
     if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, AIR_JUMPS()); setState('air'); s = 'air'; } // walked off an edge
     if (s in AIR) { // aerial: drift freely the whole time; free once it ends, or early like ground attacks
       const m = AIR[s], done = m.startup + m.active, rec = m.endlag * (P.landed ? HIT_REC : 1), end = done + rec;
+      charge(m);
       if (P.f >= end || (P.f >= end - rec * CANCEL && (jumpQ || attackQ)) || (P.landed && P.f >= done && jumpQ)) { setState('air'); s = 'air'; }
     }
     if (s === 'neutralSpecial' && !keys.special) { setState('air'); s = 'air'; } // let go: stop charging
@@ -496,15 +511,15 @@ function stepPlayer(dt) {
     if ((attackQ || heavyQ) && free && has('aerials')) { // aerial picked by the held direction (back = away from facing); heavy does the same in the air
       attackQ = heavyQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
     }
-    else if (specialQ && free && hasSpecial(dir)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (specialQ && free && hasSpecial(dir)) { if (keys.up) upB(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? downB() : dir ? setState('sideSpecial') : neutralB(); } }
     else if (dodgeQ && free && has('defense') && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
       const dx = dir, dy = keys.up ? -1 : keys.down ? 1 : 0, n = Math.hypot(dx, dy) || 1;
       dodgeQ = 0; P.airDodged = true; P.fastFall = false; P.fromTumble = s === 'tumble'; P.dodgeV = [dx / n * AD.speed, dy / n * AD.speed]; setState('airDodge');
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
     }
     else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
-    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
-    if (ffQ && P.vy > -150 && !stunned && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
+    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !FLY[s] && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
+    if (ffQ && P.vy > -150 && !stunned && !FLY[P.state] && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
   downQ = dropQ = ffQ = dashQ = sideQ = false; techQ = Math.max(0, techQ - 1); techLock = Math.max(0, techLock - 1);
@@ -535,6 +550,8 @@ function stepPlayer(dt) {
     const k = P.f === AD.burst ? 0.4 : 1;
     P.vx = P.dodgeV[0] * k; P.vy = P.dodgeV[1] * k;
   }
+  const fm = FLY[P.state];
+  if (fm) flyStep(fm, dir);
 
   const wasGround = P.ground;
   P.drop = Math.max(0, P.drop - dt);
@@ -546,6 +563,7 @@ function stepPlayer(dt) {
   if (P.ledge) ledgePlace();
   else if ((P.state === 'upSpecial' && P.teth.side) || P.state === 'respawn') {} // reeling / on the platform: already placed
   else { move(P, dt, s => land(s, wasGround)); grabLedge(); }
+  if (MOVES[P.state]?.flight && P.fly.want && ((P.fly.want[0] && !P.vx) || (P.fly.want[1] < 0 && !P.vy))) crashFlight(MOVES[P.state]); // into a wall / the underside
 
   // attack hitboxes vs the targets: one hit on each per attack, knockback grows with its damage (and a smash's charge)
   const m = MOVES[P.state], cx = P.x + P.w / 2;
@@ -558,7 +576,7 @@ function stepPlayer(dt) {
       if (b.hit === key || !overlaps(box, b)) continue;
       b.hit = key; P.landed = true;
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
-      hitBag(b, h.damage * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      hitBag(b, h.damage * charged(m), h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
       if (m.sticker) b.sticker = { t: 0, ...m.sticker }; // e.g. a community note stuck on it
     }
   }
@@ -579,13 +597,65 @@ function stepPlayer(dt) {
     cart = { x: cx - rd.w / 2, y: P.y + P.h - rd.h, w: rd.w, h: rd.h, vx: P.face * rd.speed[0], vy: P.ground ? 0 : Math.max(0, P.vy), face: P.face, t: 0, ground: P.ground, on: P.on, m, dist: 0, bag: null, bagT: 0, done: 0 };
     setState('ride'); return;
   }
-  if (m?.projectile && P.f === m.startup) shots.push({ x: cx + P.face * m.projectile.x, y: P.y + P.h + m.projectile.y, vx: P.face * m.projectile.speed, t: 0, m });
+  if (m?.projectile && P.f === m.startup) shots.push({ x: cx + P.face * m.projectile.x, y: P.y + P.h + m.projectile.y, vx: P.face * m.projectile.speed, t: 0, m, dmg: m.damage * charged(m), c: m.chargeFrames ? P.chg / m.chargeFrames : 0, pic: Math.floor(Math.random() * 3) });
+  if (m?.detonate && P.f === m.startup) for (const b of targets) if (b.sticker?.chip) { // set off whatever it planted (Neuralink)
+    hitBag(b, m.damage, m.kb, Math.sign(b.x + b.w / 2 - cx) || P.face); b.sticker = { t: 0, ...m.detonate }; P.landed = true;
+  }
   if (out(P)) ko();
 }
 
 // burrowing (Grok's down smash): under the surface it drilled into, steered with ← → (it turns to face the way it goes). Left alone
 // it digs on ahead dist px; it pops out (the out move) then, on attack / heavy / special / jump, or after max frames. Can't be hurt,
 // and can't dig past either end of the surface
+// rocket-style up special, like Diddy Kong's Rocketbarrel Boost (Grok's Starship). Charging (state + 'Charge'): stuck in place (barely
+// sinking in the air) while B builds it up, ← → swinging the aim (P.aim, radians off straight up, + = right); let go to launch that
+// way, faster the longer the charge; held overheat frames past full,
+// it blows up under the rider (selfDamage, the blast hits anyone near) and drops it helpless. Flying (the move's own state, its
+// hitbox the body): ← → turns it, B again bails out; at active frames, or bailing, the empty ship flies on and blows up on whatever it
+// meets (wreck), the rider falls helpless. Flying into the stage blows it up there
+function flyStep(m, dir) {
+  const fl = m.flight;
+  if (P.state !== m.state) { // charging
+    P.vx = 0; if (!P.ground) P.vy = Math.min(P.vy, fl.fall);
+    P.aim = Math.max(-fl.aimMax, Math.min(fl.aimMax, P.aim + dir * fl.aimTurn));
+    if (keys.special) { if (++P.chg > m.chargeFrames + m.overheat) { blowWreck(P.x + P.w / 2, P.y + P.h - m.wreck.mid, m); hurt(m.selfDamage); P.vy = -300; P.vx = 0; setState('specialFall'); } return; }
+    const c = Math.min(1, P.chg / m.chargeFrames);
+    P.fly = { ang: P.aim, speed: fl.speed[0] + (fl.speed[1] - fl.speed[0]) * c };
+    P.ground = false; P.on = null; setState(m.state); puff();
+  }
+  const F = P.fly;
+  if (specialQ || P.f >= m.active) { specialQ = 0; return bail(m); }
+  F.ang = Math.max(-fl.tilt, Math.min(fl.tilt, F.ang + dir * fl.turn));
+  P.vx = Math.sin(F.ang) * F.speed; P.vy = -Math.cos(F.ang) * F.speed; F.want = [P.vx, P.vy];
+}
+function bail(m) { // the ship flies on without its rider
+  wreck = { x: P.x + P.w / 2, y: P.y + P.h - m.wreck.mid, vx: P.vx * 0.9, vy: P.vy * 0.9, t: 0, m, boom: null };
+  P.vx *= 0.3; P.vy = Math.max(P.vy * 0.3, -250); setState('specialFall');
+}
+function blowWreck(x, y, m) { // the blast: hits every target in reach once
+  wreck = { x, y, vx: 0, vy: 0, t: 0, m, boom: 0 };
+  for (const b of targets) if (Math.hypot(b.x + b.w / 2 - x, b.y + b.h / 2 - y) < m.wreck.r + b.w / 2) hitBag(b, m.wreck.damage, m.wreck.kb, Math.sign(b.x + b.w / 2 - x) || 1);
+  fx.push({ x, y: y + 20, dir: -1, t: 0 }, { x, y: y + 20, dir: 1, t: 0 });
+}
+function crashFlight(m) { const x = P.x + P.w / 2, y = P.y + P.h - m.wreck.mid; setState('specialFall'); P.vx = P.vy = 0; blowWreck(x, y, m); }
+function stepWreck(dt) {
+  const w = wreck, W = w.m.wreck;
+  if (w.boom != null) { if ((w.boom += dt / 0.45) >= 1) wreck = null; return; }
+  w.t += dt; if (w.t > W.coast) w.vy += G * W.gravity * dt; w.x += w.vx * dt; w.y += w.vy * dt; // flies on under its own power a moment, then drops
+  const pt = { x: w.x - 8, y: w.y - 8, w: 16, h: 16 };
+  const hitPlat = w.vy > 0 && plats.some(pl => w.x > pl.x && w.x < pl.x + pl.w && w.y > pl.y && w.y - w.vy * dt <= pl.y);
+  if (targets.some(b => overlaps(pt, b)) || overlaps(pt, stage) || hitPlat || w.t > W.life) blowWreck(w.x, w.y, w.m);
+  else if (out({ x: w.x, y: w.y, w: 0, h: 0 })) wreck = null;
+}
+
+// holding the move's button (m.hold, heavy for smashes) freezes the wind-up at chargeAt, up to chargeFrames
+function charge(m) {
+  if (m.chargeAt == null) return;
+  P.held = P.held && keys[m.hold || 'heavy'];
+  if (P.held && P.f > m.chargeAt && P.chg < m.chargeFrames) { P.f = m.chargeAt; P.chg++; }
+}
+const charged = m => m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1; // damage multiplier for the charge held
+
 function burrowIn(bw) { setState('tunnel'); P.tun = { bw, steered: false, dist: 0 }; P.vx = P.vy = 0; }
 function tunnelStep(dir, dt) {
   const T = P.tun, bw = T.bw, on = P.on || stage;
@@ -599,18 +669,22 @@ function tunnelStep(dir, dt) {
   }
 }
 
+// a shot's radius: projectile.r (the Claude spark's by default), growing by projectile.grow at full charge
+const shotR = sh => (sh.m.projectile.r || SPARK_R) * (1 + (sh.m.projectile.grow || 0) * sh.c);
+
 function stepWorld(dt) {
   // sparks fly straight until they hit a target or the stage, or run out of range
   for (let i = shots.length - 1; i >= 0; i--) {
     const sh = shots[i];
     sh.x += sh.vx * dt; sh.t += dt;
-    const box = { x: sh.x - SPARK_R, y: sh.y - SPARK_R, w: 2 * SPARK_R, h: 2 * SPARK_R }, hit = targets.find(b => overlaps(box, b));
-    if (hit) hitBag(hit, sh.m.damage, sh.m.kb, Math.sign(sh.vx));
+    const r = shotR(sh), box = { x: sh.x - r, y: sh.y - r, w: 2 * r, h: 2 * r }, hit = targets.find(b => overlaps(box, b));
+    if (hit) { hitBag(hit, sh.dmg, sh.m.kb, Math.sign(sh.vx)); if (sh.m.plant) hit.sticker = { t: 0, ...sh.m.plant }; } // plant = a sticker it leaves
     if (hit || overlaps(box, stage) || sh.t > sh.m.projectile.life) shots.splice(i, 1);
   }
 
   if (sub) stepSub(dt);
   if (cart) stepCart(dt);
+  if (wreck) stepWreck(dt);
 
   for (const b of targets) {
     b.hitT = Math.max(0, b.hitT - dt);
@@ -714,8 +788,9 @@ function move(b, dt, onLand) {
 
 // which frame of which animation to show for the current state
 function clawdPose() {
-  const f = P.f, atk = MOVES[P.state];
-  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0); if (P.held && f === atk.chargeAt) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; return p; } // tremble while charging
+  const f = P.f, atk = MOVES[P.state], fly = FLY[P.state];
+  if (fly && P.state !== fly.state) return { ...fly.chargeAnim(f, P.chg / fly.chargeFrames), tilt: P.aim }; // charging a flight (c runs past 1 into the overheat), aimed
+  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0); if (P.held && f === atk.chargeAt) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging
   switch (P.state) {
     case 'idle': return M.idle.anim(f % 120, 120);
     case 'walk': return M.walk.anim(f % 40, 40);
@@ -814,9 +889,11 @@ function render(t) {
 
   drawTargets(t);
   if (sub) drawSub();
+  if (wreck) wreck.m.wreck.draw(wreck.x, wreck.y, Math.atan2(wreck.vx, -wreck.vy), wreck.boom);
   if (cart && !cart.done) { const c = cart, air = c.ground ? 0 : Math.max(-0.25, Math.min(0.3, c.vy / 2500)); // noses down as it falls, a wheelie as it sets off
     fighter.art(c.x + c.w / 2, c.y + c.h, { car: 1, empty: P.state !== 'ride', squint: true, wheel: c.dist / 11, rot: air - 0.1 * Math.max(0, 1 - c.t / 0.15) }, c.face); }
-  for (const sh of shots) drawSpark(sh.x, sh.y, SPARK_R * Math.min(1, (sh.m.projectile.life - sh.t) / 0.1), sh.t * 14 * Math.sign(sh.vx)); // shrinks away at max range
+  for (const sh of shots) { const pr = sh.m.projectile, r = shotR(sh) * Math.min(1, (pr.life - sh.t) / 0.1); // shrinks away at max range
+    if (pr.draw) pr.draw(sh.x, sh.y, r, sh.t, Math.sign(sh.vx), sh.pic); else drawSpark(sh.x, sh.y, r, sh.t * 14 * Math.sign(sh.vx)); }
 
   // player (flickers after respawn)
   for (const d of fx) drawDust(d.x, d.y, d.t, d.dir);

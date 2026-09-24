@@ -136,7 +136,8 @@ function pick(id) {
   IDS.forEach(i => $('who-' + i).setAttribute('aria-selected', i === id));
   for (const [group, moves] of Object.entries(F.moves)) {
     const h = document.createElement('h2'); h.textContent = title(group); $('nav').append(h);
-    for (const [key, move] of Object.entries(moves)) {
+    for (const [key, m] of Object.entries(moves)) {
+      const move = m.preview ? { ...m, anim: m.preview } : m; // a move the game plays in parts (Grok's Starship) previews as one run
       const b = document.createElement('button');
       b.textContent = title(key);
       if (move.anim) b.classList.add('done');
@@ -159,10 +160,10 @@ function select(i) {
   $('sub').textContent = `${F.name} · ${title(group)}${move.input ? ' · ' + move.input : ''}`;
 
   const { startup, active, endlag } = move;
-  phases = [startup, active, endlag].every(Number.isFinite)
+  phases = !move.previewFrames && [startup, active, endlag].every(Number.isFinite)
     ? [['startup', startup], ['active', active], ['endlag', endlag]]
     : [];
-  total = phases.length ? startup + active + endlag : move.frames || 60;
+  total = phases.length ? startup + active + endlag : move.previewFrames || move.frames || 60;
   $('bar').innerHTML = (phases.length
     ? phases.map(([n, v]) => `<div class="${n}" style="flex:${v}">${n} ${v}f</div>`).join('')
     : `<div class="none" style="flex:1">no frame data · looping ${total}f</div>`) + '<div class="head" id="head"></div>';
@@ -196,9 +197,9 @@ function drawFigure(fr) {
   if (pose.carry) drawSack(pose.carry[0], air + pose.carry[1], pose.carry[2]); // grabbed bag, behind the claws
   F.draw(0, air, pose);
   const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
-  if (pr && st >= 0) drawSpark(pr.x + pr.speed * st, air + pr.y, SPARK_R, st * 14);
+  if (pr && st >= 0) pr.draw ? pr.draw(pr.x + pr.speed * st, air + pr.y, pr.r, st, 1, 0) : drawSpark(pr.x + pr.speed * st, air + pr.y, SPARK_R, st * 14);
   if (!$('boxes').checked || !F.hurt) return;
-  if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - SPARK_R, y: air + pr.y - SPARK_R, w: 2 * SPARK_R, h: 2 * SPARK_R }, BOX, 'rgba(224,82,58,0.18)');
+  if (pr && st >= 0) { const r = pr.r || SPARK_R; drawRect({ x: pr.x + pr.speed * st - r, y: air + pr.y - r, w: 2 * r, h: 2 * r }, BOX, 'rgba(224,82,58,0.18)'); }
   const hurt = F.hurt(pose); hurt.y += air;
   drawRect(hurt, '#c9a227', 'rgba(230,190,60,0.22)');
   if (phaseAt(fr) === 'active' && move.hitbox) { // hitbox is relative to the fighter's bottom-center, facing right

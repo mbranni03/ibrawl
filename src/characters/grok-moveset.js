@@ -319,7 +319,86 @@ const GROK_MOVESET = {
     },
   },
 
+  // Grok's own specials run as their own states (state: …; bindMoves in index.html), clear of Claw'd's hard-wired ones
   specials: {
+    neutralSpecial: { // Grok Imagine: hold B and a card overhead counts up as it generates (a sparkle beside it); let go (or hit 100%)
+      // and it flings the picture, a polaroid of some AI slip-up (six fingers, three eyes, a melting clock). The longer the charge, the
+      // bigger the picture and the harder it hits: damage × chargeMult and projectile.r × (1 + grow) at 100%. Ground or air
+      input: 'B (V / L), no direction · hold to charge, let go to throw · ground or air', state: 'imagine', hold: 'special', keepOnLand: true,
+      startup: 12, active: 1, endlag: 18, damage: 4, kb: { base: 20, growth: 60, angle: 30 }, chargeFrames: 90, chargeMult: 3, chargeAt: 8, landingLag: 6,
+      projectile: { x: 40, y: -32, speed: 620, life: 0.8, r: 13, grow: 0.9, draw: (x, y, r, t, dir, pic) => drawImagined(x, y, r, t, dir, pic) },
+      anim: (f, n, c = 0) => ({
+        ...tween(f, [
+          [0, {}],
+          [8, { sx: 1.08, sy: 0.92, rot: -0.12 }], // hunched over it, thinking hard (the game shakes it while charging)
+          [11, { x: -3, sx: 0.94, sy: 1.06, rot: -0.2 }],
+          [12, { x: 7, sx: 1.16, sy: 0.9, rot: 0.24 }], // flings it
+          [16, { x: 6, sx: 1.12, sy: 0.92, rot: 0.2 }],
+          [30, {}],
+        ]),
+        squint: f >= 4 && f < 16, gen: f < 12 ? Math.min(1, c || f / 40) : null, // the viewer has no charge: it just shows it starting
+      }),
+    },
+    upSpecial: { // Starship, like Diddy Kong's Rocketbarrel Boost: Grok climbs into a Starship and the engine builds while B is held
+      // (flame roaring bigger). It can't move while charging (in the air it barely sinks); ← → swing the aim, a dotted line off the nose
+      // showing it. Let go to launch that way: faster the longer the charge. In flight ← → turns it (the body is the hitbox) and B again bails out. At the end of the flight, or
+      // bailing, Grok falls helpless and the empty ship flies on and blows up on whatever it hits (wreck); flying into the stage blows it
+      // up there. Held overheat frames past a full charge, it blows up under Grok instead: selfDamage to Grok, helpless.
+      // flight: speed = [tap, full] px/s · turn = radians / frame steering in flight · tilt = the most it can lean then · fall = max px/s
+      // sinking while charging in the air · aimTurn = radians / frame swinging the aim while charging, aimMax = how far · wreck: r = blast reach px, life = seconds before it blows on its own, coast = seconds it keeps flying straight, then gravity scale · mid = px up to the ship's middle
+      input: 'up + B (V / L), ground or air · hold to charge, let go to launch · ← → steer · B to bail', state: 'rocket',
+      startup: 0, active: 40, endlag: 0, damage: 5, kb: { base: 30, growth: 50, angle: 70 }, hitbox: { x: -32, y: -100, w: 64, h: 100 },
+      chargeFrames: 50, overheat: 70, selfDamage: 8, landingLag: 14,
+      flight: { speed: [420, 820], turn: 0.06, tilt: 1.35, fall: 40, aimTurn: 0.07, aimMax: 1.05 },
+      wreck: { damage: 9, kb: { base: 40, growth: 70, angle: 60 }, r: 46, life: 1.5, coast: 0.35, gravity: 0.6, mid: 51, draw: (x, y, ang, boom) => drawWreck(x, y, ang, boom) },
+      chargeAnim: (f, c) => { // in the ship, which squats down on its engines as they build; past full it shakes harder and harder
+        const over = Math.max(0, c - 1) / (70 / 50), k = f < 4 ? f / 4 * 1.15 : f < 7 ? 1.15 - 0.15 * (f - 4) / 3 : 1;
+        return {
+          sx: 1 + 0.08 * Math.min(1, c), sy: 1 - 0.08 * Math.min(1, c), x: over ? (f % 2 ? 1 : -1) * (1 + 3 * over) : 0,
+          ship: [k, f < 4 ? 0 : 0.15 + 0.45 * Math.min(1, c) + 0.1 * Math.sin(f * 1.7) + 0.3 * over], squint: true, aimLine: f < 4 ? 0 : Math.min(1, c),
+          say: over > 0.25 ? ['⚠ engine overheating', Math.min(1, (over - 0.25) * 6)] : null,
+        };
+      },
+      anim: () => ({ sx: 0.95, sy: 1.05, ship: [1, 1], squint: true }), // in flight (the game leans it to its heading)
+      previewFrames: 110,
+      preview: f => { // the viewer: charge aiming right, launch that way, steer back left, bail out; the empty ship flies off out of frame
+        if (f < 34) return { ...(f < 30 ? GROK_MOVESET.specials.upSpecial.chargeAnim(f, f / 30) : { sx: 0.92, sy: 1.08, ship: [1, 1], squint: true }), say: null, tilt: 0.5 * Math.min(1, Math.max(0, (f - 6) / 16)) };
+        if (f < 80) return { sx: 0.95, sy: 1.05, ship: [1, 1], squint: true, tilt: 0.5 * Math.cos((f - 34) / 46 * Math.PI), air: -(f - 34) * 5 };
+        const t = f - 80, e = Math.min(1, t / 14);
+        return { air: -230 - 60 * e + 0.5 * t * t, rot: Math.PI * 2 * (1 - (1 - e) ** 2), blink: t < 10 ? 1 : 0 }; // bails: pops out the top with a flip
+      },
+    },
+    downSpecial: { // Neuralink: fire a chip that plugs into the first one it hits (a little damage, no knockback) and stays in, light
+      // blinking. Down special again while a chip is in anyone: neuralZap. One chip at a time
+      input: 'down + B (V / L), ground or air · again to zap', state: 'neuralink', zap: 'neuralZap', startup: 10, active: 1, endlag: 16,
+      damage: 2, kb: { base: 0, growth: 0, angle: 0 }, landingLag: 6,
+      projectile: { x: 30, y: -36, speed: 700, life: 0.45, r: 7, draw: (x, y, r, t, dir) => drawChipShot(x, y, r, t, dir) },
+      plant: { chip: true, secs: Infinity, draw: (x, y, rot, a) => drawChip(x, y, rot, a) },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [8, { x: -3, sx: 0.94, sy: 1.06, rot: -0.12 }],
+          [10, { x: 5, sx: 1.1, sy: 0.93, rot: 0.14 }],
+          [14, { x: 4, sx: 1.08, sy: 0.94, rot: 0.12 }],
+          [27, {}],
+        ]),
+        glow: f >= 6 && f < 14 ? 1 : 0,
+      }),
+    },
+    neuralZap: { // the chip goes off: Grok's eyes flash, and wherever the chipped one is, it's zapped (knockback away from Grok)
+      input: 'down + B with a chip in someone', startup: 8, active: 1, endlag: 20, damage: 10, kb: { base: 45, growth: 75, angle: 75 }, landingLag: 8,
+      detonate: { secs: 0.45, draw: (x, y, rot, a) => drawZap(x, y, rot, a) },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [6, { sx: 1.1, sy: 0.9 }],
+          [8, { y: -4, sx: 0.92, sy: 1.1 }],
+          [14, { sx: 1.04, sy: 0.96 }],
+          [29, {}],
+        ]),
+        glow: f >= 4 && f < 18 ? 1 : f >= 18 && f < 24 ? (24 - f) / 6 : 0, say: f >= 8 && f < 26 ? ['⚡ zap', Math.min(1, (f - 8) / 2, (26 - f) / 4)] : null,
+      }),
+    },
     sideSpecial: { // Autopilot, like Steve's minecart: hop up, a Cybertruck pops in under it, and it's off, picking up speed until something
       // stops it. Jump bails out (air jumps kept: ride off the ledge, then leap for it). Running into someone scoops them into the bed as
       // Grok leaps out; the truck carries them a moment, then launches them (a grab: shields don't help). Once Grok's out, the empty
