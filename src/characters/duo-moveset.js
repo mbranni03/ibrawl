@@ -464,7 +464,23 @@ const DUO_MOVESET = {
       },
     },
   },
-  defense: { // dodges only: Duo has no shield yet (the game leaves it off for a fighter without its own)
+  defense: {
+    shield: { ...MOVESET.defense.shield, // Do Not Disturb: crouch behind a phone held up in front, eyes peeking over it. Its battery runs down
+      // as the shield wears (the game passes the wear; the preview drains it over the hold)
+      anim: f => {
+        const brace = { sx: 1.14, sy: 0.74, arm: [4, -30], legs: duoFeet([-2, 0], [2, 0]), ph: 1 };
+        const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing behind it
+        return { ...p, ph: undefined, phone: p.ph > 0.05 ? [16, -22, p.ph, -0.08] : null, blink: f >= 3 && f < 52 ? 0.3 : 0, wear: Math.min(1, Math.max(0, (f - 4) / 46)) };
+      },
+    },
+    shieldBreak: { ...MOVESET.defense.shieldBreak, // the battery ran out: the screen dies, the phone tumbles away, Duo pops up and lands dizzy
+      anim: f => ({
+        ...duoize(MOVESET.defense.shieldBreak.anim)(f), shatter: null,
+        phone: f < 24 ? [16 + 2 * f, -22 - 4 * f + 0.35 * f * f, 1 - f / 24, 0.25 * f, true] : null,
+        oopsMsg: ['phone died 🪫', '12 missed lessons'],
+      }),
+    },
     spotDodge: duoWings(MOVESET.defense.spotDodge), rollForward: duoWings(MOVESET.defense.rollForward), rollBack: duoWings(MOVESET.defense.rollBack),
     airDodgeForward: duoWings(MOVESET.defense.airDodgeForward), airDodgeBack: duoWings(MOVESET.defense.airDodgeBack), airDodge: duoWings(MOVESET.defense.airDodge),
   },
