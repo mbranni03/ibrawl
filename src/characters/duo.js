@@ -32,29 +32,36 @@ function drawDuo(cx, bottom, pose = {}, face = 1) {
     ctx.quadraticCurveTo(604, 858, 506, 838); ctx.quadraticCurveTo(449, 828, 476, 765); ctx.closePath(); // left wing
   }, DUO);
 
+  // chest feathers: three flat-topped half discs
+  ctx.fillStyle = DUO_LIT;
+  for (const [fx, fy] of [[913, 690], [1081, 690], [997, 771]]) { ctx.beginPath(); ctx.ellipse(fx, fy, 55, 46, 0, 0, Math.PI); ctx.fill(); }
+  duoFace(LW * 0.8, pose.blink, 15);
+  ctx.restore();
+}
+
+// Duo's face (also the Duolingo logo), in reference art coordinates: the light green mask, eyes and beak.
+// lw = ink outline width round the eyes and beak (0 = flat, like the logo) · look = how far the pupils shift right
+function duoFace(lw = 0, blink = 0, look = 0) {
   // mask: a circle round each eye, joined by the brows that V down to the middle, with two pointed feathers each side
   ctx.fillStyle = DUO_LIT; ctx.beginPath();
-  path([[700, 240], [735, 148], [782, 188], [803, 118], [918, 232], [997, 262], [1076, 232], [1191, 118], [1212, 188], [1259, 148], [1294, 240], [1190, 400], [805, 400]]);
+  path([[700, 240], [735, 148], [782, 188], [803, 118], [918, 232], [997, 262], [1076, 232], [1191, 118], [1212, 188], [1259, 148], [1294, 240], [1190, 400], [997, 480], [805, 400]]);
   ctx.fill();
   for (const ex of [805, 1190]) { ctx.beginPath(); ctx.arc(ex, 400, 150, 0, 6.28); ctx.fill(); }
 
-  // chest feathers: three flat-topped half discs
-  for (const [fx, fy] of [[913, 690], [1081, 690], [997, 771]]) { ctx.beginPath(); ctx.ellipse(fx, fy, 55, 46, 0, 0, Math.PI); ctx.fill(); }
-
-  // eyes: tall white capsules outlined in ink, ink capsule pupils looking in (and a little toward facing) with a round glint
-  const k = 1 - 0.85 * (pose.blink || 0), thin = LW * 0.8;
-  for (const [ex, px] of [[812, 844], [1181, 1180]]) {
+  // eyes: tall white capsules, dark capsule pupils looking in with a round glint; blink squashes them
+  const k = 1 - 0.85 * (blink || 0), dark = lw ? INK : '#4b4b4b';
+  ctx.strokeStyle = INK; ctx.lineWidth = lw;
+  for (const [ex, px] of [[812, 830 + look], [1181, 1165 + look]]) {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(ex - 105, 376 - 136 * k, 210, 272 * k, 105 * k); ctx.fill();
-    ctx.lineWidth = thin; ctx.stroke();
+    if (lw) ctx.stroke();
     if (k < 0.5) continue;
-    ctx.fillStyle = INK; ctx.beginPath(); ctx.roundRect(px - 49, 298, 98, 154, 49); ctx.fill();
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.roundRect(px - 49, 298, 98, 154, 49); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px - 44, 330, 34, 0, 6.28); ctx.fill();
   }
 
-  // beak: an orange chin under a yellow dome, each outlined
-  ctx.lineWidth = thin;
-  ctx.fillStyle = DUO_FOOT; ctx.beginPath(); ctx.arc(997, 488, 53, 0, 6.28); ctx.fill(); ctx.stroke();
+  // beak: an orange chin under a yellow dome, with a soft highlight when flat
+  ctx.fillStyle = DUO_FOOT; ctx.beginPath(); ctx.arc(997, 488, 53, 0, 6.28); ctx.fill(); if (lw) ctx.stroke();
   ctx.fillStyle = DUO_BEAK; ctx.beginPath(); ctx.moveTo(922, 480);
-  ctx.quadraticCurveTo(930, 415, 997, 415); ctx.quadraticCurveTo(1064, 415, 1072, 480); ctx.lineTo(997, 492); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.restore();
+  ctx.quadraticCurveTo(930, 415, 997, 415); ctx.quadraticCurveTo(1064, 415, 1072, 480); ctx.lineTo(997, 492); ctx.closePath(); ctx.fill();
+  if (lw) ctx.stroke(); else { ctx.fillStyle = '#ffe14d'; ctx.beginPath(); ctx.roundRect(970, 427, 55, 22, 11); ctx.fill(); }
 }
