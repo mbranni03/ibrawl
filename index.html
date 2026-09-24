@@ -180,7 +180,7 @@ addEventListener('keyup', e => {
   const a = KEYMAP[e.code]; if (!a) return;
   keys[a] = false;
   // only a short tap (< 150ms held) can start a dash / fast fall / platform drop (Smash's flick), so a held direction just walks / crouches
-  if (a === 'down' && e.timeStamp - pressT.down < 200) dropQ = true; // a bit longer than the dash / fast fall tap
+  if (a === 'down' && e.timeStamp - pressT.down < 400) dropQ = true; // a bit longer than the dash / fast fall tap
   if (a === 'left' || a === 'right' || a === 'down') lastTap = e.timeStamp - pressT[a] < 150 ? { a, t: e.timeStamp } : { a: null, t: 0 };
 });
 addEventListener('blur', () => { if (!over && !home) setPaused(true); });
