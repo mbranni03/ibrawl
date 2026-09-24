@@ -1,7 +1,7 @@
 // Snoo's moveset (drawn by snoo.js). Movement is Claw'd's (clawd-moveset.js, loaded first). Its ground attacks lean on what
 // Snoo has: stubby arms that stretch out to punch, little feet to kick with, a big head to butt with and an antenna to whip,
-// and it hands out Reddit votes: upvotes off its up tilt and up air, downvotes off its down tilt and down air. Its smashes: a ban hammer to the side, a UFO
-// beaming things up, and [removed] both ways along the floor.
+// and it hands out Reddit votes: upvotes off its up tilt and up air, downvotes off its down tilt and down air. Its smashes: a ban hammer to the side, a giant
+// upvote bursting up out of the floor, and [removed] both ways along the floor.
 // Frame data and field meanings as in clawd-moveset.js; pose fields as in snoo.js.
 // Claw'd's move `key` with Snoo's arm swing laid over it: extra(f, n) = the fields to add (swing, as in snoo.js)
 const snooArms = (key, extra) => ({ ...MOVESET.movement[key], anim: (f, n) => ({ ...MOVESET.movement[key].anim(f, n), ...extra(f, n) }) });
@@ -175,27 +175,22 @@ const SNOO_MOVESET = {
         banned: f >= 16 && f < 44 ? (f - 16) / 28 : null,
       }),
     },
-    upSmash: { // UFO beam: looks up with its antenna beeping (charge holds here, frame 8) to call a flying saucer in high overhead,
-      // which strikes a tractor beam down from the sky, like Pikachu's Thunder, beaming up whatever's in the column over Snoo
-      input: 'up + heavy (X / K), hold to charge', startup: 14, active: 8, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
-      hitbox: { x: -40, y: -220, w: 80, h: 220 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
-      anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none): keeps the antenna beeping
+    upSmash: { // front page: crouches low, arms back (charge holds here, frame 8: lower the longer it charges), then springs up tall as
+      // a giant upvote bursts up out of the floor behind it, launching whatever's above or beside Snoo
+      input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
+      hitbox: { x: -45, y: -160, w: 90, h: 160 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none)
         const p = tween(f, [
           [0, {}],
-          [6, { sx: 1.08, sy: 0.92, rot: -0.12, swing: [-0.5, 0.5], ant: -0.75 }],
-          [8, { sx: 1.1, sy: 0.9, rot: -0.14, swing: [-0.6, 0.6], ant: -0.75 }],
-          [13, { y: -2, sx: 0.94, sy: 1.08, rot: -0.1, swing: [-1.9, 1.9], ant: -0.75 }],
-          [14, { y: -3, sx: 0.92, sy: 1.1, rot: -0.12, swing: [-2, 2], ant: -0.75 }],
-          [22, { y: -3, sx: 0.93, sy: 1.09, rot: -0.12, swing: [-2, 2], ant: -0.75 }],
-          [32, { sx: 0.98, sy: 1.02, rot: -0.04, swing: [-0.8, 0.8], ant: -0.3 }],
-          [46, {}],
+          [6, { sx: 1.14, sy: 0.84, rot: 0.06, swing: [0.5, -0.5], ant: 0.3, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]] }],
+          [11, { sx: 1.16, sy: 0.82, rot: 0.06, swing: [0.55, -0.55], ant: 0.35, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]] }],
+          [12, { y: -8, sx: 0.88, sy: 1.18, rot: -0.08, swing: [-1.9, 1.9], ant: -0.75, legs: legsAll(0, 3) }],
+          [18, { y: -6, sx: 0.9, sy: 1.14, rot: -0.08, swing: [-1.9, 1.9], ant: -0.7, legs: legsAll(0, 2) }],
+          [30, { sx: 0.98, sy: 1.02, swing: [-0.8, 0.8], ant: -0.2 }],
+          [42, {}],
         ]);
-        const ufo = f >= 6 && f < 38 ? tween(f, [ // [x, y, beam, tilt]: drops in from the sky, strikes the beam down, pulls it back up, zips off
-          [6, { u: [-40, -380, 0, -0.3] }], [12, { u: [0, -280, 0, 0.08] }], [14, { u: [0, -280, 1, 0] }], [22, { u: [0, -278, 1, 0] }],
-          [26, { u: [0, -282, 0, -0.05] }], [30, { u: [10, -288, 0, -0.12] }], [38, { u: [160, -400, 0, 0.3] }],
-        ]).u : null;
-        if (ufo) ufo[4] = f / 6;
-        return { ...p, ufo, signal: f >= 4 && f < 14 ? f / 8 + 10 * c : null };
+        if (f >= 6 && f < 12) { p.sx += 0.08 * c; p.sy -= 0.08 * c; }
+        return { ...p, bigvote: f >= 11 && f < 36 ? (f - 11) / 25 : null, puff: f === 12 ? 0 : f > 12 && f < 24 ? (f - 12) / 12 : null };
       },
     },
     downSmash: { // [removed]: squashes flat (flatter the longer it charges, frame 8), hops and slams back down, and [removed] bursts out
@@ -283,6 +278,91 @@ const SNOO_MOVESET = {
         ]),
         vote: f >= 8 && f < 26 ? [0, 16, (f - 8) / 18, -1] : null,
         fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40,
+      }),
+    },
+  },
+
+  // usable on the ground and in the air. Extra fields the game reads (any fighter's specials but Claw'd's):
+  //   chargeKey = the button held to charge (with chargeAt / chargeFrames / chargeMult, as smashes) · projectile.r = its radius,
+  //   .grow = how much bigger a full charge makes it, .draw = its drawing (drawSpark's arguments + the shot; default the Claude spark),
+  //   .wave = [px, s] bobbing up and down as it flies, .hitFx = { draw(x, y, t), dur s } an effect left where it hits
+  //   burst = { vx, vy, frames, keep, from } speed held for frames from startup (or frame from; vx along facing, none = steer freely),
+//           then keep = the fraction of vx left once it ends
+  //   helpless = falls helpless (specialFall) once it ends in the air · oncePerAir = only once until it lands
+  specials: {
+    neutralSpecial: { // karma blast: points the antenna ahead and gathers an orb of karma on the ball (charge holds here, frame 10:
+      // the orb swells), then nods and fires it. The longer the charge, the bigger and harder-hitting the orb
+      input: 'B (V / L), no direction · hold to charge, ground or air', startup: 14, active: 2, endlag: 18, damage: 5, kb: { base: 18, growth: 55, angle: 35 },
+      hitbox: null, landingLag: 10, chargeKey: 'special', chargeAt: 10, chargeFrames: 60, chargeMult: 2.2,
+      projectile: { x: 30, y: -50, speed: 620, life: 0.9, r: 8, grow: 1, draw: drawKarma },
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [6, { rot: -0.08, sx: 0.98, sy: 1.02, swing: [-0.5, 0.5], ant: 0.3, orb: 3 }],
+          [10, { rot: -0.12, sx: 0.96, sy: 1.04, swing: [-0.7, 0.7], ant: 0.45, orb: 6, legs: [[2, 0], [0, 0], [0, 0], [-1, 0]] }],
+          [13, { rot: -0.16, sx: 0.95, sy: 1.05, swing: [-0.8, 0.8], ant: 0.5, orb: 7, legs: [[2, 0], [0, 0], [0, 0], [-1, 0]] }],
+          [14, { x: 3, rot: 0.16, sx: 1.04, sy: 0.96, blink: 0.4, swing: [-0.2, 0.6], ant: 0.9, legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }],
+          [20, { x: 3, rot: 0.14, sx: 1.03, sy: 0.97, swing: [-0.2, 0.5], ant: 0.8, legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }],
+          [34, {}],
+        ]);
+        if (f >= 8 && f < 14) p.orb += 6 * c;
+        return p;
+      },
+    },
+    sideSpecial: { // orangered mail: pulls out an orange envelope, winds up and sends it off like a paper plane. It glides ahead in a
+      // gentle wave, and pings a notification on whatever it reaches
+      input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 2, endlag: 18, damage: 6, kb: { base: 22, growth: 50, angle: 40 },
+      hitbox: null, landingLag: 10,
+      projectile: { x: 30, y: -32, speed: 420, life: 1.4, r: 10, wave: [14, 0.7], draw: drawMail, hitFx: { draw: snooPing, dur: 0.6 } },
+      anim: f => tween(f, [
+        [0, {}],
+        [4, { swing: [-0.2, 1], ant: 0.1, mail: [0.2, 1] }], // out it comes
+        [10, { x: -2, rot: -0.14, sx: 0.97, sy: 1.03, swing: [-0.5, 1.9], ant: 0.4, mail: [-0.5, 1], legs: [[2, 0], [0, 0], [0, 0], [-1, 0]] }], // wound back
+        [12, { x: 3, rot: 0.14, sx: 1.03, sy: 0.97, swing: [-0.2, 1.2], ant: -0.3, mail: [0.3, 0], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }], // and away
+        [20, { x: 3, rot: 0.12, swing: [-0.2, 1.1], ant: -0.2, legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }],
+        [32, {}],
+      ]),
+    },
+    upSpecial: { // UFO abduction: antenna beeping, it calls the saucer, which parks overhead and beams Snoo itself up out of danger,
+      // hitting anything in the beam. Drops it helpless when the beam cuts out
+      input: 'B (V / L) + ↑, ground or air · falls helpless after', startup: 8, active: 20, endlag: 14, damage: 5, kb: { base: 35, growth: 60, angle: 80 },
+      hitbox: { x: -30, y: -150, w: 60, h: 150 }, landingLag: 16, burst: { vy: -620, frames: 20 }, helpless: true,
+      anim: f => {
+        const lifted = { swing: [-1.9, 1.9], blink: 0.5, legs: legsAll(0, 3) };
+        const p = tween(f, [
+          [0, {}],
+          [6, { sx: 1.06, sy: 0.94, rot: -0.1, swing: [-0.6, 0.6], ant: -0.75 }],
+          [8, { ...lifted, sx: 0.94, sy: 1.08, ant: -0.4 }],
+          [28, { ...lifted, sx: 0.95, sy: 1.07, ant: -0.4 }],
+          [34, { swing: [-1.6, 1.6], legs: legsAll(0, 2) }],
+          [42, {}],
+        ]);
+        if (f >= 8 && f < 28) p.rot = 0.12 * Math.sin((f - 8) / 20 * Math.PI * 3); // dangling, twirling a little in the beam
+        const ufo = f < 40 ? tween(f, [ // [x, y, beam, tilt] above Snoo: drops in, beams down onto it, cuts out, zips off
+          [0, { u: [0, -320, 0, 0] }], [6, { u: [0, -150, 0, 0.08] }], [8, { u: [0, -150, 1, 0] }], [28, { u: [0, -145, 1, 0] }],
+          [31, { u: [0, -150, 0, -0.05] }], [40, { u: [120, -280, 0, 0.3] }],
+        ]).u : null;
+        if (ufo) ufo[4] = f / 6;
+        return { ...p, ufo, signal: f < 8 ? f / 8 : null };
+      },
+    },
+    downSpecial: { // [deleted]: glitches and blinks out into a [deleted] tag that zips off the way it's held (or ahead), then pops back
+      // into Snoo there, hitting all around. Can't be hurt while deleted; holds its height in the air, once until it lands
+      input: 'B (V / L) + ↓, ground or air · + ← → picks the way · once until it lands', startup: 18, active: 4, endlag: 16, damage: 7, kb: { base: 35, growth: 55, angle: 50 },
+      hitbox: { x: -40, y: -72, w: 80, h: 72 }, both: true, intangible: [6, 18], landingLag: 10,
+      burst: { from: 9, vx: 1400, vy: 0, frames: 8, keep: 0 }, oncePerAir: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { sx: 0.9, sy: 1.1, blink: 1, swing: [-0.4, 0.4], ant: 0.3 }], // glitch: squeezed, eyes shut
+          [6, { sx: 1.15, sy: 0.85, blink: 1, swing: [-1, 1], ant: -0.3 }],
+          [9, { gone: 1 }], [17, { gone: 1 }], // gone: only the tag, zipping
+          [18, { sx: 1.2, sy: 0.85, swing: [-1.6, 1.6], ant: 0.5 }], // back, arms flung out
+          [22, { sx: 1.1, sy: 0.92, swing: [-1.4, 1.4], ant: 0.3 }],
+          [38, {}],
+        ]),
+        deleted: f >= 6 && f < 18 ? tween(f, [[6, { k: 0 }], [9, { k: 1 }], [17, { k: 1 }], [18, { k: 0 }]]).k : 0,
+        poof: f >= 18 && f < 30 ? (f - 18) / 12 : null,
       }),
     },
   },
