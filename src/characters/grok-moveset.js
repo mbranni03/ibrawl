@@ -4,6 +4,11 @@ const bounce = (height, lean, sx = 1, sy = 1) => (f, n) => {
   const u = 2 * f / n % 1, h = Math.sin(Math.PI * u), c = (1 - h) ** 3; // h = 0 on the floor … 1 at the top · c = the landing squash
   return { y: -height * h, sx: sx * (1 + 0.1 * c - 0.03 * h), sy: sy * (1 - 0.14 * c + 0.05 * h), rot: lean + 0.05 * Math.sin(2 * Math.PI * u) };
 };
+// holding in the tractor beam: leaning back a touch, eyes lit, the held one floating out in front. beamed() points the beam at the
+// middle of whatever's carried (while the beam's on)
+const GHOLD = { rot: -0.06, sx: 1.02, sy: 0.98, glow: 1, beam: 1, carry: [72, -22, 0] };
+const beamed = p => ({ ...p, beamTo: p.carry && p.beam ? [p.carry[0], p.carry[1] - 34] : p.beamTo });
+
 const GROK_MOVESET = {
   movement: {
     ...MOVESET.movement,
@@ -236,6 +241,103 @@ const GROK_MOVESET = {
           ...p, rot: Math.PI * 2 * (1 - (1 - e) ** 2), squint: f < 12,
           debris: f < 14 ? f / 14 : null, puff: f < 8 ? f / 8 : f >= 16 && f < 24 ? (f - 16) / 8 : null,
         };
+      },
+    },
+  },
+
+  // grabs (G / U): no hands, so Grok grabs with a tractor beam out of its eyes and holds what it catches floating in it. Fields as
+  // Claw'd's (carry = where the held one's bottom-centre goes); beam / beamTo draw the beam (beamed() aims it at whatever's carried).
+  // hold.ratio: every pummel adds a reply against the held one's likes; once replies outnumber them they're RATIO'D (a stamp slams on)
+  // and the throw after hits mult × harder (damage and knockback), the stamp riding along on them for a moment
+  grabs: {
+    grab: { // eyes light up and a beam shoots out ahead; a whiff lets it fizzle back
+      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -58, w: 72, h: 46 }, grab: true,
+      anim: f => {
+        const ext = f < 3 ? 0 : f < 6 ? (f - 3) / 3 : f < 9 ? 1 : Math.max(0, 1 - (f - 9) / 8);
+        return {
+          ...tween(f, [[0, {}], [4, { sx: 0.94, sy: 1.06, rot: -0.1 }], [6, { x: 3, sx: 1.06, sy: 0.95, rot: 0.08 }], [9, { x: 3, sx: 1.05, sy: 0.96, rot: 0.08 }], [18, {}], [31, {}]]),
+          glow: f >= 3 && f < 18 ? 1 : 0, beam: ext ? 0.3 + 0.7 * ext : 0, beamTo: [18 + 72 * ext, -36],
+        };
+      },
+    },
+    dashGrab: { // out of a run: skids in, beam first, sliding on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -58, w: 84, h: 46 }, grab: true,
+      anim: f => {
+        const ext = f < 5 ? 0 : f < 9 ? (f - 5) / 4 : f < 12 ? 1 : Math.max(0, 1 - (f - 12) / 10);
+        return {
+          ...tween(f, [[0, { y: -3, rot: 0.18 }], [5, { x: -2, sx: 1.1, sy: 0.9, rot: -0.1 }], [9, { x: 8, sx: 1.12, sy: 0.9, rot: 0.1 }], [12, { x: 10, sx: 1.1, sy: 0.91, rot: 0.1 }], [24, { x: 5, sx: 1.03, sy: 0.98 }], [40, {}]]),
+          glow: f >= 5 && f < 22 ? 1 : 0, beam: ext ? 0.3 + 0.7 * ext : 0, beamTo: [18 + 84 * ext, -36],
+          speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null,
+        };
+      },
+    },
+    hold: { // got one: floating in the beam, bobbing, Grok leaning back a touch
+      input: 'grab connects', frames: 60, breakFree: 90, perDmg: 1.2,
+      ratio: { likes: 2, mult: 1.5, draw: (x, y, r) => drawRatio(x, y, r), stamp: { secs: 1.2, draw: (x, y, rot, a) => drawRatioStamp(x, y, rot, a) } },
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return beamed({ ...GHOLD, rot: -0.06 + 0.02 * b, carry: [72, -22 + 3 * b, 0.05 * b] });
+      },
+    },
+    pummel: { // "@grok is this true?": the beam flares and zaps them. Each one is a reply toward the ratio
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      anim: f => ({
+        ...beamed(tween(f, [
+          [0, GHOLD],
+          [4, { ...GHOLD, sx: 0.96, sy: 1.04, beam: 0.7 }],
+          [5, { ...GHOLD, sx: 1.07, sy: 0.94, beam: 1.9, carry: [75, -25, 0.1] }],
+          [16, GHOLD],
+        ])),
+        squint: f >= 5 && f < 9, say: ['@grok is this true?', Math.max(0, Math.min(1, f / 3, (16 - f) / 4))],
+      }),
+    },
+    forwardThrow: { // Repost: the beam swings them round in a loop, a green repost arrow circling with them, and flings them on ahead
+      input: 'forward (holding)', startup: 14, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      anim: f => beamed(throwAnim({ at: 14, n: 33, fly: [13, -5, 0.2], say: ['↻ repost', 'reposted'], keys: [
+        [0, GHOLD],
+        [4, { ...GHOLD, carry: [60, -54, -1.6] }],
+        [8, { ...GHOLD, rot: -0.12, carry: [38, -30, -3.14] }],
+        [11, { ...GHOLD, carry: [60, -6, -4.7] }],
+        [14, { x: 6, rot: 0.2, sx: 1.12, sy: 0.9, glow: 1, beam: 1.4, carry: [86, -24, -6.28] }],
+        [16, { x: 5, rot: 0.12, sx: 1.06, sy: 0.95 }],
+        [33, {}],
+      ], extra: f => ({ repost: f < 16 ? [f / 16, 60, -64] : null, speed: f >= 14 && f < 20 ? 0.6 : 0 }) })(f)),
+    },
+    backThrow: { // Blocked: swings them up over its head and down behind, and a block sign slams onto them as they go
+      input: 'back (holding)', startup: 14, active: 1, endlag: 22, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: f => beamed(throwAnim({ at: 14, n: 37, fly: [-12, -4, -0.15], say: ['🚫 block', 'blocked'], keys: [
+        [0, GHOLD],
+        [6, { ...GHOLD, rot: -0.2, carry: [22, -88, -1.2] }],
+        [10, { ...GHOLD, rot: -0.3, carry: [-40, -74, -2.2] }],
+        [14, { rot: -0.36, sx: 1.1, sy: 0.9, glow: 1, beam: 1.4, carry: [-76, -28, -3] }],
+        [16, { rot: -0.25, sx: 1.05, sy: 0.96 }],
+        [37, {}],
+      ], extra: f => ({ blocked: f >= 14 && f < 40 ? [(f - 14) / 26, -120 - 4 * (f - 14), -70] : null }) })(f)),
+    },
+    upThrow: { // Going viral: lifts them overhead in the beam, then hearts burst up under them and the likes count races them skyward
+      input: 'up (holding)', startup: 14, active: 1, endlag: 21, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: f => beamed(throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['📈 going viral', '♥ 1.2M'], keys: [
+        [0, GHOLD],
+        [6, { ...GHOLD, sx: 0.95, sy: 1.06, beam: 1.2, carry: [44, -42, 0] }],
+        [11, { ...GHOLD, rot: -0.2, sx: 0.92, sy: 1.1, beam: 1.2, carry: [8, -94, 0] }],
+        [14, { rot: -0.24, sx: 0.88, sy: 1.14, glow: 1, beam: 1.6, carry: [0, -106, 0] }],
+        [16, { rot: -0.12, sx: 0.96, sy: 1.04 }],
+        [35, {}],
+      ], extra: f => ({ hearts: f >= 12 && f < 40 ? [(f - 12) / 28, 0, -160] : null }) })(f)),
+    },
+    downThrow: { // Steamroll: drops them flat on the floor, rolls right over them and back, and they pop up flattened
+      input: 'down (holding)', startup: 16, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: f => {
+        const p = beamed(throwAnim({ at: 16, n: 36, fly: [3, -9, 0.3], say: ['steamroll', 'flattened'], keys: [
+          [0, GHOLD],
+          [5, { ...GHOLD, x: -4, sx: 1.1, sy: 0.9, carry: [64, 0, -1.57] }], // dropped, lying there
+          [6, { x: -4, sx: 1.1, sy: 0.9, carry: [64, 0, -1.57] }],
+          [11, { x: 62, y: -24, sx: 1.08, sy: 0.92, carry: [64, 0, -1.57] }], // right over the top
+          [16, { x: 4, sx: 1.16, sy: 0.86, carry: [64, 0, -1.57] }], // and back
+          [22, { sx: 0.96, sy: 1.04 }],
+          [36, {}],
+        ], extra: f => ({ puff: f >= 16 && f < 26 ? (f - 16) / 10 : null, squint: f >= 5 && f < 16 }) })(f));
+        return { ...p, rot: (p.x || 0) / GR_R }; // rolls the way a ball would over the ground it covers
       },
     },
   },

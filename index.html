@@ -58,7 +58,7 @@ const hasSpecial = dir => { // specials are on one by one; a ride special waits 
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
 let ATK, AIR, MOVES, FLY = {}; // FLY = rocket-style up specials by state (the flight, and its charge: state + 'Charge') · attack states are named after their move · bound to the fighter in play by bindMoves (below)
 const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
@@ -66,6 +66,7 @@ const US = MOVESET.specials.upSpecial; // MCP tether: its own state, runs off P.
 // a fighter's own attack groups, Claw'd's for any it doesn't have (has() keeps those off anyway)
 function bindMoves(set) {
   const g = k => set[k] || MOVESET[k], sb = set.specials?.sideSpecial || SIDE_B;
+  GR = g('grabs');
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), sideSpecial: sb, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), sideSpecial: sb, downSpecial: DOWN_B };
   MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
@@ -345,21 +346,33 @@ function breakShield() {
 // holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart
 function grabBag(b) {
   Object.assign(b, { held: true, vx: 0, vy: 0 }); P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
+  P.ratio = GR.hold.ratio ? { replies: 0, likes: GR.hold.ratio.likes, ratiod: false, at: 0 } : null; // Grok's ratio meter (grabs.hold.ratio)
 }
 function holdStep(dir) {
   const b = heldBag(); if (!b) return setState('idle');
   if (--P.holdT <= 0) { Object.assign(b, { held: false, vx: P.face * 300, vy: -250 }); P.vx = -P.face * 200; return setState('idle'); }
   if (P.state === 'pummel') {
     const m = GR.pummel;
-    if (P.f === m.startup) hitBag(b, m.damage, NO_KB, P.face);
-    if (P.f >= m.startup + m.active + m.endlag) setState('hold');
+    if (P.f === m.startup) {
+      hitBag(b, m.damage, NO_KB, P.face);
+      const r = P.ratio; // a reply; out-replied the likes: ratio'd
+      if (r && ++r.replies > r.likes && !r.ratiod) { r.ratiod = true; r.at = performance.now(); hitstop += 6; }
+    }
+    if (dir || keys.up || keys.down) P.throwQ = throwFor(dir); // a direction mid-pummel: throw as soon as it's done
+    if (P.f >= m.startup + m.active + m.endlag) { setState(P.throwQ || 'hold'); P.throwQ = null; }
   }
-  else if (attackQ) { attackQ = 0; setState('pummel'); }
-  else if (P.f >= 4 && (dir || keys.up || keys.down)) setState(keys.up ? 'upThrow' : keys.down ? 'downThrow' : dir === P.face ? 'forwardThrow' : 'backThrow');
+  else if (attackQ) { attackQ = 0; P.throwQ = null; setState('pummel'); }
+  else if (P.f >= 4 && (dir || keys.up || keys.down)) setState(throwFor(dir));
 }
+const throwFor = dir => keys.up ? 'upThrow' : keys.down ? 'downThrow' : dir === P.face ? 'forwardThrow' : 'backThrow';
 function throwStep() { // lets go on the startup frame
   const m = GR[P.state], b = heldBag();
-  if (P.f === m.startup && b) { b.held = false; hitBag(b, m.damage, m.kb, P.state === 'backThrow' ? -P.face : P.face); }
+  if (P.f === m.startup && b) {
+    const k = P.ratio?.ratiod ? GR.hold.ratio.mult : 1; // ratio'd: the throw hits harder, and the stamp stays on them a moment
+    b.held = false; hitBag(b, m.damage * k, { ...m.kb, base: m.kb.base * k, growth: m.kb.growth * k }, P.state === 'backThrow' ? -P.face : P.face);
+    if (k > 1) b.sticker = { t: 0, ...GR.hold.ratio.stamp };
+    P.ratio = null;
+  }
   if (P.f >= m.startup + m.active + m.endlag) setState('idle');
 }
 
@@ -935,6 +948,7 @@ function drawTargets(t) {
     const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh, by = b.y + b.h;
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
     if (b.sticker) b.sticker.draw(bx, b.y + b.h * 0.45, b.rot, Math.min(1, (b.sticker.secs - b.sticker.t) / 0.3)); // fades at the end
+    if (b.held && P.ratio) GR.hold.ratio.draw(bx, b.y - 44, P.ratio); // the ratio meter over whoever's held
     if (b.id !== 'bag') continue;
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
     const pct = Math.round(b.dmg) + '%';

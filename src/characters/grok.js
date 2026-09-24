@@ -13,6 +13,9 @@
 //   ship = [size 0 … 1, flame 0 … 1] inside a little Starship, face at the porthole (the ball isn't drawn) · empty = nobody in it
 //   boom = 0 … 1 it blowing up · tilt = radians the ship leans off upright, round its middle (+ = clockwise, whichever way it faces)
 //   aimLine = 0 … 1 a dotted line off the nose showing where it'll launch (charging)
+//   beam = 0 … 2 how wide a tractor beam out of its eyes is (0 = off), reaching beamTo = [dx, dy] from bottom-centre (grabs)
+//   repost / blocked / hearts = [t 0 … 1, dx, dy] throw effects centred dx, dy from bottom-centre: a green repost arrow circling,
+//   a block sign stamped on, hearts and a likes count shooting up
 //   glow = 0 … 1 eyes lit Neuralink blue (down special)
 const GROK = '#fbf9f4';
 const GR_R = 28; // body radius; it sits on the floor
@@ -54,6 +57,10 @@ function drawGrok(cx, bottom, pose = {}, face = 1) {
   if (pose.debris != null) drawDebris(cx, bottom, pose.debris);
   if (pose.gen != null) drawImagining(bx, by - 2 * GR_R * (pose.sy ?? 1) - 26, pose.gen);
   if (pose.boom != null) drawBoom(bx, by - GR_R, pose.boom);
+  if (pose.beam && pose.beamTo) drawBeam(bx + face * 0.65 * GR_R * (pose.sx ?? 1), by - 1.48 * GR_R * (pose.sy ?? 1), cx + face * pose.beamTo[0], bottom + pose.beamTo[1], pose.beam);
+  if (pose.repost) drawRepost(cx + face * pose.repost[1], bottom + pose.repost[2], pose.repost[0], face);
+  if (pose.blocked) drawBlocked(cx + face * pose.blocked[1], bottom + pose.blocked[2], pose.blocked[0]);
+  if (pose.hearts) drawHearts(cx + face * pose.hearts[1], bottom + pose.hearts[2], pose.hearts[0]);
   if (pose.note) { const [dx, dy, tilt, typed, size] = pose.note; drawNote(cx + dx * face, bottom + dy, tilt * face, typed, size); }
 }
 
@@ -280,5 +287,81 @@ function drawWreck(x, y, ang, boom) {
   }
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.translate(0, SHIP_H / 2);
   drawStarship(1, 0.5, { empty: true });
+  ctx.restore();
+}
+
+// the tractor beam: a pale blue cone from the eyes, widening to w × 22 px at the far end, rings running along it
+function drawBeam(x1, y1, x2, y2, w) {
+  const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l, r = 22 * w;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.fillStyle = 'rgba(62,197,255,0.22)'; ctx.beginPath(); ctx.moveTo(x1 + nx * 3, y1 + ny * 3); ctx.lineTo(x2 + nx * r, y2 + ny * r); ctx.lineTo(x2 - nx * r, y2 - ny * r); ctx.lineTo(x1 - nx * 3, y1 - ny * 3); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,150,210,0.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([4, 6]); ctx.lineDashOffset = performance.now() / 30;
+  line(x1 + nx * 3, y1 + ny * 3, x2 + nx * r, y2 + ny * r, 0.4, 1); line(x1 - nx * 3, y1 - ny * 3, x2 - nx * r, y2 - ny * r, 0.4, 1);
+  ctx.setLineDash([]);
+  for (let i = 0; i < 3; i++) { // rings pulled along toward Grok
+    const u = 1 - (performance.now() / 600 + i / 3) % 1, px = x1 + dx * u, py = y1 + dy * u, rr = 3 + (r - 3) * u;
+    ctx.globalAlpha = 0.5 * u; ctx.beginPath(); ctx.ellipse(px, py, rr * 0.35, rr, Math.atan2(dy, dx), 0, 6.28); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// the ratio meter over whoever Grok holds: replies vs likes; once replies win, a red RATIO'D stamp slams on (r.at = when)
+function drawRatio(x, y, r) {
+  ctx.save(); ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
+  rbox(0, 0, 84, 24, 6, '#fdfbf5', 1.8);
+  ctx.font = '700 15px Caveat, cursive'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  ctx.fillStyle = r.replies > r.likes ? '#d0412c' : INK; ctx.fillText('💬 ' + r.replies, -20, 1);
+  ctx.fillStyle = INK; ctx.fillText('♥ ' + r.likes, 22, 1);
+  if (r.ratiod) {
+    const t = Math.min(1, (performance.now() - r.at) / 160), k = 1.8 - 0.8 * t; // slams down from big
+    ctx.translate(0, -26); ctx.rotate(-0.14); ctx.scale(k, k); ctx.globalAlpha = t;
+    drawStamp("RATIO'D", 1);
+  }
+  ctx.restore();
+}
+function drawStamp(text, lw) { // a red rubber stamp: text in a double-ruled box, centred on the origin
+  ctx.font = '700 22px Caveat, cursive'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width + 16;
+  ctx.strokeStyle = '#d0412c'; ctx.fillStyle = '#d0412c'; ctx.lineWidth = 2.2 * lw;
+  ctx.strokeRect(-w / 2, -14, w, 28); ctx.lineWidth = 1 * lw; ctx.strokeRect(-w / 2 + 3, -11, w - 6, 22);
+  ctx.fillText(text, 0, 1);
+}
+// the stamp left on someone thrown while ratio'd
+function drawRatioStamp(x, y, rot, a) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot - 0.2); ctx.scale(0.8, 0.8); ctx.globalAlpha *= a; drawStamp("RATIO'D", 1); ctx.restore(); }
+
+// forward throw: a green repost arrow swinging round what's held (t 0 … 1)
+function drawRepost(x, y, t, face) {
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = Math.min(1, t * 4, (1 - t) * 4); ctx.rotate(face * t * 6.28); ctx.lineCap = ctx.lineJoin = 'round';
+  for (const [c, w] of [[INK, 6], ['#00ba7c', 3.5]]) {
+    ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.arc(0, 0, 44, -2.6, 0.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 44, 0.5, 3.8); ctx.stroke();
+  }
+  for (const a of [0.9, 3.8]) { // arrowheads
+    ctx.save(); ctx.rotate(a); ctx.translate(44, 0); ctx.fillStyle = '#00ba7c'; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    path([[-8, -2], [8, -2], [0, 9]]); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  ctx.restore();
+}
+// back throw: a block sign stamped onto what's thrown (t 0 … 1: slams in, holds, fades)
+function drawBlocked(x, y, t) {
+  const k = t < 0.2 ? 1.7 - 3.5 * t : 1;
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.globalAlpha = Math.min(1, t * 6, (1 - t) * 3); ctx.lineCap = 'round';
+  ctx.strokeStyle = '#d0412c'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, 22, 0, 6.28); ctx.stroke(); line(-15, -15, 15, 15, 0.4, 1);
+  ctx.fillStyle = '#d0412c'; ctx.font = '700 16px Caveat, cursive'; ctx.textAlign = 'center'; ctx.fillText('blocked', 0, 38);
+  ctx.restore();
+}
+// up throw: hearts popping out and floating up from under what's thrown, and a likes count racing up
+function drawHearts(x, y, t) {
+  ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round';
+  for (let i = 0; i < 8; i++) {
+    const u = (t * 1.6 + i / 8) % 1, hx = 24 * Math.sin(i * 2.4 + u * 4), hy = 50 - 130 * u, s = 6 + 3 * (i % 3);
+    ctx.globalAlpha = Math.min(1, u * 5, (1 - u) * 3) * Math.min(1, (1 - t) * 4);
+    ctx.fillStyle = '#f91880'; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(hx, hy + s * 0.9); ctx.bezierCurveTo(hx - s * 1.4, hy - s * 0.2, hx - s * 0.6, hy - s * 1.2, hx, hy - s * 0.4);
+    ctx.bezierCurveTo(hx + s * 0.6, hy - s * 1.2, hx + s * 1.4, hy - s * 0.2, hx, hy + s * 0.9); ctx.fill(); ctx.stroke();
+  }
+  ctx.globalAlpha = Math.min(1, t * 5, (1 - t) * 3); ctx.fillStyle = '#f91880'; ctx.font = '700 20px Caveat, cursive'; ctx.textAlign = 'center';
+  ctx.fillText('♥ ' + (t < 0.6 ? Math.round(10 ** (1 + 5 * t / 0.6)).toLocaleString() : '1.2M'), 0, 74);
   ctx.restore();
 }
