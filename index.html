@@ -86,7 +86,7 @@ const CONTROLS = [
    ['defend', [['I', 'hold: shield · + ← →: roll · + ↓: spot dodge'], ['Shift / Z', 'dodge · + ← →: roll · in the air: dodge any way, once per jump'],
                ['tumbling', 'I / dodge just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
   [['attack', [['C / J', 'light: jab combo · + ← →: forward tilt · + ↑ ↓: tilts · running: dash attack · in the air: aerials'],
-               ['X / K', 'heavy, hold to charge: forward smash · + ↑: terminal uppercut · + ↓: /compact'],
+               ['X / K', 'heavy, hold to charge: forward smash · + ↑: terminal uppercut · + ↓: /compact · in the air: same aerials as light'],
                ['V / L', 'special · hold: think, up to ultrathink · + ← →: spark · + ↑: MCP tether · + ↓: subagent']]],
    ['grab', [['G / U', 'grab · running: dash grab'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
    ['menu', [['Esc', 'pause']]]],
@@ -437,8 +437,8 @@ function stepPlayer(dt) {
     if (s === 'hitstun' && !stunned) { setState('air'); s = 'air'; }
     if (s === 'upSpecial') tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
     const free = ['air', 'djump', 'drop', 'ledgeDrop'].includes(s) || (s === 'tumble' && !stunned); // tumble: acts once the hitstun runs out
-    if (attackQ && free) { // aerial picked by the held direction (back = away from facing)
-      attackQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
+    if ((attackQ || heavyQ) && free) { // aerial picked by the held direction (back = away from facing); heavy does the same in the air
+      attackQ = heavyQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
     }
     else if (specialQ && free) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
     else if (dodgeQ && free && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
@@ -582,7 +582,7 @@ function move(b, dt, onLand) {
     if (b.vy > 0) { b.y = stage.y - b.h; onLand(stage); }
     else { b.y = stage.y + stage.h; b.vy = 0; }
   }
-  if (b.vy >= 0 && !(b.drop > 0)) for (const pl of plats) {
+  if (b.vy >= 0 && !(b.drop > 0) && !(b === P && keys.down)) for (const pl of plats) { // holding ↓: fall straight through
     if (b.x + b.w > pl.x && b.x < pl.x + pl.w && prevBottom <= pl.y + 0.5 && b.y + b.h >= pl.y) {
       b.y = pl.y - b.h; onLand(pl);
     }
