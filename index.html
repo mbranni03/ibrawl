@@ -25,6 +25,7 @@
 <script src="src/characters/clawd-moveset.js"></script>
 <script src="src/characters/grok-moveset.js"></script>
 <script src="src/characters/duo-moveset.js"></script>
+<script src="src/characters/snoo-moveset.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -82,7 +83,7 @@ const FIGHTER = {
   wumpus: { name: 'Wumpus', box: [50, 64], art: drawWumpus, set: { movement: MOVESET.movement } },
   android: { name: 'Android', box: [50, 64], art: drawAndroid, set: { movement: MOVESET.movement } },
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
-  snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: { movement: MOVESET.movement } },
+  snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: SNOO_MOVESET },
   lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: { movement: MOVESET.movement } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
   random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
@@ -136,7 +137,10 @@ function restart() {
 function fight() { restart(); setPaused(false); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
 const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
-function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box; }
+function versus() {
+  picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box;
+  for (const g of ['groundAttacks', 'smashAttacks', 'aerials']) { const own = { ...MOVESET[g], ...fighter.set[g] }; Object.assign(g === 'aerials' ? AIR : ATK, own); Object.assign(MOVES, own); } // its own attacks, under the same state names
+}
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -431,7 +435,7 @@ function stepPlayer(dt) {
     else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
-    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
+    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; const sm = fighter.set.smashAttacks; setState(keys.up && sm.upSmash ? 'upSmash' : keys.down && sm.downSmash ? 'downSmash' : 'forwardSmash'); } // a smash it doesn't have yet: its side smash instead
     else if (specialQ && has('specials') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
     else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab

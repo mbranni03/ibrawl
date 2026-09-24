@@ -1,0 +1,289 @@
+// Snoo's moveset (drawn by snoo.js). Movement is Claw'd's (clawd-moveset.js, loaded first). Its ground attacks lean on what
+// Snoo has: stubby arms that stretch out to punch, little feet to kick with, a big head to butt with and an antenna to whip,
+// and it hands out Reddit votes: upvotes off its up tilt and up air, downvotes off its down tilt and down air. Its smashes: a ban hammer to the side, a UFO
+// beaming things up, and [removed] both ways along the floor.
+// Frame data and field meanings as in clawd-moveset.js; pose fields as in snoo.js.
+// Claw'd's move `key` with Snoo's arm swing laid over it: extra(f, n) = the fields to add (swing, as in snoo.js)
+const snooArms = (key, extra) => ({ ...MOVESET.movement[key], anim: (f, n) => ({ ...MOVESET.movement[key].anim(f, n), ...extra(f, n) }) });
+// a jump: arms swing back in the squat, fling up and out on takeoff, open wide at the peak, reach up again coming down
+const snooHop = (f, n) => tween(f, [[0, {}], [4, { swing: -0.6 }], [7, { swing: [-1.9, 1.9] }], [(n - 2) / 2, { swing: [-1.2, 1.2] }],
+  [n - 8, { swing: [-1.6, 1.6] }], [n - 5, { swing: [-0.6, 0.6] }], [n, {}]]);
+
+const SNOO_MOVESET = {
+  movement: { // Claw'd's, with arms that show: his arm moves are a few px, lost on Snoo, so it swings them about the shoulders
+    ...MOVESET.movement,
+    idle: snooArms('idle', (f, n) => { const b = (1 - Math.cos(f / n * Math.PI * 4)) / 2; return { swing: [-0.12 * b, 0.12 * b] }; }), // ease out on each breath
+    walk: snooArms('walk', (f, n) => ({ swing: 0.55 * Math.sin(f / n * Math.PI * 2) })), // both swinging together, a little waddle
+    dash: snooArms('dash', f => tween(f, [[0, {}], [3, { swing: 0.3 }], [6, { swing: -1.2 }], [11, { swing: -1.2 }], [16, { swing: -0.9 }], [20, {}]])), // flung back
+    run: snooArms('run', (f, n) => ({ swing: -0.9 + 0.3 * Math.sin(f / n * Math.PI * 4) })), // trailing behind, pumping each step
+    skid: snooArms('skid', f => tween(f, [[0, { swing: -0.9 }], [4, { swing: 0.9 }], [13, { swing: 0.9 }], [17, {}], [26, {}]])), // thrown forward to brake
+    crouch: snooArms('crouch', f => tween(f, [[0, {}], [5, { swing: [-0.5, 0.5] }], [50, { swing: [-0.5, 0.5] }], [60, {}]])), // out a little for balance
+    crouchWalk: snooArms('crouchWalk', (f, n) => { const s = 0.3 * Math.sin(f / n * Math.PI * 2); return { swing: [-0.5 + s, 0.5 + s] }; }), // paddling
+    jumpSquat: snooArms('jumpSquat', f => tween(f, [[0, {}], [4, { swing: -0.6 }], [6, { swing: -0.7 }], [9, { swing: [-1.9, 1.9] }], [14, {}]])),
+    fullHop: snooArms('fullHop', snooHop),
+    shortHop: snooArms('shortHop', snooHop),
+    doubleJump: snooArms('doubleJump', f => tween(f, [[0, { swing: [-1.2, 1.2] }], [3, { swing: -0.5 }], [6, { swing: [-2, 2] }], [20, { swing: [-0.4, 0.4] }], [36, { swing: [-1.2, 1.2] }]])), // tucked through the flip
+    fall: snooArms('fall', (f, n) => { const s = 0.3 * Math.sin(f / n * Math.PI * 4); return { swing: [-1.6 - s, 1.6 + s] }; }), // up and out, flapping
+    fastFall: snooArms('fastFall', () => ({ swing: [-2.1, 2.1] })), // up as far as the head lets them show
+    land: snooArms('land', f => tween(f, [[0, { swing: [-1.7, 1.7] }], [3, { swing: [-0.9, 0.9] }], [8, { swing: [-0.3, 0.3] }], [18, {}]])),
+    platformDrop: snooArms('platformDrop', f => tween(f, [[0, {}], [4, { swing: -0.3 }], [8, { swing: [-1.9, 1.9] }], [40, { swing: [-1.9, 1.9] }]])),
+  },
+  groundAttacks: {
+    jab1: { // front arm stretches out in a quick straight punch, feet planted
+      input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
+      hitbox: { x: 16, y: -30, w: 26, h: 20 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [2, { x: -2, sx: 1.03, sy: 0.97, rot: -0.06, reach: -2, arm: [0, 1], ant: -0.1 }],
+          [3, { x: 3, sx: 1.05, sy: 0.96, rot: 0.08, reach: 22, arm: [0, -2], ant: -0.25, legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }],
+          [6, { x: 3, sx: 1.04, sy: 0.97, rot: 0.07, reach: 20, arm: [0, -2], ant: -0.2, legs: [[-3, 0], [0, 0], [0, 0], [2, 0]] }],
+          [11, { x: 1, rot: 0.02, reach: 4, ant: 0.08 }],
+          [19, {}],
+        ]),
+        speed: f >= 3 && f < 6 ? 0.4 : 0,
+      }),
+    },
+    jab2: { // the back arm follows through across the body: a one-two
+      input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 45 },
+      hitbox: { x: 14, y: -32, w: 24, h: 20 },
+      anim: f => tween(f, [
+        [0, {}],
+        [2, { x: -1, sx: 0.98, sy: 1.02, rot: -0.04, reach: [2, 0], arm: [1, 2], ant: 0.1 }],
+        [3, { x: 5, sx: 1.05, sy: 0.96, rot: 0.12, reach: [50, -4], arm: [-4, 3], ant: -0.3, legs: [[-5, 0], [0, 0], [0, 0], [3, 0]] }],
+        [6, { x: 5, sx: 1.04, sy: 0.97, rot: 0.11, reach: [48, -4], arm: [-4, 3], ant: -0.25, legs: [[-5, 0], [0, 0], [0, 0], [3, 0]] }],
+        [12, { x: 2, rot: 0.03, reach: [12, 0], arm: [-1, 1], ant: 0.1 }],
+        [21, {}],
+      ]),
+    },
+    jab3: { // finisher: rear back, then throw the big head forward in a headbutt, eyes squeezed shut, antenna flung back
+      input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
+      hitbox: { x: 18, y: -64, w: 32, h: 40 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -5, sx: 0.96, sy: 1.04, rot: -0.3, arm: [-4, -4], ant: 0.5, legs: legsAll(3, 0) }],
+          [5, { x: 12, sx: 1.08, sy: 0.94, rot: 0.42, blink: 1, arm: [4, 2], reach: [0, 6], ant: -0.9, legs: [[-10, 0], [0, 0], [0, 0], [3, 0]] }],
+          [8, { x: 13, sx: 1.07, sy: 0.95, rot: 0.4, blink: 1, arm: [4, 2], reach: [0, 6], ant: -0.8, legs: [[-10, 0], [0, 0], [0, 0], [3, 0]] }],
+          [16, { x: 8, rot: 0.14, blink: 0.3, arm: [1, 1], ant: 0.3, legs: [[-5, 0], [0, 0], [0, 0], [1, 0]] }],
+          [32, {}],
+        ]),
+        speed: f >= 5 && f < 12 ? 1 - (f - 5) / 7 : 0,
+        dust: f >= 5 && f < 17 ? (f - 5) / 12 : null,
+      }),
+    },
+    dashAttack: { // out of a run: dives headfirst and belly-slides along the floor, antenna leading the way
+      input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
+      hitbox: { x: 14, y: -46, w: 48, h: 44 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -3, sx: 1.06, sy: 0.9, rot: -0.12, arm: [2, 2], ant: 0.3 }],
+          [6, { x: 12, y: 6, sx: 1.04, sy: 0.96, rot: 1.25, arm: [-10, -10], reach: [0, 10], ant: 0.35, legs: [[-4, -3], [0, 0], [0, 0], [-4, -3]] }],
+          [14, { x: 14, y: 8, sx: 1.04, sy: 0.96, rot: 1.3, arm: [-10, -10], reach: [0, 10], ant: 0.3, legs: [[-4, -3], [0, 0], [0, 0], [-4, -3]] }],
+          [22, { x: 8, y: 2, rot: 0.5, arm: [-4, -4], ant: -0.2 }],
+          [34, {}],
+        ]),
+        speed: f >= 6 && f < 20 ? 1 - (f - 6) / 14 : 0,
+        dust: f >= 6 && f < 18 ? (f - 6) / 12 : null,
+      }),
+    },
+    forwardTilt: { // rocks back on its back foot, which swings the front foot up and out in a kick
+      input: 'forward + light', step: 200, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
+      hitbox: { x: 20, y: -32, w: 30, h: 26 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [5, { x: -3, sx: 0.97, sy: 1.03, rot: 0.1, arm: [-2, 2], ant: -0.1, legs: [[2, 0], [0, 0], [0, 0], [-2, -2]] }],
+          [6, { x: 2, y: 3, rot: -0.5, arm: [-8, -10], ant: 0.6, legs: [[-3, 0], [0, 0], [0, 0], [20, -8]] }],
+          [9, { x: 2, y: 3, rot: -0.48, arm: [-8, -10], ant: 0.5, legs: [[-3, 0], [0, 0], [0, 0], [19, -8]] }],
+          [16, { x: 1, y: 1, rot: -0.16, arm: [-2, -2], ant: -0.1, legs: [[-1, 0], [0, 0], [0, 0], [2, -2]] }],
+          [27, {}],
+        ]),
+        speed: f >= 6 && f < 10 ? 0.5 : 0,
+      }),
+    },
+    upTilt: { // springs up tall and whips the antenna over its head, front to back, handing out an upvote
+      input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
+      hitbox: { x: -26, y: -102, w: 66, h: 58 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { sx: 1.1, sy: 0.88, rot: 0.1, arm: [2, 2], ant: 0.7 }],
+          [5, { y: -4, sx: 0.92, sy: 1.14, rot: -0.1, arm: [-10, -12], ant: -0.6, legs: legsAll(0, 3) }],
+          [9, { y: -3, sx: 0.93, sy: 1.12, rot: -0.14, arm: [-10, -12], ant: -1.7, legs: legsAll(0, 2) }],
+          [16, { sx: 0.98, sy: 1.04, rot: -0.05, arm: [-3, -3], ant: -0.9 }],
+          [25, {}],
+        ]),
+        vote: f >= 5 && f < 25 ? [4, -92, (f - 5) / 20, 1] : null,
+      }),
+    },
+    downTilt: { // from the crouch: sweeps the front foot out low along the floor, handing out a downvote
+      input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
+      hitbox: { x: 16, y: -18, w: 32, h: 18 },
+      anim: f => ({
+        ...tween(f, [
+          [0, CROUCH],
+          [4, { ...CROUCH, x: -2, rot: -0.05, ant: 0.2, legs: [[0, 0], [0, 0], [0, 0], [-3, 0]] }],
+          [5, { ...CROUCH, x: 4, rot: -0.12, ant: -0.3, legs: [[-4, 0], [0, 0], [0, 0], [24, 0]] }],
+          [8, { ...CROUCH, x: 4, rot: -0.11, ant: -0.25, legs: [[-4, 0], [0, 0], [0, 0], [23, 0]] }],
+          [14, { ...CROUCH, x: 1, ant: 0.1, legs: [[-1, 0], [0, 0], [0, 0], [6, 0]] }],
+          [20, CROUCH],
+        ]),
+        vote: f >= 5 && f < 20 ? [40, -34, (f - 5) / 15, -1] : null,
+        dustAhead: f >= 5 && f < 15 ? (f - 5) / 10 : null,
+      }),
+    },
+    getupAttack: { // from flat on its back: rocks, flips over with both feet kicking and lands with both arms flung out wide.
+      // Can't be hurt until the hit comes out; knockback goes away from Snoo
+      input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
+      hitbox: { x: -60, y: -34, w: 120, h: 34 }, both: true, intangible: [0, 12],
+      anim: f => ({
+        ...tween(f, [
+          [0, { rot: Math.PI, sx: 1.04, sy: 0.94 }],
+          [6, { rot: Math.PI - 0.3, sx: 1.1, sy: 0.88, ant: 0.4 }],
+          [11, { rot: Math.PI * 1.7, y: -14, sx: 0.92, sy: 1.08, ant: -0.6, legs: legsAll(0, -4) }],
+          [12, { rot: Math.PI * 2, sx: 1.22, sy: 0.82, blink: 1, arm: [-4, -4], reach: [-30, 30], ant: 0.3, legs: [[-8, 0], [0, 0], [0, 0], [8, 0]] }],
+          [16, { rot: Math.PI * 2, sx: 1.2, sy: 0.84, blink: 1, arm: [-4, -4], reach: [-28, 28], ant: 0.2, legs: [[-8, 0], [0, 0], [0, 0], [8, 0]] }],
+          [22, { rot: Math.PI * 2, sx: 1.06, sy: 0.94, reach: [-8, 8], ant: -0.1 }],
+          [32, { rot: Math.PI * 2 }],
+        ]),
+        puff: f >= 12 ? (f - 12) / 10 : null,
+      }),
+    },
+  },
+  // hold the button to charge; chargeFrames = max hold, chargeMult = damage multiplier at full charge
+  smashAttacks: {
+    forwardSmash: { // the ban hammer: pulls it out, winds it back over its shoulder (charge holds here, frame 12), then slams it
+      // down in front, eyes shut, and stamps BANNED
+      input: 'heavy (X / K), hold to charge', step: 240, startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 102, angle: 40 },
+      hitbox: { x: 20, y: -60, w: 60, h: 60 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 12,
+      anim: f => ({
+        ...tween(f, [
+          [0, { hammer: [0.6, 0], swing: [0, 0.4] }],
+          [4, { x: -1, rot: -0.06, swing: [-0.2, 1.2], ant: 0.2, hammer: [0.2, 1] }],
+          [12, { x: -5, sx: 0.95, sy: 1.06, rot: -0.24, swing: [-0.6, 2], ant: 0.6, legs: [[3, 0], [0, 0], [0, 0], [-2, 0]], hammer: [-1, 1] }],
+          [15, { x: -6, sx: 0.94, sy: 1.07, rot: -0.26, swing: [-0.6, 2.05], ant: 0.65, legs: [[3, 0], [0, 0], [0, 0], [-2, 0]], hammer: [-1.1, 1] }],
+          [16, { x: 12, sx: 1.1, sy: 0.9, rot: 0.3, blink: 1, swing: [-0.8, 1.1], ant: -0.8, legs: [[-12, 0], [0, 0], [0, 0], [4, 0]], hammer: [1.12, 1] }],
+          [20, { x: 13, sx: 1.08, sy: 0.92, rot: 0.28, blink: 1, swing: [-0.8, 1.1], ant: -0.6, legs: [[-12, 0], [0, 0], [0, 0], [4, 0]], hammer: [1.14, 1] }],
+          [34, { x: 9, sx: 1.02, sy: 0.98, rot: 0.1, swing: [-0.3, 0.9], ant: 0.1, legs: [[-6, 0], [0, 0], [0, 0], [2, 0]], hammer: [0.85, 1] }],
+          [44, { x: 2, swing: [0, 0.5], hammer: [0.6, 1] }],
+          [50, { hammer: [0.6, 0] }],
+        ]),
+        speed: f >= 16 && f < 24 ? 1 - (f - 16) / 8 : 0,
+        puff: f >= 16 && f < 30 ? (f - 16) / 14 : null,
+        banned: f >= 16 && f < 44 ? (f - 16) / 28 : null,
+      }),
+    },
+    upSmash: { // UFO beam: looks up with its antenna beeping (charge holds here, frame 8) to call a flying saucer in high overhead,
+      // which strikes a tractor beam down from the sky, like Pikachu's Thunder, beaming up whatever's in the column over Snoo
+      input: 'up + heavy (X / K), hold to charge', startup: 14, active: 8, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
+      hitbox: { x: -40, y: -220, w: 80, h: 220 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none): keeps the antenna beeping
+        const p = tween(f, [
+          [0, {}],
+          [6, { sx: 1.08, sy: 0.92, rot: -0.12, swing: [-0.5, 0.5], ant: -0.75 }],
+          [8, { sx: 1.1, sy: 0.9, rot: -0.14, swing: [-0.6, 0.6], ant: -0.75 }],
+          [13, { y: -2, sx: 0.94, sy: 1.08, rot: -0.1, swing: [-1.9, 1.9], ant: -0.75 }],
+          [14, { y: -3, sx: 0.92, sy: 1.1, rot: -0.12, swing: [-2, 2], ant: -0.75 }],
+          [22, { y: -3, sx: 0.93, sy: 1.09, rot: -0.12, swing: [-2, 2], ant: -0.75 }],
+          [32, { sx: 0.98, sy: 1.02, rot: -0.04, swing: [-0.8, 0.8], ant: -0.3 }],
+          [46, {}],
+        ]);
+        const ufo = f >= 6 && f < 38 ? tween(f, [ // [x, y, beam, tilt]: drops in from the sky, strikes the beam down, pulls it back up, zips off
+          [6, { u: [-40, -380, 0, -0.3] }], [12, { u: [0, -280, 0, 0.08] }], [14, { u: [0, -280, 1, 0] }], [22, { u: [0, -278, 1, 0] }],
+          [26, { u: [0, -282, 0, -0.05] }], [30, { u: [10, -288, 0, -0.12] }], [38, { u: [160, -400, 0, 0.3] }],
+        ]).u : null;
+        if (ufo) ufo[4] = f / 6;
+        return { ...p, ufo, signal: f >= 4 && f < 14 ? f / 8 + 10 * c : null };
+      },
+    },
+    downSmash: { // [removed]: squashes flat (flatter the longer it charges, frame 8), hops and slams back down, and [removed] bursts out
+      // along the floor both ways. Hits both sides; knockback goes away from Snoo
+      input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 22, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
+      hitbox: { x: -90, y: -24, w: 180, h: 24 }, both: true, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: (f, n, c = 0) => {
+        const wide = [[-3, 0], [0, 0], [0, 0], [3, 0]], planted = [[-5, 0], [0, 0], [0, 0], [5, 0]];
+        const p = tween(f, [
+          [0, {}],
+          [8, { sx: 1.3, sy: 0.62, swing: [-0.6, 0.6], ant: 0.3, legs: wide }],
+          [9, { sx: 1.3, sy: 0.62, swing: [-0.6, 0.6], ant: 0.3, legs: wide }],
+          [11, { y: -12, sx: 0.88, sy: 1.14, swing: [-1.8, 1.8], ant: -0.4, legs: legsAll(0, 2) }],
+          [12, { sx: 1.32, sy: 0.7, blink: 1, swing: [-1.3, 1.3], ant: 0.5, legs: planted }],
+          [16, { sx: 1.28, sy: 0.72, blink: 1, swing: [-1.2, 1.2], ant: 0.3, legs: planted }],
+          [26, { sx: 1.04, sy: 0.96, swing: [-0.3, 0.3] }],
+          [38, {}],
+        ]);
+        if (f >= 6 && f < 11) { p.sx += 0.12 * c; p.sy -= 0.1 * c; }
+        return { ...p, puff: f >= 12 ? (f - 12) / 10 : null, removed: f >= 12 && f < 34 ? (f - 12) / 22 : null };
+      },
+    },
+  },
+
+  aerials: {
+    // drawn with a preview-only air: -40 so they float in the viewer; frame 0 / the last frame = the plain airborne pose
+    neutralAir: { // curls up, then spins a full turn with both arms stretched out either way: hits all around
+      input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
+      hitbox: { x: -44, y: -80, w: 88, h: 84 }, landingLag: 8,
+      anim: f => {
+        const p = tween(f, [[0, AIRBORNE], [3, { sx: 0.92, sy: 1.06, arm: [-4, -4], legs: TUCK }],
+          [4, { reach: [-22, 22], arm: [-2, -2], ant: -0.4, legs: legsAll(0, -2) }], [12, { reach: [-22, 22], arm: [-2, -2], ant: -0.4, legs: legsAll(0, -2) }], [26, AIRBORNE]]);
+        const e = 1 - (1 - Math.min(1, Math.max(0, (f - 4) / 9))) ** 2; // spin eases out
+        return { ...p, rot: f < 4 ? -0.05 * f : -0.2 + (Math.PI * 2 + 0.2) * e, air: -40 };
+      },
+    },
+    forwardAir: { // raises the front arm behind its head, then stretches it out and chops it down in front
+      input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
+      hitbox: { x: 16, y: -52, w: 36, h: 44 }, landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [6, { x: -3, sx: 0.96, sy: 1.04, rot: -0.2, arm: [0, -30], reach: [0, 6], ant: 0.4, legs: TUCK }],
+          [7, { x: 4, sx: 1.06, sy: 0.95, rot: 0.25, arm: [-2, -8], reach: [0, 26], ant: -0.5, blink: 0.5, legs: legsAll(-3, -2) }],
+          [11, { x: 4, sx: 1.05, sy: 0.96, rot: 0.28, arm: [-2, 4], reach: [0, 24], ant: -0.4, legs: legsAll(-3, -2) }],
+          [18, { x: 2, rot: 0.1, arm: [-1, 2], reach: [0, 6], ant: 0.1, legs: TUCK }],
+          [27, AIRBORNE],
+        ]),
+        speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
+      }),
+    },
+    backAir: { // tips forward, which swings both feet out behind, and kicks them back
+      input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
+      hitbox: { x: -46, y: -36, w: 30, h: 30 }, landingLag: 9,
+      anim: f => tween(f, [
+        [0, { ...AIRBORNE, air: -40 }],
+        [5, { x: 3, sx: 0.96, sy: 1.04, rot: -0.15, arm: [-2, -2], ant: -0.2, legs: [[4, -4], [0, 0], [0, 0], [2, -3]], air: -40 }],
+        [6, { x: -4, sx: 1.04, sy: 0.96, rot: 0.6, arm: [-6, 2], reach: [0, 8], ant: 0.5, blink: 0.5, legs: [[-12, -2], [0, 0], [0, 0], [-10, -4]], air: -40 }],
+        [10, { x: -4, sx: 1.04, sy: 0.96, rot: 0.58, arm: [-6, 2], reach: [0, 8], ant: 0.4, blink: 0.5, legs: [[-11, -2], [0, 0], [0, 0], [-9, -4]], air: -40 }],
+        [16, { x: -1, rot: 0.2, arm: [-3, 0], ant: 0.1, legs: [[-5, -3], [0, 0], [0, 0], [-4, -3]], air: -40 }],
+        [24, { ...AIRBORNE, air: -40 }],
+      ]),
+    },
+    upAir: { // a quick backflip: its feet sweep up over its head, front to back, and it hands out an upvote
+      input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
+      hitbox: { x: -40, y: -92, w: 80, h: 48 }, landingLag: 7,
+      anim: f => {
+        const p = tween(f, [[0, AIRBORNE], [4, { sx: 1.08, sy: 0.9, arm: [2, 2], legs: TUCK }],
+          [5, { arm: [-6, -6], ant: 0.3, legs: legsAll(0, 3) }], [10, { arm: [-6, -6], ant: 0.3, legs: legsAll(0, 3) }], [24, AIRBORNE]]);
+        let u = Math.min(1, Math.max(0, (f - 2) / 12)); u = u * u * (3 - 2 * u);
+        return { ...p, rot: -Math.PI * 2 * u, vote: f >= 6 && f < 24 ? [0, -100, (f - 6) / 18, 1] : null, air: -40 };
+      },
+    },
+    downAir: { // flips upside down and drives its antenna straight down like a pogo stick, handing out a downvote. Spikes
+      input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
+      hitbox: { x: -18, y: -30, w: 36, h: 34 }, landingLag: 14,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [7, { y: -10, rot: Math.PI * 0.92, sx: 0.94, sy: 1.06, arm: [-6, -6], ant: 0.2, legs: TUCK }],
+          [8, { y: -8, rot: Math.PI, sx: 0.9, sy: 1.1, arm: [-10, -10], blink: 1, ant: -0.75, legs: legsAll(0, -3) }],
+          [14, { y: -8, rot: Math.PI, sx: 0.91, sy: 1.09, arm: [-10, -10], blink: 1, ant: -0.75, legs: legsAll(0, -3) }],
+          [22, { y: -6, rot: Math.PI * 1.3, arm: [-4, -4], ant: -0.3, legs: TUCK }],
+          [32, { ...AIRBORNE, rot: Math.PI * 2 }],
+        ]),
+        vote: f >= 8 && f < 26 ? [0, 16, (f - 8) / 18, -1] : null,
+        fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40,
+      }),
+    },
+  },
+};
