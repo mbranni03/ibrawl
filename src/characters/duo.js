@@ -1,9 +1,11 @@
 // Duo (Duolingo's owl), after the official art: a wide green body whose top dips in the middle, wings flaring out
-// from the sides, a light green mask with pointed brow feathers around two tall white eyes, a yellow-over-orange
+// from behind its sides, a light green mask with pointed brow feathers around two tall white eyes, a yellow-over-orange
 // beak, three chest feathers and chunky orange feet, outlined in ink like the other fighters.
 // Shapes are laid out on the reference art's 1000-unit grid (x from the centre line, y up from the feet), then scaled down.
 // pose fields (all optional), written facing right and mirrored for face = -1:
 //   x, y offsets · sx, sy stretch (from the floor) · rot radians (+ = lean forward, around the middle) · blink 0 (open) … 1 (shut)
+//   legs = Claw'd's four [dx, dy] foot offsets in px, back to front: the outer two move these feet
+//   arm = px the wingtips swing about the shoulders (negative = up), or [back, front]: the wings are Duo's arms
 const DUO = '#78c800', DUO_LIT = '#8ee000', DUO_FOOT = '#f49000', DUO_BEAK = '#ffc800';
 const DUO_K = 0.064; // reference units → px: about 68 px wide, 61 tall
 
@@ -20,16 +22,26 @@ function drawDuo(cx, bottom, pose = {}, face = 1) {
   };
 
   // feet, tucked under the body
-  for (const fx of [805, 1017]) fillStroke(() => ctx.roundRect(fx, 912, 173, 93, 46), DUO_FOOT);
+  const feet = [pose.legs?.[0] || [0, 0], pose.legs?.[3] || [0, 0]], arm = Array.isArray(pose.arm) ? pose.arm : [pose.arm || 0, pose.arm || 0];
+  for (const [i, fx] of [805, 1017].entries()) { const [dx, dy] = feet[i]; fillStroke(() => ctx.roundRect(fx + dx / DUO_K, 912 + dy / DUO_K, 173, 93, 46), DUO_FOOT); }
 
-  // body: rounded top corners, the top edge dipping to the middle, straight sides, wings flaring out, round belly
+  // wings, behind the body, flaring out from its sides: the front one, and the back one mirrored across the centre line.
+  // Each turns about its shoulder; the wing is 18.5 px long, so arm px of wingtip travel is arm / 18.5 radians
+  for (const [i, a] of arm.entries()) {
+    ctx.save();
+    if (!i) { ctx.translate(1994, 0); ctx.scale(-1, 1); }
+    ctx.translate(1378, 512); ctx.rotate(a / 18.5); ctx.translate(-1378, -512);
+    fillStroke(() => { ctx.moveTo(1378, 512); ctx.lineTo(1518, 765); ctx.quadraticCurveTo(1545, 828, 1488, 838); ctx.quadraticCurveTo(1390, 858, 1295, 818); ctx.closePath(); }, DUO);
+    ctx.restore();
+  }
+
+  // body: rounded top corners, the top edge dipping to the middle, straight sides curving into a round belly
   fillStroke(() => {
-    ctx.moveTo(615, 512); ctx.lineTo(615, 180); ctx.quadraticCurveTo(615, 50, 745, 50);
+    ctx.moveTo(615, 620); ctx.lineTo(615, 180); ctx.quadraticCurveTo(615, 50, 745, 50);
     ctx.bezierCurveTo(800, 50, 930, 125, 997, 125); ctx.bezierCurveTo(1064, 125, 1194, 50, 1250, 50);
-    ctx.quadraticCurveTo(1378, 50, 1378, 180); ctx.lineTo(1378, 512);
-    ctx.lineTo(1518, 765); ctx.quadraticCurveTo(1545, 828, 1488, 838); ctx.quadraticCurveTo(1390, 858, 1295, 818); // right wing
+    ctx.quadraticCurveTo(1378, 50, 1378, 180); ctx.lineTo(1378, 620); ctx.bezierCurveTo(1378, 720, 1340, 770, 1295, 818);
     ctx.bezierCurveTo(1230, 900, 1120, 958, 997, 958); ctx.bezierCurveTo(874, 958, 764, 900, 700, 818); // belly
-    ctx.quadraticCurveTo(604, 858, 506, 838); ctx.quadraticCurveTo(449, 828, 476, 765); ctx.closePath(); // left wing
+    ctx.bezierCurveTo(654, 770, 615, 720, 615, 620); ctx.closePath();
   }, DUO);
 
   // chest feathers: three flat-topped half discs
