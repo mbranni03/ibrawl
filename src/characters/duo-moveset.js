@@ -8,6 +8,9 @@ const duoFeet = (back, front) => [back, [0, 0], [0, 0], front];
 const duoSay = (text, f, a, b) => f >= a && f < b ? [text, Math.min(1, (f - a) / 3, (b - f) / 5)] : null;
 const DUO_GA = MOVESET.groundAttacks, DUO_SA = MOVESET.smashAttacks, DUO_AA = MOVESET.aerials; // frame data starts as Claw'd's; the hitboxes and poses are Duo's
 const DUO_AIR = { arm: -12, legs: duoFeet([1, -2], [-1, -2]) }; // wings half out, feet tucked: the plain airborne pose aerials start and end on
+// holding a grabbed target: leaning back a touch, the front wing clamped round it (carry = where the target sits, as in Claw'd's HOLD)
+const DUO_HOLD = { rot: -0.04, arm: [-10, -20], legs: duoFeet([-3, 0], [2, 0]), carry: [52, -4, 0] };
+const DUO_GR = MOVESET.grabs; // frame data starts as Claw'd's
 // Claw'd's arm swings are sized for his little nubs: the movement Duo borrows from him swings its wings 4x as far
 const duoWings = m => m.anim ? { ...m, anim: (f, n) => { const p = m.anim(f, n); return p.arm == null ? p : { ...p, arm: Array.isArray(p.arm) ? p.arm.map(a => 4 * a) : 4 * p.arm }; } } : m;
 const DUO_MOVESET = {
@@ -303,11 +306,10 @@ const DUO_MOVESET = {
         if (!had) return { // out of hearts: holds up an empty wing, droops
           ...p, heart: null, sy: p.sy - 0.06 * Math.min(1, f / 10), blink: f >= 10 ? 0.5 : 0, say: duoSay('💔 out of hearts · get Super!', f, 6, 36),
         };
-        const left = had - 1;
         return {
           ...p, blink: f >= 10 && f < 14 ? 0.4 : 0, speed: f >= 10 && f < 14 ? 0.5 : 0,
+          hearts: [had, f < 10 ? 0 : Math.min(1, (f - 10) / 8), Math.min(1, f / 3, (36 - f) / 6)], // the one it zaps pops out of the row
           heart: f < 10 ? [30, -44, 0.5 + 0.05 * f, Math.min(1, f / 3)] : f < 20 ? [30 + 3 * (f - 10), -40, 1 + 0.06 * (f - 10), 1 - (f - 10) / 10] : null, // held up, then zapped out
-          say: duoSay('❤'.repeat(left) + '🖤'.repeat(5 - left), f, 10, 36),
         };
       },
     },
@@ -357,6 +359,90 @@ const DUO_MOVESET = {
         ]),
         say: duoSay('Duo is watching 👀', f, 12, 32),
       }),
+    },
+  },
+  grabs: { // throws use Claw'd's throwAnim: the target rides carry until the release frame, say = [before, after] it
+    grab: { ...DUO_GR.grab, // lean in and clamp the front wing round whatever's there
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, arm: [-2, -34], legs: duoFeet([2, 0], [0, 0]) }],
+          [6, { x: 6, sx: 1.1, sy: 0.93, rot: 0.14, arm: [-10, -22], legs: duoFeet([-4, 0], [3, 0]) }],
+          [9, { x: 6, sx: 1.1, sy: 0.93, rot: 0.14, arm: [-10, -16], legs: duoFeet([-4, 0], [3, 0]) }],
+          [16, { x: 4, sx: 1.04, sy: 0.96, rot: 0.08, arm: [-4, -4] }],
+          [31, {}],
+        ]),
+        blink: f >= 9 && f < 16 ? 0.5 : 0,
+      }),
+    },
+    dashGrab: { ...DUO_GR.dashGrab, // out of a run: dives in wing-first and slides on the momentum
+      anim: f => ({
+        ...tween(f, [
+          [0, { y: -3, rot: 0.12 }], // = run frame 0
+          [5, { x: -2, sx: 1.06, sy: 0.92, rot: -0.04, arm: [-2, -34] }],
+          [9, { x: 12, y: -2, sx: 1.18, sy: 0.86, rot: 0.2, arm: [-14, -22], legs: duoFeet([-10, 2], [5, 1]) }],
+          [12, { x: 14, sx: 1.16, sy: 0.87, rot: 0.18, arm: [-12, -18], legs: duoFeet([-10, 1], [5, 0]) }],
+          [24, { x: 8, sx: 1.05, sy: 0.95, rot: 0.06, arm: [-4, -4] }],
+          [40, {}],
+        ]),
+        speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null, blink: f >= 12 && f < 22 ? 0.5 : 0,
+      }),
+    },
+    hold: { ...DUO_GR.hold, // got it: leaning back with its wing clamped on, staring it down
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return { ...DUO_HOLD, rot: -0.04 + 0.02 * b, sx: 1.02 + 0.01 * b, sy: 0.98 - 0.01 * b, carry: [52, -4 + b, 0] };
+      },
+    },
+    pummel: { ...DUO_GR.pummel, // *peck*: a quick headbutt
+      anim: f => ({
+        ...tween(f, [
+          [0, DUO_HOLD],
+          [4, { ...DUO_HOLD, x: -2, rot: -0.14, sx: 0.96, sy: 1.04, carry: [50, -6, 0] }],
+          [5, { ...DUO_HOLD, x: 4, rot: 0.22, sx: 1.06, sy: 0.95, carry: [55, -2, 0.08] }],
+          [16, DUO_HOLD],
+        ]),
+        blink: f >= 5 && f < 9 ? 0.8 : 0, say: ['*peck*', Math.max(0, Math.min(1, f / 3, (16 - f) / 4))],
+      }),
+    },
+    forwardThrow: { ...DUO_GR.forwardThrow, // skip this lesson? no.: rear back and shove it away
+      anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['skip this lesson?', '✗ no.'], keys: [
+        [0, DUO_HOLD],
+        [7, { x: -4, rot: -0.18, sx: 0.94, sy: 1.06, arm: [-8, -6], legs: duoFeet([2, 0], [1, 0]), carry: [42, -8, -0.15] }],
+        [10, { x: 6, rot: 0.2, sx: 1.16, sy: 0.88, arm: [-12, -24], legs: duoFeet([-8, 0], [4, 0]), carry: [80, -14, 0.2] }],
+        [16, { x: 5, rot: 0.14, sx: 1.1, sy: 0.92, arm: [-10, -20] }],
+        [29, {}],
+      ], extra: f => ({ speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
+    },
+    backThrow: { ...DUO_GR.backThrow, // you missed a day: hoist it overhead with both wings and heave it over backwards
+      anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['you missed a day…', '↶ back to day 0'], keys: [
+        [0, DUO_HOLD],
+        [6, { rot: -0.1, sx: 0.92, sy: 1.1, arm: -44, carry: [28, -62, -0.8] }],
+        [12, { rot: -0.35, sx: 0.96, sy: 1.06, arm: -48, carry: [-20, -68, -2.2] }],
+        [16, { rot: -0.45, sx: 1.1, sy: 0.9, arm: [-22, -30], carry: [-62, -20, -3] }],
+        [22, { rot: -0.3, sx: 1.06, sy: 0.94, arm: -12 }],
+        [37, {}],
+      ] }),
+    },
+    upThrow: { ...DUO_GR.upThrow, // lesson complete!: crouch under it, then fling it skyward with a big flap
+      anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['lesson complete!', '⬆ +20 XP'], keys: [
+        [0, DUO_HOLD],
+        [8, { sx: 1.16, sy: 0.84, arm: [4, 2], legs: duoFeet([-3, 0], [3, 0]), carry: [48, 0, 0] }],
+        [11, { sx: 1.18, sy: 0.82, arm: [6, 4], legs: duoFeet([-3, 0], [3, 0]), carry: [48, 2, 0] }],
+        [14, { y: -6, sx: 0.86, sy: 1.2, arm: -46, legs: duoFeet([0, 3], [0, 3]), carry: [40, -80, 0] }],
+        [22, { y: -2, sx: 0.94, sy: 1.08, arm: -30 }],
+        [35, {}],
+      ] }),
+    },
+    downThrow: { ...DUO_GR.downThrow, // spanish or vanish: lift it overhead and slam it into the floor, where it bounces up
+      anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['spanish or vanish.', '💥 vanished'], keys: [
+        [0, DUO_HOLD],
+        [6, { y: -6, rot: -0.05, sx: 0.9, sy: 1.12, arm: -44, carry: [30, -62, 0] }],
+        [11, { y: -10, rot: 0.05, sx: 0.94, sy: 1.08, arm: -48, carry: [40, -72, 0.1] }],
+        [14, { rot: 0.18, sx: 1.26, sy: 0.74, arm: [-6, -14], carry: [58, 0, 0] }],
+        [22, { rot: 0.06, sx: 1.1, sy: 0.9, arm: -4 }],
+        [35, {}],
+      ], extra: f => ({ puff: f >= 14 ? (f - 14) / 10 : null, blink: f >= 14 && f < 18 ? 0.6 : 0 }) }),
     },
   },
 };

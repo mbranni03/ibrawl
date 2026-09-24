@@ -8,7 +8,8 @@
 //   arm = px the wingtips swing about the shoulders (negative = up), or [back, front]: the wings are Duo's arms
 //   flame = [height px, alpha] a streak flame rising from the floor behind Duo (up smash)
 //   ads = [drop 0 (hovering high) … 1 (slammed on the floor), alpha] an ad panel either side of Duo (down smash)
-//   heart = [dx, dy, size, alpha] a heart held out / zapped (neutral special) · ice = [height px, alpha] a block of ice shot up out of the floor ahead of Duo (up special)
+//   heart = [dx, dy, size, alpha] a heart held out / zapped · hearts = [left, pop 0 … 1, alpha] Duo's hearts in a row overhead,
+//          the last one popping away as it's spent (neutral special) · ice = [height px, alpha] a block of ice shot up out of the floor ahead of Duo (up special)
 //   card = [dx, dy, tilt, mark, flip] a quiz card held out, centred dx, dy px from the feet: mark 0 = ?, 1 = ✓, -1 = ✗;
 //          flip = its width as it turns over (1 … 0 edge-on) (forward smash)
 const DUO = '#78c800', DUO_LIT = '#8ee000', DUO_FOOT = '#f49000', DUO_BEAK = '#ffc800';
@@ -57,6 +58,10 @@ function drawDuo(cx, bottom, pose = {}, face = 1) {
   ctx.restore();
   if (pose.ads) for (const side of [-1, 1]) drawAdPanel(cx + (pose.x || 0) * face + side * 56, bottom - 130 * (1 - pose.ads[0]), pose.ads[1]);
   if (pose.ice) drawIcePillar(cx + ((pose.x || 0) + 48) * face, bottom + (pose.y || 0), ...pose.ice);
+  if (pose.hearts) { // five fixed slots over its head: the ones it has left, the last one popping
+    const [left, pop, a] = pose.hearts, hx = cx + (pose.x || 0) * face, hy = bottom + (pose.y || 0) - 86;
+    for (let i = 0; i < left; i++) { const last = i === left - 1 && pop > 0; drawHeart(hx + (i - 2) * 15, hy, 0.48 * (last ? 1 + 0.8 * pop : 1), a * (last ? 1 - pop : 1)); }
+  }
   if (pose.heart) { const [dx, dy, k, a] = pose.heart; drawHeart(cx + ((pose.x || 0) + dx) * face, bottom + (pose.y || 0) + dy, k, a); }
   if (pose.card) { const [dx, dy, tilt, mark, flip = 1] = pose.card; drawQuizCard(cx + ((pose.x || 0) + dx) * face, bottom + (pose.y || 0) + dy, tilt * face, mark, flip); }
 }
