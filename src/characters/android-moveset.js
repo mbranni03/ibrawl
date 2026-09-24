@@ -55,8 +55,153 @@ const LUCKY = [
 // holding a grabbed target: both floating hands out in front, clamped on its near side (carry = where its bottom-centre goes)
 const A_HOLD = { rot: -0.04, swing: [1.35, 1.25], reach: [30, 4], legs: [[-3, 0], [-2, 0], [1, 0], [2, 0]], carry: [56, -4, 0] };
 
+// Ledge, defense and reactions keep Claw'd's frame data and root motion (the game moves the fighter by their x / air), so each
+// is his move with Android's own animation: CLAWD_SET = his, by group
+const CLAWD_SET = { ledge: MOVESET.ledge, defense: MOVESET.defense, reactions: MOVESET.reactions };
+const smooth = t => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+// hanging off the ledge: both floating hands hooked over the lip (in the game about 35 px ahead of it, 40 px up), legs dangling
+const A_HANG = { x: -60, air: 40, sy: 1.04, rot: 0.08, swing: [1.95, 1.9], reach: [36, 0], legs: legsAll(0, 3) };
+const A_HAUL = { x: -60, air: 46, sx: 1.06, sy: 0.92, swing: [2.2, 2.1], reach: [36, 2], legs: legsAll(0, 2) }; // dipping to pull up
+const A_OVER = { x: -46, air: -6, sx: 0.92, sy: 1.12, rot: 0.25, swing: [0.4, 0.4], reach: [10, 4], legs: TUCK }; // pushed up over the lip
+// screen off (spot dodge, air dodge): collapses to a thin bright line like a phone screen switching off, then back on. on = 0 … 1
+const screenOff = on => ({ sx: 1 + 0.5 * on, sy: 1 - 0.94 * on, y: -28 * on, blink: on > 0.4 ? 1 : 0 });
+// a roll d (1 forward, -1 back): the same path as Claw'd's, curled up as a Chrome ball rolling (spin follows the distance)
+const chromeRoll = d => f => {
+  const p = tween(f, [
+    [0, {}],
+    [3, { sx: 1.12, sy: 0.82, rot: 0.1 * d, swing: [0.6, 0.6], head: [0, 4], blink: 1 }],
+    [6, { x: 12 * d, sx: 0.86, sy: 0.86, swing: [0.8, 0.8], legs: TUCK }],
+    [22, { x: 112 * d, sx: 0.86, sy: 0.86, swing: [0.8, 0.8], legs: TUCK }],
+    [25, { x: 120 * d, sx: 1.14, sy: 0.82, swing: [0.3, 0.3] }],
+    [30, { x: 120 * d }],
+  ]);
+  if (f >= 6 && f < 22) Object.assign(p, { chrome: p.x / 24, sx: 1, sy: 1, rot: 0 });
+  return { ...p, [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null }; // kicked up opposite the travel
+};
+// a sideways air dodge d (1 forward, -1 back): streaks off stretched thin, head and arms trailing (x is the viewer's; the game moves it)
+const sideStreak = d => f => ({
+  ...tween(f, [
+    [0, AIRBORNE],
+    [2, { sx: 0.9, sy: 1.1, rot: -0.1 * d, legs: TUCK }],
+    [4, { x: 30 * d, sx: 1.3, sy: 0.74, rot: 0.12 * d, swing: [-1.2 * d, -1.2 * d], head: [-6 * d, 0], legs: legsAll(-6 * d, -2) }],
+    [14, { x: 130 * d, sx: 1.22, sy: 0.8, rot: 0.08 * d, swing: [-1 * d, -1 * d], head: [-5 * d, 0], legs: legsAll(-5 * d, -2) }],
+    [18, { x: 140 * d, sx: 0.95, sy: 1.05, rot: -0.04 * d, legs: TUCK }],
+    [28, { ...AIRBORNE, x: 144 * d }],
+  ]),
+  blink: f >= 3 && f < 18 ? 1 : 0, speed: f >= 3 && f < 16 ? d * (1 - (f - 3) / 13) : 0, air: -40,
+});
+
 const ANDROID_MOVESET = {
   movement: MOVESET.movement,
+
+  ledge: {
+    ledgeGrab: { ...CLAWD_SET.ledge.ledgeGrab, anim: f => tween(f, [ // hands fly up and catch it, weight drops, settles into the hang
+      [0, { x: -60, air: 28, sx: 0.92, sy: 1.12, swing: [2.6, 2.5], reach: [30, 0], legs: legsAll(0, 3) }],
+      [4, { x: -60, air: 46, sx: 1.04, sy: 0.96, swing: [2.1, 2], reach: [36, 0], legs: legsAll(0, 5) }],
+      [10, A_HANG],
+    ]) },
+    ledgeHang: { ...CLAWD_SET.ledge.ledgeHang, anim: (f, n) => { // swaying, feet swinging
+      const s = Math.sin(f / n * Math.PI * 2);
+      return { ...A_HANG, rot: 0.08 + 0.04 * s, kick: [0.15 * s, -0.15 * s], blink: f >= 40 && f < 46 ? 1 : 0 };
+    } },
+    ledgeGetup: { ...CLAWD_SET.ledge.ledgeGetup, anim: f => ({ // dip, push itself up over the lip, squash down onto the stage
+      ...tween(f, [[0, A_HANG], [5, A_HAUL], [11, A_OVER], [16, { x: -14, air: -4, rot: 0.15, swing: [0.2, 0.2], legs: TUCK }], [19, { sx: 1.16, sy: 0.8, swing: [0.3, 0.3] }], [24, {}]]),
+      puff: f >= 19 ? (f - 19) / 5 : null,
+    }) },
+    ledgeJump: { ...CLAWD_SET.ledge.ledgeJump, anim: f => tween(f, [ // pull down, spring up off it with both arms flung high
+      [0, A_HANG],
+      [4, { ...A_HAUL, air: 48, sx: 1.08, sy: 0.9 }],
+      [6, { x: -58, air: 40, sx: 0.86, sy: 1.2, swing: [2.9, 2.9], reach: [4, -4], legs: legsAll(0, 3) }],
+      [20, { x: -40, air: -90, swing: [2.6, 2.6], reach: [4, -4], legs: TUCK }],
+      [34, { x: -24, air: -40, sx: 0.94, sy: 1.08, swing: [0.6, 0.6], legs: REACH }],
+      [40, { x: -20, air: -30, sx: 0.94, sy: 1.08, swing: [0.6, 0.6], legs: REACH }],
+    ]) },
+    ledgeRoll: { ...CLAWD_SET.ledge.ledgeRoll, anim: f => { // haul up, curl into a Chrome ball and roll onto the stage, pop up standing
+      const p = tween(f, [
+        [0, A_HANG], [5, A_HAUL],
+        [10, { x: -40, air: -10, sx: 0.86, sy: 0.86, swing: [0.8, 0.8], legs: TUCK }],
+        [25, { x: 72, air: -4, sx: 0.86, sy: 0.86, swing: [0.8, 0.8], legs: TUCK }],
+        [28, { x: 84, sx: 1.16, sy: 0.8, swing: [0.3, 0.3] }],
+        [36, { x: 90 }],
+      ]);
+      if (f >= 10 && f < 25) Object.assign(p, { chrome: Math.PI * 2 * smooth((f - 9) / 17) * 1.2, sx: 1, sy: 1 });
+      return { ...p, puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+    } },
+    ledgeAttack: { ...CLAWD_SET.ledge.ledgeAttack, anim: f => ({ // haul up with the front arm cocked, drop into a crouch and sweep it low along the stage
+      ...tween(f, [
+        [0, A_HANG], [4, A_HAUL], [9, { ...A_OVER, x: -44, air: -8 }],
+        [13, { x: -16, air: -4, rot: -0.1, swing: [-0.3, -0.8], reach: [0, -4], legs: TUCK }],
+        [15, { x: -6, sx: 1.14, sy: 0.84, rot: -0.12, swing: [-0.3, -0.9], arm: [0, 8] }],
+        [16, { x: 4, sx: 1.2, sy: 0.84, rot: 0.14, swing: [-0.4, PUNCH + 0.14], reach: [-4, 16], arm: [0, 12], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+        [20, { x: 4, sx: 1.18, sy: 0.85, rot: 0.13, swing: [-0.4, PUNCH + 0.13], reach: [-4, 15], arm: [0, 12], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+        [28, { x: 2, sx: 1.05, sy: 0.96, rot: 0.04, swing: [-0.1, 0.6], reach: [0, 4], arm: [0, 3], legs: [[-3, 0], [-3, 0], [-1, 0], [1, 0]] }],
+        [36, {}],
+      ]),
+      speed: f >= 16 && f < 20 ? 0.6 : 0, puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+    }) },
+    ledgeDrop: { ...CLAWD_SET.ledge.ledgeDrop, anim: f => tween(f, [ // let go: hands stay up a moment, then it slides down the wall
+      [0, A_HANG],
+      [4, { x: -62, air: 50, sx: 0.92, sy: 1.1, swing: [2.6, 2.6], reach: [20, -4], legs: legsAll(0, 3) }],
+      [16, { x: -66, air: 110, sx: 0.96, sy: 1.04, swing: [2.9, 2.9], reach: [4, -4], legs: legsAll(0, 2) }],
+      [24, { x: -66, air: 110, sx: 0.96, sy: 1.04, swing: [2.9, 2.9], reach: [4, -4], legs: legsAll(0, 2) }],
+    ]) },
+  },
+
+  // dodges only: no shield yet (the game offers one only to a fighter whose defense has it)
+  defense: {
+    spotDodge: { ...CLAWD_SET.defense.spotDodge, anim: f => { // screen off in place
+      const on = f < 3 ? 0 : f < 6 ? (f - 3) / 3 : f < 16 ? 1 : f < 21 ? 1 - (f - 16) / 5 : 0;
+      return f < 3 ? tween(f, [[0, {}], [3, { sx: 1.1, sy: 0.88, head: [0, 2] }]]) : screenOff(on);
+    } },
+    rollForward: { ...CLAWD_SET.defense.rollForward, anim: chromeRoll(1) },
+    rollBack: { ...CLAWD_SET.defense.rollBack, anim: chromeRoll(-1) },
+    airDodgeForward: { ...CLAWD_SET.defense.airDodgeForward, anim: sideStreak(1) },
+    airDodgeBack: { ...CLAWD_SET.defense.airDodgeBack, anim: sideStreak(-1) },
+    airDodge: { ...CLAWD_SET.defense.airDodge, anim: f => { // screen off in mid-air
+      const on = f < 2 ? 0 : f < 5 ? (f - 2) / 3 : f < 18 ? 1 : f < 24 ? 1 - (f - 18) / 6 : 0;
+      return { ...AIRBORNE, ...(on ? screenOff(on) : {}), air: -40 };
+    } },
+  },
+
+  reactions: {
+    hitstun: { ...CLAWD_SET.reactions.hitstun, anim: (f, n = 30) => { // knocked back: head and arms jolted loose, eyes shut, a glitchy crackle
+      const t = f / n * 30, p = tween(t, [
+        [0, { x: -4, sx: 0.88, sy: 1.12, rot: -0.28, swing: [-0.9, -0.6], head: [-5, -3], legs: [[-3, -2], [-2, 0], [2, 0], [3, -2]] }],
+        [5, { x: -6, sx: 0.92, sy: 1.08, rot: -0.22, swing: [-0.7, -0.5], head: [-4, -2], legs: [[-2, -1], [-1, 0], [1, 0], [2, -1]] }],
+        [22, { x: -3, sx: 1.03, sy: 0.97, rot: -0.06, swing: [-0.2, -0.1], head: [-1, 0] }],
+        [30, {}],
+      ]);
+      if (t < 10) p.x += f % 2 ? 1.5 : -1.5;
+      return { ...p, blink: t < 20 ? 1 : 0, zap: t < 9 && f % 3 === 0 ? 0.6 : 0 };
+    } },
+    tumble: { ...CLAWD_SET.reactions.tumble, anim: (f, n = 40) => { // spinning head over heels, the floating parts flailing loose
+      const p = f / n * Math.PI * 2, s = Math.sin(2 * p);
+      return { rot: -p, sx: 0.94, sy: 1.06, swing: [2 + 1.2 * s, 2 - 1.2 * s], reach: [4 * s, -4 * s], head: [3 * Math.sin(3 * p), -3 - 3 * Math.cos(2 * p)], kick: [0.6 * s, -0.6 * s], blink: 1, air: -30 };
+    } },
+    knockdown: { ...CLAWD_SET.reactions.knockdown, anim: f => ({ // slams onto its back, bounces, lies there legs kicking
+      ...tween(f, [[0, { sx: 1.3, sy: 0.6, swing: [0.4, 0.4] }], [6, { y: -14, sx: 0.95, sy: 1.05, swing: [1.2, 1.2] }], [12, { sx: 1.2, sy: 0.75, swing: [0.5, 0.5] }], [18, { sx: 1.04, sy: 0.94, swing: [0.3, 0.3] }]]),
+      rot: Math.PI, kick: f >= 14 ? [0.5 * Math.sin((f - 14) / 3), 0.5 * Math.sin((f - 14) / 3 + 1.7)] : [0, 0],
+      blink: f < 14 ? 1 : 0, dizzy: f >= 14 ? 0.01 + (f - 14) / 40 : 0, puff: f < 8 ? f / 8 : f >= 12 && f < 18 ? (f - 12) / 6 : null,
+    }) },
+    tech: { ...CLAWD_SET.reactions.tech, anim: f => ({ // slaps the floor and pops back up, sparking
+      ...tween(f, [[0, { sx: 1.3, sy: 0.66, swing: [0.5, 0.5] }], [5, { y: -18, sx: 0.9, sy: 1.12, swing: [2.6, 2.6], legs: TUCK }], [11, { sx: 1.14, sy: 0.84, swing: [0.4, 0.4] }], [22, {}]]),
+      ring: f < 12 ? f / 12 : null, blink: f < 5 ? 1 : 0, zap: f < 8 ? 1 - f / 8 : 0,
+    }) },
+    getup: { ...CLAWD_SET.reactions.getup, anim: f => ({ // rocks back and kicks over forward onto its feet
+      ...tween(f, [
+        [0, { rot: Math.PI, sx: 1.04, sy: 0.94, swing: [0.3, 0.3] }],
+        [5, { rot: Math.PI - 0.25, sx: 1.12, sy: 0.86, swing: [0.6, 0.6] }],
+        [13, { rot: Math.PI * 1.55, y: -26, sx: 0.9, sy: 1.1, swing: [2.4, 2.4], legs: TUCK }],
+        [18, { rot: Math.PI * 2, sx: 1.2, sy: 0.76, swing: [0.4, 0.4] }],
+        [26, { rot: Math.PI * 2 }],
+      ]),
+      puff: f >= 18 ? (f - 18) / 8 : null,
+    }) },
+    ko: { ...CLAWD_SET.reactions.ko, anim: f => f < 20 // spins off shrinking, its head popping clean off, then a green burst at the edge round the spinning head
+      ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, swing: [-1.2, 1.2], head: [0.8 * f, -1.2 * f], blink: 1 }
+      : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, ANDROID, drawAndroidHead] } },
+    respawn: { ...CLAWD_SET.reactions.respawn, say: '> adb reboot', anim: f => ({ ...CLAWD_SET.reactions.respawn.anim(f), say: ['> adb reboot', f < 100 ? Math.min(1, f / 10) : 0] }) },
+  },
 
   groundAttacks: {
     jab1: { // front fist straight out: a tiny cock back, snapped out on frame 3, feet planted

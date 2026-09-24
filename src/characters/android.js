@@ -320,6 +320,17 @@ function androidZap(z) {
   ctx.restore();
 }
 
+// just Android's head (dome, antennae, eyes) centred at x, y about r px across, turned spin: what's left in the middle of its KO burst
+function drawAndroidHead(x, y, r, spin = 0) {
+  const k = r / 17;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(spin); ctx.scale(k, k); ctx.translate(0, 52); // the head's own coordinates, as in drawAndroid
+  ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = 2.4;
+  for (const [tx, ty] of ANDROID_TIPS) line(tx * 8 / 13, -52, tx, ty, 0.4, 1);
+  ctx.fillStyle = ANDROID; ctx.beginPath(); ctx.ellipse(0, -45, 17, 15, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = INK; for (const ex of [-6, 9]) { ctx.beginPath(); ctx.arc(ex, -52, 1.9, 0, 6.28); ctx.fill(); }
+  ctx.restore();
+}
+
 // the part of Android that can be hit (body + legs + head; the loose arms left out), relative to bottom-center like move hitboxes
 function androidHurtbox(pose = {}, face = 1) {
   const w = 34 * (pose.sx ?? 1), h = 60 * (pose.sy ?? 1);

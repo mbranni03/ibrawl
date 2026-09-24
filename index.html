@@ -54,7 +54,8 @@ let hitstop = 0;
 let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
-const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+const JABS = ['jab1', 'jab2', 'jab3'];
+let L, D, R, AD, SB; // the fighter's ledge moves, defense (dodges; a shield only if it has one) and reactions, else Claw'd's
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 let GR; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // the fighter's grabs (else Claw'd's) · holding the bag: hold / pummel / throws
 // the fighter's specials (else Claw'd's). Ones with frame data are ordinary attacks usable on the ground and in the air, so they live
@@ -65,6 +66,7 @@ let ATK, AIR, MOVES; // attack states are named after their move: the fighter's 
 function bindMoves(set) {
   const own = g => ({ ...MOVESET[g], ...set[g] });
   ({ neutralSpecial: NEUTRAL_B, sideSpecial: SIDE_B, downSpecial: DOWN_B, upSpecial: US } = own('specials')); GR = own('grabs');
+  L = own('ledge'); D = own('defense'); R = own('reactions'); AD = D.airDodge; SB = D.shieldBreak;
   const both = { sideSpecial: SIDE_B, ...(DOWN_B.charge ? {} : { downSpecial: DOWN_B }), ...(NEUTRAL_B.startup != null ? { neutralSpecial: NEUTRAL_B } : {}) };
   ATK = { ...own('groundAttacks'), ...own('smashAttacks'), ...both, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...own('aerials'), ...both };
@@ -72,8 +74,8 @@ function bindMoves(set) {
 }
 bindMoves(MOVESET);
 const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; // resume from the last checkpoint reached
-const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
-const D = MOVESET.defense, DODGES = ['spotDodge', 'rollForward', 'rollBack'], AD = D.airDodge, SB = D.shieldBreak;
+const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
+const DODGES = ['spotDodge', 'rollForward', 'rollBack'];
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
@@ -484,7 +486,7 @@ function stepPlayer(dt) {
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if (keys.shield && fighter.set.defense?.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
