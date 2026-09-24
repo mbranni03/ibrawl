@@ -915,22 +915,22 @@ const LOGOS = [
 // character select, Smash style: the roster along the top (click / Enter picks your fighter, then CPU dummies), a READY TO FIGHT band,
 // and the player slots along the bottom: P1 (the first pick) and up to three CPUs (the picks after it; click a slot to clear it).
 // No CPUs: the fight is against the training bag, shown faded in the first CPU slot once P1 has picked
-const MAX_CPUS = 3, TILE = { w: 168, h: 150, y: 104 }, tileX = i => W / 2 + (i - (ROSTER.length - 1) / 2) * 182 - TILE.w / 2;
+const MAX_CPUS = 3, TILES = ROSTER.length + 1, TILE = { w: 160, h: 150, y: 104 }, tileX = i => W / 2 + (i - (TILES - 1) / 2) * 172 - TILE.w / 2; // the last tile is Random
 const BAND = { y: 280, h: 50 }, SLOT = { w: 280, h: 320, y: 368 }, slotX = i => W / 2 + (i - 1.5) * 300 - SLOT.w / 2;
 let focus = 0, onBand = false; // keyboard focus: a roster tile, or the READY band
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function selectAt(x, y) {
   if (x < 170 && y < 90) return { back: true };
-  for (let i = 0; i < ROSTER.length; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
+  for (let i = 0; i < TILES; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
   if (y > BAND.y && y < BAND.y + BAND.h) return { ready: true };
   if (p1 && x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: true }; // clears the pick
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
 const addCpu = i => { if (cpus.length < MAX_CPUS) cpus.push(ROSTER[i]); };
-const pickTile = i => p1 ? addCpu(i) : p1 = ROSTER[i]; // the first pick is P1's fighter, the rest are CPUs
+const pickTile = i => { if (i === ROSTER.length) i = Math.floor(Math.random() * ROSTER.length); p1 ? addCpu(i) : p1 = ROSTER[i]; }; // the first pick is P1's fighter, the rest are CPUs; Random rolls one
 function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick
-  const n = ROSTER.length;
+  const n = TILES;
   if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
   else if (a === 'down' || a === 'up') onBand = a === 'down';
   else if (code === 'Enter' || code === 'Space') onBand ? p1 && versus() : pickTile(focus);
@@ -960,6 +960,14 @@ function drawSelect(t) {
     if (id === p1) tag(x + TILE.w - 8, y + 8, 'P1', CLAWD, true);
     if (n) tag(x + TILE.w - 8, y + (id === p1 ? 36 : 8), n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
   });
+  { // Random: a big question mark; picking it rolls one of the fighters
+    const x = tileX(ROSTER.length), y = TILE.y, on = !onBand && focus === ROSTER.length, r = rect(x, y, TILE.w, TILE.h);
+    ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill(); ctx.strokeStyle = INK; hatch(r, 12, 0.15);
+    ctx.save(); ctx.translate(x + TILE.w / 2, y + 92); ctx.rotate(Math.sin(t * 3) * 0.12); ctx.textAlign = 'center'; ctx.font = '700 96px Caveat, cursive';
+    ctx.fillStyle = INK; ctx.fillText('?', 3, 3); ctx.fillStyle = CLAWD; ctx.fillText('?', 0, 0); ctx.restore();
+    ctx.strokeStyle = on ? CLAWD : INK; ctx.lineWidth = on ? 3.6 : 2; poly(r, 1.1);
+    ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText('Random', x + TILE.w / 2, y + TILE.h - 12);
+  }
 
   // READY TO FIGHT: a slightly slanted orange band right across
   const br = [[0, BAND.y + 6], [W, BAND.y - 6], [W, BAND.y + BAND.h - 6], [0, BAND.y + BAND.h + 6]], txt = !p1 ? 'PICK YOUR FIGHTER' : onBand ? '›  READY TO FIGHT  ‹' : 'READY TO FIGHT';
