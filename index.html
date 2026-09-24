@@ -56,7 +56,7 @@ const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
 const ATK = { ...MOVESET.groundAttacks, ...MOVESET.smashAttacks, sideSpecial: SIDE_B, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab }, AIR = { ...MOVESET.aerials, sideSpecial: SIDE_B, downSpecial: DOWN_B }; // attack states are named after their move
 const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
@@ -144,6 +144,8 @@ function versus() {
   for (const m of [ATK, AIR, MOVES]) for (const k of SPECIALS) delete m[k];
   const B = clawdB() ? { sideSpecial: SIDE_B, downSpecial: DOWN_B } : fighter.set.specials || {};
   Object.assign(ATK, B); Object.assign(AIR, B); Object.assign(MOVES, B, clawdB() ? { neutralSpecial: NEUTRAL_B } : {});
+  GR = { ...MOVESET.grabs, ...fighter.set.grabs }; // grabs: its own grab, hold, pummel and throws
+  Object.assign(ATK, { grab: GR.grab, dashGrab: GR.dashGrab }); Object.assign(MOVES, { grab: GR.grab, dashGrab: GR.dashGrab, pummel: GR.pummel }, Object.fromEntries(THROWS.map(k => [k, GR[k]])));
 }
 const SPECIALS = ['neutralSpecial', 'sideSpecial', 'upSpecial', 'downSpecial'];
 const clawdB = () => fighter.set.specials === MOVESET.specials; // the fighter in play has Claw'd's hand-wired specials

@@ -3,6 +3,8 @@
 // and it hands out Reddit votes: upvotes off its up tilt and up air, downvotes off its down tilt and down air. Its smashes: a ban hammer to the side, a giant
 // upvote bursting up out of the floor, and [removed] both ways along the floor.
 // Frame data and field meanings as in clawd-moveset.js; pose fields as in snoo.js.
+// holding a grabbed foe out at arm's length, both arms stretched to it (carry = where its bottom-centre is, as Claw'd's HOLD)
+const SNOO_HOLD = { rot: -0.06, reach: [38, 32], arm: [-4, -4], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]], carry: [52, -4, 0] };
 // Claw'd's move `key` with Snoo's arm swing laid over it: extra(f, n) = the fields to add (swing, as in snoo.js)
 const snooArms = (key, extra) => ({ ...MOVESET.movement[key], anim: (f, n) => ({ ...MOVESET.movement[key].anim(f, n), ...extra(f, n) }) });
 // a jump: arms swing back in the squat, fling up and out on takeoff, open wide at the peak, reach up again coming down
@@ -364,6 +366,95 @@ const SNOO_MOVESET = {
         deleted: f >= 6 && f < 18 ? tween(f, [[6, { k: 0 }], [9, { k: 1 }], [17, { k: 1 }], [18, { k: 0 }]]).k : 0,
         poof: f >= 18 && f < 30 ? (f - 18) / 12 : null,
       }),
+    },
+  },
+
+  grabs: {
+    grab: { // both stretchy arms shoot out in front and clamp; a whiff snaps them back empty
+      input: 'grab (G / U)', startup: 7, active: 3, endlag: 22, hitbox: { x: 16, y: -44, w: 48, h: 40 }, grab: true,
+      anim: f => tween(f, [
+        [0, {}],
+        [5, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, reach: [-4, -2], arm: [-2, -2], ant: 0.2 }],
+        [7, { x: 4, sx: 1.06, sy: 0.95, rot: 0.1, reach: [44, 38], arm: [-4, -4], ant: -0.3, legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [10, { x: 4, sx: 1.05, sy: 0.96, rot: 0.1, reach: [42, 36], arm: [-4, -4], ant: -0.25, legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [17, { x: 2, rot: 0.04, reach: [8, 6], ant: 0.1 }],
+        [32, {}],
+      ]),
+    },
+    dashGrab: { // out of a run: dives forward with both arms stretched out ahead, sliding on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -44, w: 60, h: 40 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, { y: -3, rot: 0.12, swing: -0.9 }], // = run frame 0
+          [5, { x: -2, sx: 1.06, sy: 0.92, rot: -0.04, reach: [-2, -2], ant: 0.2 }],
+          [9, { x: 12, y: -2, sx: 1.08, sy: 0.92, rot: 0.3, reach: [50, 44], arm: [-6, -6], ant: -0.5, blink: 0.4, legs: [[-8, -2], [0, 0], [0, 0], [4, 0]] }],
+          [12, { x: 14, sx: 1.07, sy: 0.93, rot: 0.28, reach: [48, 42], arm: [-6, -6], ant: -0.4, legs: [[-8, -2], [0, 0], [0, 0], [4, 0]] }],
+          [24, { x: 8, rot: 0.1, reach: [10, 8], ant: 0.1 }],
+          [40, {}],
+        ]),
+        speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null,
+      }),
+    },
+    hold: { // got it: held out at arm's length, leaning back a little, antenna bobbing
+      ...MOVESET.grabs.hold, input: 'grab connects',
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return { ...SNOO_HOLD, rot: -0.06 + 0.02 * b, sx: 1.01 + 0.01 * b, sy: 0.99 - 0.01 * b, ant: 0.15 * b, carry: [52, -4 + b, 0] };
+      },
+    },
+    pummel: { // nods and bonks it with the antenna ball
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      anim: f => tween(f, [
+        [0, SNOO_HOLD],
+        [4, { ...SNOO_HOLD, rot: -0.14, ant: -0.4 }],
+        [5, { ...SNOO_HOLD, rot: 0.22, ant: 1.5, blink: 0.6, carry: [53, -3, 0.05] }],
+        [16, SNOO_HOLD],
+      ]),
+    },
+    forwardThrow: { // sets it down, pulls out the ban hammer and golf-swings it away
+      input: 'forward (holding)', startup: 12, active: 1, endlag: 20, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      anim: throwAnim({ at: 12, n: 33, fly: [12, -5, 0.15], keys: [
+        [0, { ...SNOO_HOLD, hammer: [-0.6, 0] }],
+        [5, { x: -3, rot: -0.2, swing: [-0.6, 2], ant: 0.5, legs: [[3, 0], [0, 0], [0, 0], [-2, 0]], carry: [50, 0, 0], hammer: [-1, 1] }], // let go, hammer back
+        [10, { x: -4, rot: -0.24, swing: [-0.6, 2.05], ant: 0.55, legs: [[3, 0], [0, 0], [0, 0], [-2, 0]], carry: [50, 0, 0], hammer: [-1.1, 1] }],
+        [12, { x: 6, sx: 1.06, sy: 0.94, rot: 0.2, blink: 1, swing: [-0.8, 1.2], ant: -0.6, legs: [[-8, 0], [0, 0], [0, 0], [3, 0]], carry: [52, -4, 0.2], hammer: [1.2, 1] }], // swing
+        [20, { x: 5, rot: 0.16, swing: [-0.6, 1.1], ant: -0.3, hammer: [1.3, 1] }],
+        [28, { x: 2, swing: [0, 0.6], hammer: [0.8, 1] }],
+        [33, { hammer: [0.6, 0] }],
+      ], extra: f => ({ speed: f >= 12 && f < 20 ? 1 - (f - 12) / 8 : 0 }) }),
+    },
+    backThrow: { // hoists it up over its head and heaves it over backwards
+      input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], keys: [
+        [0, SNOO_HOLD],
+        [6, { rot: -0.1, sx: 0.94, sy: 1.08, swing: [-1.6, 1.6], ant: 0.3, carry: [32, -60, -0.8] }],
+        [12, { rot: -0.34, sx: 0.96, sy: 1.06, swing: [-1.9, 1.9], ant: 0.6, carry: [-16, -80, -2.2] }],
+        [16, { rot: -0.44, sx: 1.08, sy: 0.92, blink: 0.6, swing: [-1.2, 1.2], ant: 0.8, carry: [-58, -26, -3] }],
+        [22, { rot: -0.3, sx: 1.06, sy: 0.94, swing: [-0.6, 0.6], ant: 0.4 }],
+        [37, {}],
+      ] }),
+    },
+    upThrow: { // tosses it up and springs after it, poking it higher with the antenna: an upvote
+      input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], keys: [
+        [0, SNOO_HOLD],
+        [6, { sx: 1.1, sy: 0.9, swing: [-0.4, 0.4], reach: [20, 16], ant: 0.2, carry: [40, -14, 0] }],
+        [10, { sx: 1.12, sy: 0.88, swing: [-1.4, 1.4], ant: 0.3, carry: [24, -70, 0.2] }], // up it goes
+        [14, { y: -8, sx: 0.88, sy: 1.18, swing: [-1.9, 1.9], ant: -0.75, legs: legsAll(0, 3), carry: [6, -96, 0.3] }], // poke
+        [20, { y: -5, sx: 0.92, sy: 1.1, swing: [-1.7, 1.7], ant: -0.7, legs: legsAll(0, 2) }],
+        [35, {}],
+      ], extra: f => ({ vote: f >= 14 && f < 34 ? [8, -118, (f - 14) / 20, 1] : null }) }),
+    },
+    downThrow: { // lifts it and slams it into the floor with a downvote, where it bounces up
+      input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], keys: [
+        [0, SNOO_HOLD],
+        [6, { y: -4, sx: 0.92, sy: 1.1, rot: -0.05, reach: [30, 26], arm: [-10, -10], ant: 0.3, carry: [44, -30, -0.1] }],
+        [11, { y: -6, sx: 0.9, sy: 1.12, rot: -0.08, reach: [30, 26], arm: [-12, -12], ant: 0.4, carry: [46, -42, 0] }],
+        [14, { sx: 1.2, sy: 0.82, rot: 0.2, blink: 1, reach: [36, 30], arm: [4, 4], ant: -0.5, carry: [52, 0, 0] }], // slam
+        [22, { sx: 1.08, sy: 0.93, rot: 0.08, reach: [12, 10], ant: -0.1 }],
+        [35, {}],
+      ], extra: f => ({ puff: f >= 14 ? (f - 14) / 10 : null, vote: f >= 14 && f < 32 ? [52, -66, (f - 14) / 18, -1] : null }) }),
     },
   },
 };
