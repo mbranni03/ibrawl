@@ -27,6 +27,7 @@ function drawGrok(cx, bottom, pose = {}, face = 1) {
     ctx.save(); ctx.translate(px, py); ctx.rotate(pose.tilt); ctx.translate(-px, -py);
     drawGrok(cx, bottom, { ...pose, tilt: 0 }, face); ctx.restore(); return;
   }
+  if (pose.blast) return pose.blastDraw(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - GR_R, ...pose.blast); // KO'd: only the burst is left
   if (pose.mound != null) return drawMound(cx, bottom, pose.mound, pose.moving, face);
   const bx = cx + (pose.x || 0) * face, by = bottom + (pose.y || 0);
   if (pose.posts) drawPosts(bx, by - 2 * GR_R * (pose.sy ?? 1), ...pose.posts);
@@ -363,5 +364,24 @@ function drawHearts(x, y, t) {
   }
   ctx.globalAlpha = Math.min(1, t * 5, (1 - t) * 3); ctx.fillStyle = '#f91880'; ctx.font = '700 20px Caveat, cursive'; ctx.textAlign = 'center';
   ctx.fillText('♥ ' + (t < 0.6 ? Math.round(10 ** (1 + 5 * t / 0.6)).toLocaleString() : '1.2M'), 0, 74);
+  ctx.restore();
+}
+
+// Grok's KO: ink rays and blue sparks shooting off toward ang, with a little X spinning away in the middle (t 0 … 1)
+function drawGrokBlast(x, y, t, ang) {
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = Math.min(1, (1 - t) * 2.2); ctx.lineCap = 'round';
+  for (let i = 0; i < 11; i++) {
+    const a = ang + (i - 5) * 0.2, l0 = 20 + 60 * t, l1 = l0 + 30 + (i % 3) * 20 * (1 - t);
+    ctx.strokeStyle = i % 2 ? '#3ec5ff' : INK; ctx.lineWidth = i % 2 ? 3 : 4.5;
+    line(Math.cos(a) * l0, Math.sin(a) * l0, Math.cos(a) * l1, Math.sin(a) * l1, 0.8, 1);
+  }
+  ctx.rotate(t * 8); drawXMark(0, 0, 10 * (1 - t) + 4);
+  ctx.restore();
+}
+// a small hand-drawn X (xAI's mark), r = half its size
+function drawXMark(x, y, r) {
+  ctx.save(); ctx.strokeStyle = INK; ctx.lineCap = 'round';
+  ctx.lineWidth = r * 0.45; line(x - r, y - r, x + r, y + r, 0.3, 1);
+  ctx.lineWidth = r * 0.2; line(x + r, y - r, x - r, y + r, 0.3, 1);
   ctx.restore();
 }

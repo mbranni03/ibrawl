@@ -56,7 +56,8 @@ const hasSpecial = dir => { // specials are on one by one; a ride special waits 
   return !!fighter.set.specials?.[k] && !(fighter.set.specials[k].ride && cart);
 };
 const AIR_JUMPS = () => fighter.jumps || 1;
-const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+const JABS = ['jab1', 'jab2', 'jab3'];
+let L, D, R, AD, SB; // the fighter's ledge moves, dodges (+ shield), getting-hit reactions: bindMoves, Claw'd's for any it lacks
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -66,7 +67,7 @@ const US = MOVESET.specials.upSpecial; // MCP tether: its own state, runs off P.
 // a fighter's own attack groups, Claw'd's for any it doesn't have (has() keeps those off anyway)
 function bindMoves(set) {
   const g = k => set[k] || MOVESET[k], sb = set.specials?.sideSpecial || SIDE_B;
-  GR = g('grabs');
+  GR = g('grabs'); L = g('ledge'); D = g('defense'); R = g('reactions'); AD = D.airDodge; SB = D.shieldBreak || MOVESET.defense.shieldBreak;
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), sideSpecial: sb, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), sideSpecial: sb, downSpecial: DOWN_B };
   MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
@@ -88,8 +89,8 @@ function downB() { const m = fighter.set.specials.downSpecial; setState(!m.state
 function neutralB() { const m = fighter.set.specials.neutralSpecial; if (!m.state) return think(); P.held = true; P.chg = 0; setState(m.state); }
 bindMoves(MOVESET);
 const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; // resume from the last checkpoint reached
-const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
-const D = MOVESET.defense, DODGES = ['spotDodge', 'rollForward', 'rollBack'], AD = D.airDodge, SB = D.shieldBreak;
+const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
+const DODGES = ['spotDodge', 'rollForward', 'rollBack'];
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { if (P.state === 'tunnel') return true; const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
@@ -485,7 +486,7 @@ function stepPlayer(dt) {
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if (keys.shield && D.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
@@ -845,7 +846,7 @@ function clawdPose() {
     case 'tumble': return R.tumble.anim(f % 40, 40);
     case 'knockdown': return R.knockdown.anim(f);
     case 'getup': case 'tech': return R[P.state].anim(Math.min(f, R[P.state].frames - 1));
-    case 'respawn': return { ...M.idle.anim(f % 120, 120), pad: 1, say: [R.respawn.say, Math.min(1, f / 10)] };
+    case 'respawn': return { ...M.idle.anim(f % 120, 120), pad: 1, padMark: R.respawn.mark, say: [R.respawn.say, Math.min(1, f / 10)] };
     case 'specialFall': return M.fall.anim(f % 40, 40); // helpless
     case 'tunnel': return { mound: f, moving: P.tun.steered ? !!(keys.left || keys.right) : true };
   }

@@ -17,7 +17,8 @@
 //   term = [dx, dy from body centre, tilt, size] a terminal swung in the claws (up smash) · swoosh = 0 … 1 its swing trail over the head
 //   compact = 0 … 1 chevrons bursting out both ways along the floor (down smash) · say = [text, alpha] a monospace caption over its head
 //   aura = effort tier 0 … 3: glow, one halo per tier, rising sparks · burst = 0 … 1 progress of a tier-up ring
-//   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet
+//   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet (padMark = (x, y, r) =>
+//   draws the mark on its front instead of the Claude spark) · blastDraw = (x, y, t, ang) => draws the KO burst instead of Claw'd's
 //   blast = [0 … 1, angle] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was
 //   body = () => draws another fighter in place of Claw'd's body, legs and eyes (every effect above still drawn around it)
 const CLAWD = '#d97757';
@@ -44,7 +45,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   const rch = pose.reach || 0, [rl, rr] = face > 0 ? [0, rch] : [-rch, 0];
 
   const mx = ox + 9 * U, my = oy + 2.5 * V;
-  if (pose.blast) return drawBlast(mx, my, ...pose.blast);
+  if (pose.blast) return (pose.blastDraw || drawBlast)(mx, my, ...pose.blast); // blastDraw: another fighter's own KO burst
   if (pose.speed) { // motion lines trailing off the back edge (negative speed = moving backwards: off the front edge)
     const sp = Math.abs(pose.speed), sd = face * Math.sign(pose.speed);
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.6 * sp;
@@ -63,7 +64,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
     const py = bottom + (pose.y || 0) + 2, sl = [[mx - 50, py], [mx + 50, py], [mx + 42, py + 10], [mx - 42, py + 10]];
     ctx.save(); ctx.globalAlpha *= pose.pad; ctx.strokeStyle = INK;
     ctx.fillStyle = '#e3d9c6'; path(sl); ctx.fill(); ctx.lineWidth = 2.2; poly(sl, 1);
-    drawSpark(mx, py + 5, 6);
+    (pose.padMark || drawSpark)(mx, py + 5, 6); // padMark: another fighter's own mark on it
     ctx.lineWidth = 1.4; ctx.globalAlpha *= 0.4; for (const dx of [-24, 0, 24]) line(mx + dx, py + 16, mx + dx, py + 24, 0.6, 1);
     ctx.restore();
   }

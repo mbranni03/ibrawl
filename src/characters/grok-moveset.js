@@ -4,6 +4,16 @@ const bounce = (height, lean, sx = 1, sy = 1) => (f, n) => {
   const u = 2 * f / n % 1, h = Math.sin(Math.PI * u), c = (1 - h) ** 3; // h = 0 on the floor … 1 at the top · c = the landing squash
   return { y: -height * h, sx: sx * (1 + 0.1 * c - 0.03 * h), sy: sy * (1 - 0.14 * c + 0.05 * h), rot: lean + 0.05 * Math.sin(2 * Math.PI * u) };
 };
+// hanging off the ledge: the ball just past the lip, squashed against the wall with its eyes peeking over (x / air as Claw'd's HANG,
+// measured from standing at the lip)
+const GHANG = { x: -58, air: 40, sx: 0.92, sy: 1.06, rot: -0.12 };
+// a real roll: forward (d = 1) or back (-1) 120px, one full turn, squashing as it sets off and lands
+const ballRoll = d => f => {
+  const p = tween(f, [[0, {}], [3, { sx: 1.14, sy: 0.84 }], [6, { x: 14 * d }], [22, { x: 110 * d }], [25, { x: 120 * d, sx: 1.12, sy: 0.88 }], [30, { x: 120 * d }]]);
+  const e = Math.min(1, Math.max(0, (f - 4) / 20));
+  return { ...p, rot: d * Math.PI * 2 * e * e * (3 - 2 * e), squint: f >= 4 && f < 24, [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null };
+};
+
 // holding in the tractor beam: leaning back a touch, eyes lit, the held one floating out in front. beamed() points the beam at the
 // middle of whatever's carried (while the beam's on)
 const GHOLD = { rot: -0.06, sx: 1.02, sy: 0.98, glow: 1, beam: 1, carry: [72, -22, 0] };
@@ -339,6 +349,168 @@ const GROK_MOVESET = {
         ], extra: f => ({ puff: f >= 16 && f < 26 ? (f - 16) / 10 : null, squint: f >= 5 && f < 16 }) })(f));
         return { ...p, rot: (p.x || 0) / GR_R }; // rolls the way a ball would over the ground it covers
       },
+    },
+  },
+
+  // dodges (no shield yet). Frame data, intangibility and air dodge physics as Claw'd's
+  defense: {
+    spotDodge: { // flattens into a pancake on the floor, eyes shut, and everything goes over it; then springs back
+      ...MOVESET.defense.spotDodge,
+      anim: f => tween(f, [
+        [0, {}],
+        [3, { sx: 1.2, sy: 0.8 }],
+        [6, { sx: 1.5, sy: 0.36, blink: 1 }],
+        [16, { sx: 1.5, sy: 0.36, blink: 1 }],
+        [21, { sx: 0.9, sy: 1.12 }],
+        [26, {}],
+      ]),
+    },
+    rollForward: { ...MOVESET.defense.rollForward, anim: ballRoll(1) },
+    rollBack: { ...MOVESET.defense.rollBack, anim: ballRoll(-1) },
+    airDodgeForward: { ...MOVESET.defense.airDodgeForward }, // streaking stretched along the way it goes (Claw'd's sideDodge reads fine on a ball)
+    airDodgeBack: { ...MOVESET.defense.airDodgeBack },
+    airDodge: { // curls up small and spins once, eyes shut
+      ...MOVESET.defense.airDodge,
+      anim: f => {
+        const e = Math.min(1, Math.max(0, (f - 4) / 14));
+        return {
+          ...tween(f, [[0, {}], [2, { sx: 1.1, sy: 0.9 }], [5, { sx: 0.8, sy: 0.8, blink: 1 }], [18, { sx: 0.8, sy: 0.8, blink: 1 }], [24, { sx: 1.05, sy: 0.97 }], [28, {}]]),
+          rot: Math.PI * 2 * e * e * (3 - 2 * e), air: -40,
+        };
+      },
+    },
+  },
+
+  // the ledge: the floor is the stage top and Grok faces the stage, x / air from standing right at the lip (the game places it by them)
+  ledge: {
+    ledgeGrab: { // smacks into the wall stretched, squashes flat against it, settles
+      input: 'fall near ledge', frames: 10,
+      anim: f => tween(f, [
+        [0, { x: -58, air: 26, sx: 0.88, sy: 1.14, rot: -0.2 }],
+        [4, { x: -56, air: 46, sx: 0.8, sy: 1.12, rot: -0.08 }],
+        [10, GHANG],
+      ]),
+    },
+    ledgeHang: { // clinging on: a slow wobble, peeking over the top, a blink
+      input: 'none', frames: 60,
+      anim: (f, n) => { const s = Math.sin(f / n * Math.PI * 2); return { ...GHANG, rot: -0.12 + 0.05 * s, sy: 1.06 + 0.02 * s, blink: f >= 40 && f < 46 ? 1 : 0 }; },
+    },
+    ledgeGetup: { // squashes down, springs up and rolls over the lip onto the stage
+      input: 'toward stage / up', frames: 24,
+      anim: f => {
+        const p = tween(f, [
+          [0, GHANG],
+          [5, { x: -58, air: 48, sx: 1.08, sy: 0.88 }],
+          [11, { x: -40, air: -18, sx: 0.9, sy: 1.12 }],
+          [16, { x: -14, air: -6 }],
+          [19, { sx: 1.18, sy: 0.8 }],
+          [24, {}],
+        ]);
+        const e = Math.min(1, Math.max(0, (f - 5) / 14));
+        return { ...p, rot: f < 5 ? p.rot : Math.PI * 2 * e * e * (3 - 2 * e), puff: f >= 19 ? (f - 19) / 5 : null };
+      },
+    },
+    ledgeJump: { // squashes against the wall and pings straight up off it like a rubber ball
+      input: 'jump', frames: 40, launchAt: 6,
+      anim: f => tween(f, [
+        [0, GHANG],
+        [4, { x: -58, air: 52, sx: 1.14, sy: 0.84 }],
+        [6, { x: -56, air: 40, sx: 0.84, sy: 1.22 }],
+        [20, { x: -40, air: -90, sx: 1.04, sy: 0.96 }],
+        [34, { x: -24, air: -40, sx: 0.94, sy: 1.08 }],
+        [40, { x: -20, air: -30, sx: 0.94, sy: 1.08 }],
+      ]),
+    },
+    ledgeRoll: { // hauls up and rolls a full turn onto the stage, well inland
+      input: 'dodge (Shift / Z)', frames: 36, intangible: [0, 36],
+      anim: f => {
+        const p = tween(f, [
+          [0, GHANG],
+          [5, { x: -58, air: 48, sx: 1.08, sy: 0.88 }],
+          [10, { x: -40, air: -10, sx: 0.9, sy: 0.9 }],
+          [25, { x: 72, air: -4, sx: 0.9, sy: 0.9 }],
+          [28, { x: 84, sx: 1.14, sy: 0.84 }],
+          [36, { x: 90 }],
+        ]);
+        const e = Math.min(1, Math.max(0, (f - 9) / 17));
+        return { ...p, rot: Math.PI * 2 * e * e * (3 - 2 * e), squint: f >= 8 && f < 26, puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+      },
+    },
+    ledgeAttack: { // pops up over the lip and bowls in low along the stage
+      input: 'light / heavy (on ledge)', startup: 16, active: 4, endlag: 16, damage: 7, kb: { base: 30, growth: 50, angle: 35 },
+      hitbox: { x: 26, y: -34, w: 50, h: 32 },
+      anim: f => ({
+        ...tween(f, [
+          [0, GHANG],
+          [4, { x: -58, air: 48, sx: 1.08, sy: 0.88 }],
+          [9, { x: -44, air: -10, sx: 0.9, sy: 1.12 }],
+          [13, { x: -16, air: -4, rot: -0.2 }],
+          [15, { x: -6, sx: 1.16, sy: 0.84, rot: -0.2 }],
+          [16, { x: 6, sx: 1.26, sy: 0.8, rot: 0.24 }],
+          [20, { x: 6, sx: 1.24, sy: 0.82, rot: 0.22 }],
+          [28, { x: 3, sx: 1.06, sy: 0.95, rot: 0.06 }],
+          [36, {}],
+        ]),
+        squint: f >= 13 && f < 24, speed: f >= 16 && f < 20 ? 0.6 : 0, puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+      }),
+    },
+    ledgeDrop: { // lets go and slides down the wall
+      input: 'away / down', frames: 24,
+      anim: f => tween(f, [
+        [0, GHANG],
+        [4, { x: -60, air: 50, sx: 0.9, sy: 1.1 }],
+        [16, { x: -64, air: 110, sx: 0.94, sy: 1.06 }],
+        [24, { x: -64, air: 110, sx: 0.94, sy: 1.06 }],
+      ]),
+    },
+  },
+
+  // getting hit. Hitstun / tumble thresholds, tech window and timings as Claw'd's
+  reactions: {
+    hitstun: { // dented in by the hit, eyes squeezed, shudders, pops back round
+      ...MOVESET.reactions.hitstun,
+      anim: (f, n = 30) => {
+        const t = f / n * 30, p = tween(t, [[0, { x: -5, sx: 0.78, sy: 1.18, rot: -0.3 }], [5, { x: -6, sx: 0.86, sy: 1.1, rot: -0.24 }], [22, { x: -3, sx: 1.04, sy: 0.97, rot: -0.06 }], [30, {}]]);
+        if (t < 10) p.x += f % 2 ? 1.5 : -1.5;
+        return { ...p, squint: t < 20 };
+      },
+    },
+    tumble: { // launched: spinning end over end, wobbling out of shape
+      ...MOVESET.reactions.tumble,
+      anim: (f, n = 40) => { const p = f / n * Math.PI * 2; return { rot: -2 * p, sx: 1 + 0.08 * Math.sin(2 * p), sy: 1 - 0.08 * Math.sin(2 * p), squint: true, air: -30 }; },
+    },
+    knockdown: { // splats flat on the floor upside down, bounces, then lies there wobbling, seeing stars
+      ...MOVESET.reactions.knockdown,
+      anim: f => ({
+        ...tween(f, [[0, { sx: 1.4, sy: 0.56 }], [6, { y: -16, sx: 0.92, sy: 1.08 }], [12, { sx: 1.26, sy: 0.72 }], [18, { sx: 1.1, sy: 0.88 }]]),
+        rot: Math.PI + (f >= 18 ? 0.08 * Math.sin((f - 18) / 5) : 0), squint: f < 14,
+        dizzy: f >= 14 ? 0.01 + (f - 14) / 40 : 0, puff: f < 8 ? f / 8 : f >= 12 && f < 18 ? (f - 12) / 6 : null,
+      }),
+    },
+    tech: { // slaps the floor and bounces straight back up the right way round
+      ...MOVESET.reactions.tech,
+      anim: f => ({
+        ...tween(f, [[0, { sx: 1.36, sy: 0.62 }], [5, { y: -20, sx: 0.88, sy: 1.14 }], [11, { sx: 1.14, sy: 0.84 }], [22, {}]]),
+        ring: f < 12 ? f / 12 : null, squint: f < 5,
+      }),
+    },
+    getup: { // rocks, then rolls back over onto its bottom with a hop
+      ...MOVESET.reactions.getup,
+      anim: f => {
+        const p = tween(f, [[0, { sx: 1.1, sy: 0.9 }], [5, { sx: 1.14, sy: 0.86 }], [13, { y: -22, sx: 0.92, sy: 1.08 }], [18, { sx: 1.16, sy: 0.84 }], [26, {}]]);
+        const e = Math.min(1, Math.max(0, (f - 5) / 13));
+        return { ...p, rot: f < 5 ? Math.PI - 0.2 * f / 5 : Math.PI - 0.2 + (Math.PI + 0.2) * e * e * (3 - 2 * e), puff: f >= 18 ? (f - 18) / 8 : null };
+      },
+    },
+    ko: { // spins off shrinking, then a burst of ink and blue rays where it left
+      ...MOVESET.reactions.ko,
+      anim: f => f < 20
+        ? { x: 7 * f, air: -5 * f, rot: -f / 3, sx: 1 - f / 40, sy: 1 - f / 40, squint: true }
+        : { air: -100, blast: [(f - 20) / 60, Math.PI - 0.6], blastDraw: (x, y, t, ang) => drawGrokBlast(x, y, t, ang) }, // right on the edge it left by
+    },
+    respawn: { // lowered in on the platform (an X on its front); stands there until any input, then drops
+      ...MOVESET.reactions.respawn, say: '> grok: back online', mark: (x, y, r) => drawXMark(x, y, r),
+      anim: f => { const p = MOVESET.reactions.respawn.anim(f); return { ...p, say: p.say && ['> grok: back online', p.say[1]], padMark: (x, y, r) => drawXMark(x, y, r) }; },
     },
   },
 
