@@ -5,8 +5,13 @@
 // Frame data and field meanings as in clawd-moveset.js; pose fields as in snoo.js.
 // holding a grabbed foe out at arm's length, both arms stretched to it (carry = where its bottom-centre is, as Claw'd's HOLD)
 const SNOO_HOLD = { rot: -0.06, reach: [38, 32], arm: [-4, -4], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]], carry: [52, -4, 0] };
-// Claw'd's move `key` with Snoo's arm swing laid over it: extra(f, n) = the fields to add (swing, as in snoo.js)
-const snooArms = (key, extra) => ({ ...MOVESET.movement[key], anim: (f, n) => ({ ...MOVESET.movement[key].anim(f, n), ...extra(f, n) }) });
+// one of Claw'd's moves done by Snoo: his pose, his squints as shut eyes, and extra(f, n) laid over it (swing, antenna… as in snoo.js)
+const snooOver = (move, extra) => ({ ...move, anim: (f, n) => { const p = move.anim(f, n); return { ...p, blink: p.squint ? 1 : p.blink, ...extra(f, n) }; } });
+const snooArms = (key, extra) => snooOver(MOVESET.movement[key], extra); // his movement
+// hanging off the ledge on Claw'd's spot (the game moves it by x / air), both arms stretched up and over to the lip
+const SNOO_HANG = { x: -60, air: 40, sy: 1.08, swing: [0.32, 0.57], reach: [48, 26], legs: legsAll(0, 3) };
+const SNOO_PULL = { x: -60, air: 46, sx: 1.08, sy: 0.9, swing: [0.34, 0.6], reach: [54, 32], legs: legsAll(0, 2) }; // dipping to haul itself up
+const SNOO_TUCK = { swing: [0.6, -0.6], ant: -0.6 }; // arms pulled in under it, antenna flattened: rolls and dodges
 // a jump: arms swing back in the squat, fling up and out on takeoff, open wide at the peak, reach up again coming down
 const snooHop = (f, n) => tween(f, [[0, {}], [4, { swing: -0.6 }], [7, { swing: [-1.9, 1.9] }], [(n - 2) / 2, { swing: [-1.2, 1.2] }],
   [n - 8, { swing: [-1.6, 1.6] }], [n - 5, { swing: [-0.6, 0.6] }], [n, {}]]);
@@ -455,6 +460,119 @@ const SNOO_MOVESET = {
         [22, { sx: 1.08, sy: 0.93, rot: 0.08, reach: [12, 10], ant: -0.1 }],
         [35, {}],
       ], extra: f => ({ puff: f >= 14 ? (f - 14) / 10 : null, vote: f >= 14 && f < 32 ? [52, -66, (f - 14) / 18, -1] : null }) }),
+    },
+  },
+
+  ledge: { // Claw'd's x / air path (it's the game's root motion there), Snoo's arms
+    ledgeGrab: {
+      ...MOVESET.ledge.ledgeGrab,
+      anim: f => tween(f, [ // catches it with both stretchy arms, drops and stretches, settles into the hang
+        [0, { x: -60, air: 28, sx: 0.9, sy: 1.14, swing: [0.3, 0.5], reach: [40, 20], ant: -0.4, legs: legsAll(0, 3) }],
+        [4, { x: -60, air: 46, sx: 1.06, sy: 0.94, swing: [0.34, 0.6], reach: [52, 30], ant: 0.3, legs: legsAll(0, 5) }],
+        [10, SNOO_HANG],
+      ]),
+    },
+    ledgeHang: {
+      ...MOVESET.ledge.ledgeHang,
+      anim: (f, n) => { // dangling, peeking over the lip: slow sway, feet trailing, antenna nodding
+        const s = Math.sin(f / n * Math.PI * 2);
+        return { ...SNOO_HANG, rot: 0.04 * s, ant: 0.15 * s, legs: [[-s, 3], [0, 0], [0, 0], [-s, 3]], blink: f >= 40 && f < 46 ? 1 : 0 };
+      },
+    },
+    ledgeGetup: {
+      ...MOVESET.ledge.ledgeGetup,
+      anim: f => ({ // dips, hauls up over the lip arms flung up, squashes down onto the stage
+        ...tween(f, [
+          [0, SNOO_HANG],
+          [5, SNOO_PULL],
+          [11, { x: -46, air: -6, sx: 0.9, sy: 1.14, rot: 0.25, swing: [-1.6, 1.6], ant: -0.4, legs: TUCK }],
+          [16, { x: -14, air: -4, rot: 0.15, swing: [-1.2, 1.2], legs: TUCK }],
+          [19, { sx: 1.16, sy: 0.8, swing: [-0.5, 0.5], ant: 0.3 }],
+          [24, {}],
+        ]),
+        puff: f >= 19 ? (f - 19) / 5 : null,
+      }),
+    },
+    ledgeJump: {
+      ...MOVESET.ledge.ledgeJump,
+      anim: f => tween(f, [ // pulls down, springs straight up arms first, drifts over the stage
+        [0, SNOO_HANG],
+        [4, { ...SNOO_PULL, air: 48, sx: 1.1, sy: 0.88 }],
+        [6, { x: -58, air: 40, sx: 0.86, sy: 1.22, swing: [-1.9, 1.9], ant: -0.75, legs: legsAll(0, 3) }],
+        [20, { x: -40, air: -90, sx: 1.04, sy: 0.96, swing: [-1.2, 1.2], legs: TUCK }],
+        [34, { x: -24, air: -40, sx: 0.94, sy: 1.08, swing: [-1.6, 1.6], legs: REACH }],
+        [40, { x: -20, air: -30, sx: 0.94, sy: 1.08, swing: [-1.6, 1.6], legs: REACH }],
+      ]),
+    },
+    ledgeRoll: {
+      ...MOVESET.ledge.ledgeRoll,
+      anim: f => { // hauls up, curls into a ball and rolls a full turn onto the stage, pops up standing well inland
+        const p = tween(f, [
+          [0, SNOO_HANG],
+          [5, SNOO_PULL],
+          [10, { ...SNOO_TUCK, x: -40, air: -10, sx: 0.86, sy: 0.86, legs: TUCK }],
+          [25, { ...SNOO_TUCK, x: 72, air: -4, sx: 0.86, sy: 0.86, legs: TUCK }],
+          [28, { x: 84, sx: 1.14, sy: 0.82, swing: [-0.5, 0.5] }],
+          [36, { x: 90 }],
+        ]);
+        const e = Math.min(1, Math.max(0, (f - 9) / 17));
+        return { ...p, rot: Math.PI * 2 * e * e * (3 - 2 * e), puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+      },
+    },
+    ledgeAttack: {
+      ...MOVESET.ledge.ledgeAttack,
+      anim: f => ({ // hauls up, lands low and shoots the front arm out along the stage
+        ...tween(f, [
+          [0, SNOO_HANG],
+          [4, SNOO_PULL],
+          [9, { x: -44, air: -8, sx: 0.9, sy: 1.14, rot: 0.25, swing: [-1.6, 1.6], ant: -0.4, legs: TUCK }],
+          [13, { x: -16, air: -4, rot: -0.1, swing: [-0.6, 0.4], reach: [0, -4], ant: 0.4, legs: TUCK }],
+          [15, { x: -6, sx: 1.14, sy: 0.84, rot: -0.12, swing: [-0.6, 0.3], reach: [0, -4], ant: 0.5 }],
+          [16, { x: 4, sx: 1.14, sy: 0.86, rot: 0.14, arm: [0, 4], reach: [0, 46], ant: -0.4, legs: [[-6, 0], [0, 0], [0, 0], [3, 0]] }],
+          [20, { x: 4, sx: 1.12, sy: 0.87, rot: 0.13, arm: [0, 4], reach: [0, 44], ant: -0.3, legs: [[-6, 0], [0, 0], [0, 0], [3, 0]] }],
+          [28, { x: 2, rot: 0.04, reach: [0, 8], ant: 0.1, legs: [[-2, 0], [0, 0], [0, 0], [1, 0]] }],
+          [36, {}],
+        ]),
+        speed: f >= 16 && f < 20 ? 0.6 : 0,
+        puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+      }),
+    },
+    ledgeDrop: {
+      ...MOVESET.ledge.ledgeDrop,
+      anim: f => tween(f, [ // lets go: arms stay up a moment, then it slides down the wall
+        [0, SNOO_HANG],
+        [4, { x: -62, air: 50, sx: 0.92, sy: 1.1, swing: [-1.9, 1.9], ant: -0.5, legs: legsAll(0, 3) }],
+        [16, { x: -66, air: 110, sx: 0.96, sy: 1.04, swing: [-1.6, 1.6], ant: -0.3, legs: legsAll(0, 2) }],
+        [24, { x: -66, air: 110, sx: 0.96, sy: 1.04, swing: [-1.6, 1.6], ant: -0.3, legs: legsAll(0, 2) }],
+      ]),
+    },
+  },
+
+  defense: { // dodges only, so far: no shield yet (the game won't raise one), so no shield break either
+    spotDodge: snooOver(MOVESET.defense.spotDodge, f => tween(f, [ // shrinks into the page, arms and antenna pulled in
+      [0, {}], [3, { swing: [-0.4, 0.4] }], [6, SNOO_TUCK], [16, SNOO_TUCK], [21, { swing: [-0.3, 0.3], ant: 0.2 }], [26, {}]])),
+    rollForward: snooOver(MOVESET.defense.rollForward, f => tween(f, [[0, {}], [5, SNOO_TUCK], [22, SNOO_TUCK], [30, {}]])), // balled up
+    rollBack: snooOver(MOVESET.defense.rollBack, f => tween(f, [[0, {}], [5, SNOO_TUCK], [22, SNOO_TUCK], [30, {}]])),
+    airDodgeForward: snooOver(MOVESET.defense.airDodgeForward, f => tween(f, [[0, {}], [4, { swing: -0.9, ant: -0.6 }], [18, { swing: -0.9, ant: -0.6 }], [28, {}]])), // arms streaming back
+    airDodgeBack: snooOver(MOVESET.defense.airDodgeBack, f => tween(f, [[0, {}], [4, { swing: 0.9, ant: 0.6 }], [18, { swing: 0.9, ant: 0.6 }], [28, {}]])),
+    airDodge: snooOver(MOVESET.defense.airDodge, f => tween(f, [[0, {}], [5, SNOO_TUCK], [18, SNOO_TUCK], [28, {}]])),
+  },
+
+  reactions: { // Claw'd's, with Snoo's arms and antenna thrown about
+    hitstun: snooOver(MOVESET.reactions.hitstun, (f, n = 30) => tween(f / n * 30, [ // arms flung up, antenna whipped back, settling
+      [0, { swing: [-1.5, 1.5], ant: -0.9 }], [5, { swing: [-1.3, 1.3], ant: -0.6 }], [22, { swing: [-0.3, 0.3], ant: 0.2 }], [30, {}]])),
+    tumble: snooOver(MOVESET.reactions.tumble, (f, n = 40) => { // windmilling
+      const p = f / n * Math.PI * 2, s = Math.sin(2 * p);
+      return { swing: [-1.2 + 0.8 * s, 1.2 + 0.8 * s], ant: 0.8 * Math.sin(3 * p) };
+    }),
+    knockdown: snooOver(MOVESET.reactions.knockdown, f => ({ // flopped over, arms splayed and twitching, antenna bent flat
+      swing: f < 14 ? [-1.8, 1.8] : [-1.6 - 0.15 * Math.sin(f / 4), 1.6 + 0.15 * Math.sin(f / 4 + 1)], ant: 1.1 })),
+    tech: snooOver(MOVESET.reactions.tech, f => tween(f, [[0, { swing: [-1.4, 1.4] }], [5, { swing: [-1.9, 1.9], ant: -0.6 }], [11, { swing: [-0.6, 0.6], ant: 0.2 }], [22, {}]])),
+    getup: snooOver(MOVESET.reactions.getup, f => tween(f, [[0, { swing: [-1.6, 1.6], ant: 1.1 }], [13, { swing: [0.4, -0.4], ant: -0.4 }], [18, { swing: [-1.4, 1.4], ant: 0.3 }], [26, {}]])),
+    ko: snooOver(MOVESET.reactions.ko, () => ({ swing: [-1.9, 1.9], ant: -1 })), // arms up, spinning off
+    respawn: { // lowered in on the platform, [restored] (the opposite of [removed]) overhead
+      ...MOVESET.reactions.respawn, say: '[restored]',
+      anim: f => { const p = MOVESET.reactions.respawn.anim(f); return { ...p, swing: [-0.1, 0.1], say: ['[restored]', p.say[1]] }; },
     },
   },
 };

@@ -102,7 +102,7 @@ const FIGHTERS = {
   wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
   duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
-  snoo: { name: 'Snoo', moves: { ...todo, ...SNOO_MOVESET, specials: { ...todo.specials, ...SNOO_MOVESET.specials } }, draw: drawSnoo, fx: drawClawdFx,
+  snoo: { name: 'Snoo', moves: { ...todo, ...SNOO_MOVESET, defense: { ...todo.defense, ...SNOO_MOVESET.defense } }, draw: drawSnoo, fx: drawClawdFx,
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
   lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
 };
