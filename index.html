@@ -50,17 +50,18 @@ const ATTACK_FROM = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWal
 // shield: holding it wears it down, letting go lets it grow back; blocking a hit costs a chunk. Emptied = it breaks (stun), and comes back at SHIELD_MIN
 const SHIELD_DRAIN = 1 / 240, SHIELD_REGEN = 1 / 360, SHIELD_HIT = 0.3, SHIELD_MIN = 0.3;
 let hitstop = 0;
-// every fighter, in select-screen order. They all fight with Claw'd's moves (his effects drawn around them) until they have their own;
-// moves = their movement animations · h = height, px · jumps = air jumps · flap = air jump speed · glide = max fall speed holding jump
+// every fighter, in select-screen order. set = its moveset: a group it doesn't have yet (attacks, specials, grabs, defense, ledge) is
+// simply off for it · h = height, px · jumps = air jumps · flap = air jump speed · glide = max fall speed holding jump
 const FIGHTERS = [
-  { name: "Claw'd", draw: drawClawd, moves: MOVESET.movement, h: 50 },
-  { name: 'Grok Bot', draw: drawGrok, moves: GROK_MOVESET.movement, h: 56 },
-  { name: 'Wumpus', draw: drawWumpus, moves: MOVESET.movement, h: 66 },
-  { name: 'Android', draw: drawAndroid, moves: MOVESET.movement, h: 62 },
-  { name: 'Duo', draw: drawDuo, moves: DUO_MOVESET.movement, h: 61, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
-  { name: 'Snoo', draw: drawSnoo, moves: MOVESET.movement, h: 77 },
+  { name: "Claw'd", draw: drawClawd, set: MOVESET, h: 50 },
+  { name: 'Grok Bot', draw: drawGrok, set: GROK_MOVESET, h: 56 },
+  { name: 'Wumpus', draw: drawWumpus, set: { movement: MOVESET.movement }, h: 66 },
+  { name: 'Android', draw: drawAndroid, set: { movement: MOVESET.movement }, h: 62 },
+  { name: 'Duo', draw: drawDuo, set: DUO_MOVESET, h: 61, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
+  { name: 'Snoo', draw: drawSnoo, set: { movement: MOVESET.movement }, h: 77 },
 ];
-let pickI = 0, fighter = FIGHTERS[0], M = fighter.moves; // the highlighted card, the fighter in play, its movement
+let pickI = 0, fighter = FIGHTERS[0], M = fighter.set.movement; // the highlighted card, the fighter in play, its movement
+const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
@@ -117,7 +118,7 @@ function restart() {
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
-function versus() { picking = false; vsT = performance.now(); fighter = FIGHTERS[pickI]; M = fighter.moves; } // character picked: the vs screen, then the fight
+function versus() { picking = false; vsT = performance.now(); fighter = FIGHTERS[pickI]; M = fighter.set.movement; } // character picked: the vs screen, then the fight
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -198,7 +199,7 @@ function land(surface, wasGround) {
     if (P.state === 'shieldBreak') puff(); // still stunned through the landing
     else if (P.state === 'tumble' || (P.state === 'airDodge' && P.fromTumble && techQ)) { // tech (+ ← → tech roll), else slammed onto its back (dodging out of a tumble right before landing still techs)
       const d = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      if (techQ) { techQ = dodgeQ = 0; setState(d ? (d === P.face ? 'rollForward' : 'rollBack') : 'tech'); } else setState('knockdown');
+      if (techQ) { techQ = dodgeQ = 0; setState(d && has('defense') ? (d === P.face ? 'rollForward' : 'rollBack') : 'tech'); } else setState('knockdown');
       puff();
     }
     else if (P.state === 'hitstun') {} // flinches through the landing
@@ -212,7 +213,7 @@ function land(surface, wasGround) {
 // ledges: falling past a stage corner (not holding down) catches it. While on it, the ledge moves' x / air place Claw'd
 // (measured from standing at the lip); P.ledge = which corner, -1 left / 1 right
 function grabLedge() {
-  if (P.regrab > 0 || keys.down || P.vy < 0 || !(['air', 'djump', 'upSpecial', 'specialFall'].includes(P.state) || (P.state === 'tumble' && P.f >= P.stun))) return;
+  if (!has('ledge') || P.regrab > 0 || keys.down || P.vy < 0 || !(['air', 'djump', 'upSpecial', 'specialFall'].includes(P.state) || (P.state === 'tumble' && P.f >= P.stun))) return;
   for (const side of [-1, 1]) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, gap = side < 0 ? lx - (P.x + P.w) : P.x - lx;
     if (gap >= 0 && gap < 24 && P.y > stage.y - 40 && P.y < stage.y + 16) {
@@ -390,7 +391,7 @@ function stepPlayer(dt) {
     else if (s === 'knockdown') { // lying there: any input gets up (← → rolls away instead), or it gets up by itself
       if (P.f >= R.knockdown.frames || (P.f >= R.knockdown.bounce && (dir || keys.up || jumpQ || attackQ || heavyQ || specialQ || dodgeQ))) {
         const atk = attackQ || heavyQ; jumpQ = attackQ = heavyQ = specialQ = dodgeQ = 0;
-        setState(atk ? 'getupAttack' : dir ? (dir === P.face ? 'rollForward' : 'rollBack') : 'getup');
+        setState(atk && has('groundAttacks') ? 'getupAttack' : dir && has('defense') ? (dir === P.face ? 'rollForward' : 'rollBack') : 'getup');
       }
     }
     else if (DODGES.includes(s)) { if (P.f >= D[s].frames) setState('idle'); }
@@ -402,21 +403,21 @@ function stepPlayer(dt) {
       else if (!keys.shield) setState('shieldDrop');
     }
     else if (s === 'shieldDrop' && P.f < 7) {} // lowering it
-    else if (grabQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide)
+    else if (grabQ && has('grabs') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide)
       grabQ = 0; const dash = s === 'dash' || s === 'run'; if (dir && !dash) P.face = dir; setState(dash ? 'dashGrab' : 'grab');
     }
-    else if (dodgeQ && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
+    else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
-    else if (heavyQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
-    else if (specialQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
-    else if (attackQ && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
+    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
+    else if (specialQ && has('specials') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab
       const atk = keys.up ? 'upTilt' : keys.down ? 'downTilt' : s === 'dash' || s === 'run' ? 'dashAttack' : dir && tiltQ ? 'forwardTilt' : 'jab1';
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if (keys.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (downQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
@@ -451,11 +452,11 @@ function stepPlayer(dt) {
     if (s === 'hitstun' && !stunned) { setState('air'); s = 'air'; }
     if (s === 'upSpecial') tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
     const free = ['air', 'djump', 'drop', 'ledgeDrop'].includes(s) || (s === 'tumble' && !stunned); // tumble: acts once the hitstun runs out
-    if (attackQ && free) { // aerial picked by the held direction (back = away from facing)
+    if (attackQ && free && has('aerials')) { // aerial picked by the held direction (back = away from facing)
       attackQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
     }
-    else if (specialQ && free) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
-    else if (dodgeQ && free && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
+    else if (specialQ && free && has('specials')) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
+    else if (dodgeQ && free && has('defense') && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
       const dx = dir, dy = keys.up ? -1 : keys.down ? 1 : 0, n = Math.hypot(dx, dy) || 1;
       dodgeQ = 0; P.airDodged = true; P.fastFall = false; P.fromTumble = s === 'tumble'; P.dodgeV = [dx / n * AD.speed, dy / n * AD.speed]; setState('airDodge');
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
@@ -726,8 +727,7 @@ function render(t) {
   if (paused) drawPause(t);
 }
 
-// the fighter in play; anyone but Claw'd is drawn inside his effects (shield, cord, toasts…), since they use his moves,
-// stretched to its height so the shield sits on its head and toasts float above it
+// the fighter in play; anyone but Claw'd is drawn inside his effects (speed lines, dizzy stars, respawn pad…), stretched to its height
 const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.draw === drawClawd ? p : { ...p, sy: (p.sy ?? 1) * fighter.h / 50, body: () => fighter.draw(cx, b, p, face) }, face);
 
 // the up special's toasts ("connection refused" on a miss, "mcp connected" plugging into the bag): stay up TOAST frames whatever
