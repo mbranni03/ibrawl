@@ -914,7 +914,7 @@ const LOGOS = [
 ];
 // character select, Smash style: the roster along the top (click / Enter picks your fighter, then CPU dummies), a READY TO FIGHT band,
 // and the player slots along the bottom: P1 (the first pick) and up to three CPUs (the picks after it; click a slot to clear it).
-// No CPUs: the fight is against the training bag, shown faded in the first CPU slot
+// No CPUs: the fight is against the training bag, shown faded in the first CPU slot once P1 has picked
 const MAX_CPUS = 3, TILE = { w: 168, h: 150, y: 104 }, tileX = i => W / 2 + (i - (ROSTER.length - 1) / 2) * 182 - TILE.w / 2;
 const BAND = { y: 280, h: 50 }, SLOT = { w: 280, h: 320, y: 368 }, slotX = i => W / 2 + (i - 1.5) * 300 - SLOT.w / 2;
 let focus = 0, onBand = false; // keyboard focus: a roster tile, or the READY band
@@ -968,7 +968,7 @@ function drawSelect(t) {
   ctx.fillStyle = INK; ctx.fillText(txt, 3, 3); ctx.fillStyle = PAPER; ctx.fillText(txt, 0, 0); ctx.restore();
 
   for (let i = 0; i <= MAX_CPUS; i++) { // player slots: P1, then the CPUs
-    const x = slotX(i), y = SLOT.y, id = i ? cpus[i - 1] ?? (i === 1 && !cpus.length ? 'bag' : null) : p1, ghost = id === 'bag', r = rect(x, y, SLOT.w, SLOT.h);
+    const x = slotX(i), y = SLOT.y, id = i ? cpus[i - 1] ?? (i === 1 && !cpus.length && p1 ? 'bag' : null) : p1, ghost = id === 'bag', r = rect(x, y, SLOT.w, SLOT.h);
     ctx.textAlign = 'center';
     if (!id) { // empty slot: P1 waiting for its pick, or room for a CPU
       ctx.globalAlpha = i ? 0.4 : 0.8; ctx.strokeStyle = ctx.fillStyle = i ? INK : CLAWD; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.strokeRect(x, y, SLOT.w, SLOT.h); ctx.setLineDash([]);
