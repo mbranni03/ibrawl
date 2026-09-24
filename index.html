@@ -49,7 +49,7 @@ const ATTACK_FROM = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWal
 // shield: holding it wears it down, letting go lets it grow back; blocking a hit costs a chunk. Emptied = it breaks (stun), and comes back at SHIELD_MIN
 const SHIELD_DRAIN = 1 / 240, SHIELD_REGEN = 1 / 360, SHIELD_HIT = 0.3, SHIELD_MIN = 0.3;
 let hitstop = 0;
-let p1 = 'clawd', fighter, M = MOVESET.movement; // P1's pick, the fighter in play (FIGHTER, set on the vs screen), its movement
+let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
@@ -189,7 +189,7 @@ function menuAt(e) {
 }
 cv.addEventListener('mousemove', e => {
   const i = menuAt(e), p = picking && selectAt(...at(e)); if (i >= 0) sel = i;
-  if (p?.tile != null) { focus = p.tile; onBand = onP1 = false; } else if (p?.ready) { onBand = true; onP1 = false; } else if (p?.p1) { onP1 = true; onBand = false; } // hover moves the keyboard focus too
+  if (p?.tile != null) { focus = p.tile; onBand = false; } else if (p?.ready) onBand = true; // hover moves the keyboard focus too
   cv.style.cursor = i >= 0 || p ? 'pointer' : '';
 });
 cv.addEventListener('click', e => {
@@ -197,7 +197,7 @@ cv.addEventListener('click', e => {
   if (vsT != null) { fight(); return; }
   if (picking) { // character select hot spots (drawn in drawSelect)
     const p = selectAt(...at(e));
-    if (p?.back) picking = false; else if (p?.tile != null) addCpu(p.tile); else if (p?.p1) stepP1(p.p1); else if (p?.slot) cpus.splice(p.slot - 1, 1); else if (p?.ready) { versus(); cv.style.cursor = ''; }
+    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.slot) cpus.splice(p.slot - 1, 1); else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
     return;
   }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
@@ -777,11 +777,11 @@ function drawTargets(t) {
 
 // hud: Claw'd's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
 function drawHealth(t) {
-  const portrait = (id, face) => () => { const h = FIGHTER[id].box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); FIGHTER[id].draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
-  badge(W - 120, P.dmg, P.hitT, portrait(p1, 1), stocks);
+  const portrait = (F, face) => () => { const h = F.box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
+  badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1), stocks);
   foes.forEach((b, i) => {
     ctx.globalAlpha = b.lives ? 1 : 0.35; // faded once out
-    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, portrait(b.id, -1), b.lives);
+    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, portrait(FIGHTER[b.id], -1), b.lives);
   });
   ctx.globalAlpha = 1;
 }
@@ -912,31 +912,29 @@ const LOGOS = [
     ctx.fillStyle = '#ff4500'; for (const ex of [10.5, 17.5]) { ctx.beginPath(); ctx.arc(ex, 16, 1.5, 0, 6.28); ctx.fill(); }
   },
 ];
-// character select, Smash style: the roster along the top (click / Enter adds that fighter as a CPU dummy), a READY TO FIGHT band,
-// and the player slots along the bottom: P1 (‹ › / ← → on it change P1's fighter) and up to three CPUs (click one to remove it).
+// character select, Smash style: the roster along the top (click / Enter picks your fighter, then CPU dummies), a READY TO FIGHT band,
+// and the player slots along the bottom: P1 (the first pick) and up to three CPUs (the picks after it; click a slot to clear it).
 // No CPUs: the fight is against the training bag, shown faded in the first CPU slot
 const MAX_CPUS = 3, TILE = { w: 168, h: 150, y: 104 }, tileX = i => W / 2 + (i - (ROSTER.length - 1) / 2) * 182 - TILE.w / 2;
 const BAND = { y: 280, h: 50 }, SLOT = { w: 280, h: 320, y: 368 }, slotX = i => W / 2 + (i - 1.5) * 300 - SLOT.w / 2;
-let focus = 0, onBand = false, onP1 = false; // keyboard focus: a roster tile, the READY band, or the P1 slot
+let focus = 0, onBand = false; // keyboard focus: a roster tile, or the READY band
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function selectAt(x, y) {
   if (x < 170 && y < 90) return { back: true };
   for (let i = 0; i < ROSTER.length; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
   if (y > BAND.y && y < BAND.y + BAND.h) return { ready: true };
-  if (x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: x < slotX(0) + SLOT.w / 2 ? -1 : 1 }; // ‹ / › half
+  if (p1 && x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: true }; // clears the pick
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
 const addCpu = i => { if (cpus.length < MAX_CPUS) cpus.push(ROSTER[i]); };
-const stepP1 = d => { p1 = ROSTER[(ROSTER.indexOf(p1) + d + ROSTER.length) % ROSTER.length]; }; // P1's fighter, cycled with ‹ ›
-function pickKey(code, a) { // ← → roster (on the P1 slot: P1's fighter) · ↓ ↑ roster → band → P1 slot · Enter / Space add or fight · Backspace drops the last CPU
+const pickTile = i => p1 ? addCpu(i) : p1 = ROSTER[i]; // the first pick is P1's fighter, the rest are CPUs
+function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick
   const n = ROSTER.length;
-  if ((a === 'left' || a === 'right') && onP1) stepP1(a === 'left' ? -1 : 1);
-  else if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
-  else if (a === 'down') { if (onBand) { onBand = false; onP1 = true; } else if (!onP1) onBand = true; }
-  else if (a === 'up') { if (onP1) { onP1 = false; onBand = true; } else onBand = false; }
-  else if (code === 'Enter' || code === 'Space') onBand || onP1 ? versus() : addCpu(focus);
-  else if (code === 'Backspace' || code === 'Delete') cpus.pop();
+  if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
+  else if (a === 'down' || a === 'up') onBand = a === 'down';
+  else if (code === 'Enter' || code === 'Space') onBand ? p1 && versus() : pickTile(focus);
+  else if (code === 'Backspace' || code === 'Delete') cpus.length ? cpus.pop() : p1 = null;
   else return false;
   return true;
 }
@@ -947,11 +945,11 @@ function tag(x, y, text, fill, right) { // a little filled label, e.g. P1 / CPU 
 }
 function drawSelect(t) {
   ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
-  ctx.font = '700 56px Caveat, cursive'; ctx.fillText('choose your fighter', W / 2, 74);
+  ctx.font = '700 56px Caveat, cursive'; ctx.fillText(p1 ? 'now pick your opponents' : 'choose your fighter', W / 2, 74);
   ctx.font = '600 32px Caveat, cursive'; ctx.textAlign = 'left'; ctx.fillText('‹ back', 40, 60);
 
-  ROSTER.forEach((id, i) => { // roster tiles: portrait, name, logo, and a CPU badge once picked
-    const x = tileX(i), y = TILE.y, on = !onBand && !onP1 && focus === i, r = rect(x, y, TILE.w, TILE.h);
+  ROSTER.forEach((id, i) => { // roster tiles: portrait, name, logo, and a P1 / CPU badge once picked
+    const x = tileX(i), y = TILE.y, on = !onBand && focus === i, r = rect(x, y, TILE.w, TILE.h);
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
     ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 2, TILE.w - 4, TILE.h - 4); ctx.clip(); // keep antennae / ears inside
     ctx.translate(x + TILE.w / 2, y + 108); ctx.scale(1.35, 1.35); FIGHTER[id].draw(0, 0, {}, 1, t); ctx.restore();
@@ -959,11 +957,12 @@ function drawSelect(t) {
     ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + TILE.w / 2, y + TILE.h - 12);
     ctx.save(); ctx.translate(x + 9, y + 9); ctx.scale(0.8, 0.8); LOGOS[i](); ctx.restore();
     const n = cpus.filter(c => c === id).length;
-    if (n) tag(x + TILE.w - 8, y + 8, n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
+    if (id === p1) tag(x + TILE.w - 8, y + 8, 'P1', CLAWD, true);
+    if (n) tag(x + TILE.w - 8, y + (id === p1 ? 36 : 8), n > 1 ? `CPU ×${n}` : 'CPU', '#6b7280', true);
   });
 
   // READY TO FIGHT: a slightly slanted orange band right across
-  const br = [[0, BAND.y + 6], [W, BAND.y - 6], [W, BAND.y + BAND.h - 6], [0, BAND.y + BAND.h + 6]], txt = onBand ? '›  READY TO FIGHT  ‹' : 'READY TO FIGHT';
+  const br = [[0, BAND.y + 6], [W, BAND.y - 6], [W, BAND.y + BAND.h - 6], [0, BAND.y + BAND.h + 6]], txt = !p1 ? 'PICK YOUR FIGHTER' : onBand ? '›  READY TO FIGHT  ‹' : 'READY TO FIGHT';
   ctx.fillStyle = CLAWD; path(br); ctx.fill(); ctx.strokeStyle = INK; hatch(br, 14, 0.18); ctx.lineWidth = onBand ? 3.4 : 2; poly(br, 1.2);
   ctx.save(); ctx.translate(W / 2, BAND.y + BAND.h / 2 + 15); ctx.rotate(-0.01); ctx.textAlign = 'center'; ctx.font = '700 46px Caveat, cursive';
   ctx.fillStyle = INK; ctx.fillText(txt, 3, 3); ctx.fillStyle = PAPER; ctx.fillText(txt, 0, 0); ctx.restore();
@@ -971,10 +970,10 @@ function drawSelect(t) {
   for (let i = 0; i <= MAX_CPUS; i++) { // player slots: P1, then the CPUs
     const x = slotX(i), y = SLOT.y, id = i ? cpus[i - 1] ?? (i === 1 && !cpus.length ? 'bag' : null) : p1, ghost = id === 'bag', r = rect(x, y, SLOT.w, SLOT.h);
     ctx.textAlign = 'center';
-    if (!id) { // empty CPU slot
-      ctx.globalAlpha = 0.4; ctx.strokeStyle = ctx.fillStyle = INK; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.strokeRect(x, y, SLOT.w, SLOT.h); ctx.setLineDash([]);
-      ctx.font = '700 44px Caveat, cursive'; ctx.fillText('+ CPU', x + SLOT.w / 2, y + SLOT.h / 2);
-      ctx.font = '600 22px Caveat, cursive'; ctx.fillText('pick a fighter above', x + SLOT.w / 2, y + SLOT.h / 2 + 32); ctx.globalAlpha = 1; continue;
+    if (!id) { // empty slot: P1 waiting for its pick, or room for a CPU
+      ctx.globalAlpha = i ? 0.4 : 0.8; ctx.strokeStyle = ctx.fillStyle = i ? INK : CLAWD; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.strokeRect(x, y, SLOT.w, SLOT.h); ctx.setLineDash([]);
+      ctx.font = '700 44px Caveat, cursive'; ctx.fillText(i ? '+ CPU' : 'P1', x + SLOT.w / 2, y + SLOT.h / 2);
+      ctx.font = '600 22px Caveat, cursive'; ctx.fillText(i ? (p1 ? 'pick a fighter above' : 'after your fighter') : 'pick your fighter above', x + SLOT.w / 2, y + SLOT.h / 2 + 32); ctx.globalAlpha = 1; continue;
     }
     ctx.globalAlpha = ghost ? 0.5 : 1;
     ctx.fillStyle = i ? '#d6d2c9' : '#f3cdb9'; path(r); ctx.fill(); ctx.strokeStyle = i ? INK : CLAWD; hatch(r, 16, 0.12);
@@ -984,8 +983,7 @@ function drawSelect(t) {
     ctx.fillStyle = PAPER; ctx.font = '700 40px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + SLOT.w / 2, y + SLOT.h - 18);
     ctx.strokeStyle = i ? INK : CLAWD; ctx.lineWidth = i ? 2.4 : 3.4; poly(r, 1.2);
     tag(x + 10, y + 10, i ? (ghost ? 'no CPUs' : `CPU ${i}`) : 'P1', i ? '#6b7280' : CLAWD);
-    if (!i) { ctx.fillStyle = onP1 ? CLAWD : INK; ctx.textAlign = 'center'; ctx.font = '700 64px Caveat, cursive'; ctx.fillText('‹', x + 24, y + 150); ctx.fillText('›', x + SLOT.w - 24, y + 150); } // change P1's fighter
-    if (i && !ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
+    if (!ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
     ctx.globalAlpha = 1;
   }
   ctx.textAlign = 'left';
