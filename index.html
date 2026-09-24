@@ -22,6 +22,8 @@
 <script src="src/characters/duo.js"></script>
 <script src="src/characters/snoo.js"></script>
 <script src="src/characters/clawd-moveset.js"></script>
+<script src="src/characters/grok-moveset.js"></script>
+<script src="src/characters/duo-moveset.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -48,7 +50,19 @@ const ATTACK_FROM = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWal
 // shield: holding it wears it down, letting go lets it grow back; blocking a hit costs a chunk. Emptied = it breaks (stun), and comes back at SHIELD_MIN
 const SHIELD_DRAIN = 1 / 240, SHIELD_REGEN = 1 / 360, SHIELD_HIT = 0.3, SHIELD_MIN = 0.3;
 let hitstop = 0;
-const M = MOVESET.movement, L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+// every fighter, in select-screen order. They all fight with Claw'd's moves (his effects drawn around them) until they have their own;
+// moves = their movement animations · h = height, px · jumps = air jumps · flap = air jump speed · glide = max fall speed holding jump
+const FIGHTERS = [
+  { name: "Claw'd", draw: drawClawd, moves: MOVESET.movement, h: 50 },
+  { name: 'Grok Bot', draw: drawGrok, moves: GROK_MOVESET.movement, h: 56 },
+  { name: 'Wumpus', draw: drawWumpus, moves: MOVESET.movement, h: 66 },
+  { name: 'Android', draw: drawAndroid, moves: MOVESET.movement, h: 62 },
+  { name: 'Duo', draw: drawDuo, moves: DUO_MOVESET.movement, h: 61, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
+  { name: 'Snoo', draw: drawSnoo, moves: MOVESET.movement, h: 77 },
+];
+let pickI = 0, fighter = FIGHTERS[0], M = fighter.moves; // the highlighted card, the fighter in play, its movement
+const AIR_JUMPS = () => fighter.jumps || 1;
+const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -102,8 +116,8 @@ function restart() {
   stocks = STOCKS; fx.length = shots.length = 0; sub = null; Object.assign(bag, BAG_SPAWN);
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null });
 }
-function fight() { restart(); setPaused(false); } // leaves the vs screen: Claw'd is the only fighter so far
-function versus() { picking = false; vsT = performance.now(); } // character picked: the vs screen, then the fight
+function fight() { restart(); setPaused(false); } // leaves the vs screen
+function versus() { picking = false; vsT = performance.now(); fighter = FIGHTERS[pickI]; M = fighter.moves; } // character picked: the vs screen, then the fight
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -117,7 +131,7 @@ addEventListener('keydown', e => {
     const a = KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
     if (showControls) { if (ok) showControls = false; }
     else if (vsT != null) { if (ok) fight(); else return; } // skip ahead
-    else if (picking) { if (ok) versus(); else return; }
+    else if (picking) { if (a === 'left' || a === 'right') pickI = (pickI + (a === 'left' ? CARDS - 1 : 1)) % CARDS; else if (ok) versus(); else return; }
     else if (a === 'up') sel = (sel + menu.length - 1) % menu.length;
     else if (a === 'down') sel = (sel + 1) % menu.length;
     else if (ok) choose(sel);
@@ -158,18 +172,18 @@ function menuAt(e) {
   const [x, y] = at(e), i = Math.floor((y - (menuY() - 36)) / 52);
   return paused && !showControls && !picking && vsT == null && Math.abs(x - W / 2) < 120 && i >= 0 && i < menu.length ? i : -1;
 }
-// character select hot spots (drawn in drawSelect): 0 = Claw'd's card, 1 = back
+// character select hot spots (drawn in drawSelect): a card's index, CARDS = back
 function pickAt(e) {
   const [x, y] = at(e);
   if (!picking) return -1;
-  if (Math.abs(x - cardX(0)) < CARD.w / 2 && y > CARD.y && y < CARD.y + CARD.h) return 0;
-  return x < 170 && y < 90 ? 1 : -1;
+  for (let i = 0; i < CARDS; i++) if (Math.abs(x - cardX(i)) < CARD.w / 2 && y > CARD.y && y < CARD.y + CARD.h) return i;
+  return x < 170 && y < 90 ? CARDS : -1;
 }
-cv.addEventListener('mousemove', e => { const i = menuAt(e); if (i >= 0) sel = i; cv.style.cursor = i >= 0 || pickAt(e) >= 0 ? 'pointer' : ''; });
+cv.addEventListener('mousemove', e => { const i = menuAt(e), p = pickAt(e); if (i >= 0) sel = i; if (p >= 0 && p < CARDS) pickI = p; cv.style.cursor = i >= 0 || p >= 0 ? 'pointer' : ''; });
 cv.addEventListener('click', e => {
   if (paused && showControls) { showControls = false; return; }
   if (vsT != null) { fight(); return; }
-  if (picking) { const p = pickAt(e); if (p === 0) { versus(); cv.style.cursor = ''; } else if (p === 1) picking = false; return; }
+  if (picking) { const p = pickAt(e); if (p === CARDS) picking = false; else if (p >= 0) { pickI = p; versus(); cv.style.cursor = ''; } return; }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
 });
 
@@ -202,7 +216,7 @@ function grabLedge() {
   for (const side of [-1, 1]) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, gap = side < 0 ? lx - (P.x + P.w) : P.x - lx;
     if (gap >= 0 && gap < 24 && P.y > stage.y - 40 && P.y < stage.y + 16) {
-      Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: 1, airDodged: false }); // catching refreshes the double jump
+      Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
       return setState('ledgeGrab');
     }
   }
@@ -218,7 +232,7 @@ function ledgeInput(dir) {
     else if (keys.down || dir === -P.face) { P.ledge = 0; P.regrab = 0.4; setState('ledgeDrop'); }
   }
   else if (s === 'ledgeGetup' && P.f >= L.ledgeGetup.frames) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
-  else if (s === 'ledgeJump' && P.f >= L.ledgeJump.launchAt) { P.ledge = 0; P.regrab = 0.4; P.vy = -JUMP; P.jumps = 1; setState('air'); }
+  else if (s === 'ledgeJump' && P.f >= L.ledgeJump.launchAt) { P.ledge = 0; P.regrab = 0.4; P.vy = -JUMP; P.jumps = AIR_JUMPS(); setState('air'); }
   else if (s === 'ledgeRoll' && P.f >= L.ledgeRoll.frames) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
   else if (s === 'ledgeAttack' && P.f >= L.ledgeAttack.startup + L.ledgeAttack.active + L.ledgeAttack.endlag) { P.ledge = 0; P.ground = true; P.on = stage; P.jumps = 2; setState('idle'); }
   else if ((s === 'ledgeGetup' && P.f === 19) || (s === 'ledgeAttack' && P.f === 15) || (s === 'ledgeRoll' && P.f === 26)) puff(); // feet hit the stage
@@ -242,7 +256,7 @@ function tetherStep(dt) {
     const tx = lx - T.side * (P.w / 2 + g.x) - P.w / 2, ty = stage.y + g.air - P.h, dx = tx - P.x, dy = ty - P.y, d = Math.hypot(dx, dy), step = US.reel * dt;
     P.vx = P.vy = 0;
     if (d > step) { P.x += dx / d * step; P.y += dy / d * step; return; }
-    Object.assign(P, { x: tx, y: ty, ledge: T.side, face: -T.side, fastFall: false, jumps: 1, airDodged: false }); // catching refreshes the double jump
+    Object.assign(P, { x: tx, y: ty, ledge: T.side, face: -T.side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
     return setState('ledgeGrab');
   }
   if (T.link != null) return linkStep(T, ax, ay, dt);
@@ -314,7 +328,7 @@ function ko() {
 }
 function respawn() {
   if (--stocks <= 0) return gameOver();
-  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: 1, inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, toastT: null });
+  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, toastT: null });
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -404,9 +418,9 @@ function stepPlayer(dt) {
     }
     else if (keys.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
-    else if (downQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = 1; setState('drop'); } // through the platform
+    else if (downQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
-      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = 1; setState('air'); puff(); }
+      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = AIR_JUMPS(); setState('air'); puff(); }
     }
     else if (s === 'skid') { // braking slide; pressing the other way at any point turns it into a turnaround
       if (dir === -P.face) P.turn = true;
@@ -428,7 +442,7 @@ function stepPlayer(dt) {
     else if (dashQ || (s === 'dash' && dir !== P.face)) { P.face = dir; P.state = 'dash'; P.f = 0; } // turning mid-dash restarts it
     else if (s !== 'dash') { P.face = dir; setState('walk'); }
   } else {
-    if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, 1); setState('air'); s = 'air'; } // walked off an edge
+    if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, AIR_JUMPS()); setState('air'); s = 'air'; } // walked off an edge
     if (s in AIR) { // aerial: drift freely the whole time; free once it ends, or early like ground attacks
       const m = AIR[s], done = m.startup + m.active, rec = m.endlag * (P.landed ? HIT_REC : 1), end = done + rec;
       if (P.f >= end || (P.f >= end - rec * CANCEL && (jumpQ || attackQ)) || (P.landed && P.f >= done && jumpQ)) { setState('air'); s = 'air'; }
@@ -447,7 +461,7 @@ function stepPlayer(dt) {
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
     }
     else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
-    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -AIRJUMP; P.jumps = 0; P.fastFall = false; setState('djump'); }
+    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
     if (ffQ && P.vy > -150 && !stunned && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
@@ -472,6 +486,8 @@ function stepPlayer(dt) {
 
   P.vy += G * dt * (P.state === 'upSpecial' ? US.gravity : 1);
   P.vy = Math.min(P.vy, P.fastFall ? 1500 : 950);
+  P.glide = fighter.glide && keys.jump && P.vy > 0 && !P.fastFall && ['air', 'djump'].includes(P.state); // holding jump on the way down
+  if (P.glide) P.vy = Math.min(P.vy, fighter.glide);
   if (P.fastFall) P.vy = Math.max(P.vy, 1100);
   if (P.state === 'airDodge' && P.f <= AD.burst) { // the dodge burst ignores gravity and steering, then eases off
     const k = P.f === AD.burst ? 0.4 : 1;
@@ -637,6 +653,7 @@ function clawdPose() {
     case 'respawn': return { ...M.idle.anim(f % 120, 120), pad: 1, say: [R.respawn.say, Math.min(1, f / 10)] };
     case 'specialFall': return M.fall.anim(f % 40, 40); // helpless
   }
+  if (P.glide) return M.glide.anim(f % 48, 48);
   if (P.fastFall) return M.fastFall.anim(f % 24, 24);
   if (P.vy > 450) return M.fall.anim(f % 40, 40);
   // rising / floating: pick the jump-arc frame from vertical speed (stretched going up, tucked at the peak, reaching down)
@@ -702,12 +719,16 @@ function render(t) {
   for (const d of fx) drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
   if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawClawd(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
 
   // hud
   drawHealth();
   if (paused) drawPause(t);
 }
+
+// the fighter in play; anyone but Claw'd is drawn inside his effects (shield, cord, toasts…), since they use his moves,
+// stretched to its height so the shield sits on its head and toasts float above it
+const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.draw === drawClawd ? p : { ...p, sy: (p.sy ?? 1) * fighter.h / 50, body: () => fighter.draw(cx, b, p, face) }, face);
 
 // the up special's toasts ("connection refused" on a miss, "mcp connected" plugging into the bag): stay up TOAST frames whatever
 // Claw'd does next (landing, getting up…). P.toastMsg = OOPS index or [headline, detail], P.toastOk = success style
@@ -721,12 +742,12 @@ function powered(pose) {
   return { aura: P.think, sx: (pose.sx ?? 1) * g, sy: (pose.sy ?? 1) * g };
 }
 
-// the subagent: Claw'd at half size, popping in, running (or falling); once done just its toast, over where it poofed
+// the subagent: the fighter at half size, popping in, running (or falling); once done just its toast, over where it poofed
 function drawSub() {
   const S = DOWN_B.sub, bx = sub.x + sub.w / 2, by = sub.y + sub.h, fr = Math.floor(sub.t * 60);
   if (sub.done) return drawOops(bx, sub.y - 4, Math.min(1, sub.done / 0.1, (S.report - sub.done) / 0.2), DONE, true);
   const k = S.scale * Math.min(1, 0.4 + sub.t / 0.15), pose = sub.ground ? M.run.anim(fr % 24, 24) : M.fall.anim(fr % 40, 40);
-  ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; drawClawd(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
+  ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; fighter.draw(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
 }
 
 // the sack (clawd.js), shaking when hit, damage % floating above
@@ -743,7 +764,7 @@ function drawHealth() {
   const sh = P.hitT * 16, bx = W - 120 + (Math.random() - 0.5) * sh, by = 70 + (Math.random() - 0.5) * sh, R = 38; // shakes when hit
   ctx.fillStyle = dmgColor(P.dmg); ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.28); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ellipse(bx, by, R, R, 1.2);
-  ctx.save(); ctx.translate(bx, by); ctx.scale(0.8, 0.8); drawClawd(0, 5 * CV / 2); ctx.restore(); // centred inside
+  ctx.save(); ctx.translate(bx, by); ctx.scale(0.8, 0.8); fighter.draw(0, fighter.h / 2); ctx.restore(); // centred inside
   // damage %, overlapping the circle's bottom right, filled with the same colour
   ctx.font = '700 36px Caveat, cursive'; ctx.lineWidth = 3.5; ctx.textAlign = 'left'; // grows rightward, away from the circle
   const pct = Math.round(P.dmg) + '%', tx = bx + 12, ty = by + R + 6;
@@ -806,8 +827,8 @@ function drawVersus(s) {
   const left = [[0, 0], [W / 2 + cut, 0], [W / 2 - cut, H], [0, H]], right = [[W / 2 + cut, 0], [W, 0], [W, H], [W / 2 - cut, H]];
   ctx.save(); ctx.translate(-(1 - slide) * W / 2, 0);
   ctx.fillStyle = '#f3cdb9'; path(left); ctx.fill(); ctx.strokeStyle = CLAWD; hatch(left, 16, 0.35);
-  ctx.save(); ctx.translate(W * 0.27, H * 0.7); ctx.scale(3.4, 3.4); drawClawd(0, 0, { ...M.idle.anim(Math.floor(s * 60) % 120, 120), x: 0 }, 1); ctx.restore();
-  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 76px Caveat, cursive'; ctx.fillText("Claw'd", W * 0.27, H * 0.88);
+  ctx.save(); ctx.translate(W * 0.27, H * 0.7); ctx.scale(3.4, 3.4); fighter.draw(0, 0, idleAt(s), 1); ctx.restore();
+  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 76px Caveat, cursive'; ctx.fillText(fighter.name, W * 0.27, H * 0.88);
   ctx.restore();
   ctx.save(); ctx.translate((1 - slide) * W / 2, 0);
   ctx.fillStyle = INK; path(right); ctx.fill(); ctx.strokeStyle = PAPER; hatch(right, 16, 0.08);
@@ -827,8 +848,6 @@ function drawVersus(s) {
   ctx.textAlign = 'left';
 }
 
-// character select: Claw'd's card (the pick) beside fighters that are drawn but not playable until they have a moveset
-const SOON = [, ['Grok Bot', drawGrok], ['Wumpus', drawWumpus], ['Android', drawAndroid], ['Duo', drawDuo], ['Snoo', drawSnoo]];
 // each fighter's company logo, drawn in a 28px box from its top-left: Claude, xAI, Discord, Google, Duolingo, Reddit
 // the Claude and xAI marks, as SVG paths on a 24px grid (Simple Icons, LobeHub icons)
 const LOGO_CLAUDE = new Path2D('m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z');
@@ -862,24 +881,17 @@ const LOGOS = [
     ctx.fillStyle = '#ff4500'; for (const ex of [10.5, 17.5]) { ctx.beginPath(); ctx.arc(ex, 16, 1.5, 0, 6.28); ctx.fill(); }
   },
 ];
-const CARD = { w: 185, h: 300, y: 190 }, CARDS = SOON.length, cardX = i => W / 2 + (i - (CARDS - 1) / 2) * 200;
+// character select: a card per fighter, the highlighted one outlined in orange (← → / hover to move it)
+const CARD = { w: 185, h: 300, y: 190 }, CARDS = FIGHTERS.length, cardX = i => W / 2 + (i - (CARDS - 1) / 2) * 200;
 function drawSelect(t) {
   ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
   ctx.font = '700 72px Caveat, cursive'; ctx.fillText('choose your fighter', W / 2, 120);
   for (let i = 0; i < CARDS; i++) {
     const cx = cardX(i), x = cx - CARD.w / 2, y = CARD.y, r = [[x, y], [x + CARD.w, y], [x + CARD.w, y + CARD.h], [x, y + CARD.h]];
-    ctx.strokeStyle = ctx.fillStyle = INK;
-    if (SOON[i]) {
-      const [name, draw] = SOON[i];
-      ctx.globalAlpha = 0.75; ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill(); ctx.lineWidth = 2.4; poly(r, 1.2);
-      ctx.save(); ctx.globalAlpha = 1; ctx.translate(cx, y + 205); ctx.scale(2, 2); draw(0, 0, idleAt(t, i), -1); ctx.restore(); // opaque, or overlapping parts show through each other
-      ctx.fillStyle = INK; ctx.font = '700 44px Caveat, cursive'; ctx.fillText(name, cx, y + CARD.h - 42);
-      ctx.font = '600 22px Caveat, cursive'; ctx.fillText('coming soon', cx, y + CARD.h - 14); ctx.globalAlpha = 1; continue;
-    }
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
-    ctx.strokeStyle = CLAWD; ctx.lineWidth = 3.2; poly(r, 1.4);
-    ctx.save(); ctx.translate(cx, y + 205); ctx.scale(2, 2); drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }); ctx.restore();
-    ctx.fillStyle = INK; ctx.font = '700 44px Caveat, cursive'; ctx.fillText("Claw'd", cx, y + CARD.h - 30);
+    ctx.strokeStyle = i === pickI ? CLAWD : INK; ctx.lineWidth = i === pickI ? 3.2 : 2.4; poly(r, i === pickI ? 1.4 : 1.2);
+    ctx.save(); ctx.translate(cx, y + 205); ctx.scale(2, 2); FIGHTERS[i].draw(0, 0, idleAt(t, i), i ? -1 : 1); ctx.restore();
+    ctx.fillStyle = INK; ctx.font = '700 44px Caveat, cursive'; ctx.fillText(FIGHTERS[i].name, cx, y + CARD.h - 30);
   }
   LOGOS.forEach((logo, i) => { ctx.save(); ctx.translate(cardX(i) - CARD.w / 2 + 14, CARD.y + 14); logo(); ctx.restore(); });
   ctx.font = '600 32px Caveat, cursive'; ctx.textAlign = 'left'; ctx.fillText('‹ back', 40, 60);
