@@ -28,6 +28,11 @@ function ellipse(cx, cy, rx, ry, wob = 1.2) {
   }
   ctx.stroke();
 }
+// a rounded box centred on x, y: fill slightly off-register, then a crisp outline. r can be [tl, tr, br, bl] like roundRect
+function rbox(x, y, w, h, r, fill, lw = 2.4) {
+  ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x - w / 2 + j(1), y - h / 2 + j(1), w, h, r); ctx.fill();
+  ctx.lineWidth = lw; ctx.beginPath(); ctx.roundRect(x - w / 2 + j(0.4), y - h / 2 + j(0.4), w, h, r); ctx.stroke();
+}
 function hatch(pts, gap = 11, alpha = 0.45) {
   ctx.save(); path(pts); ctx.clip();
   ctx.globalAlpha = alpha; ctx.lineWidth = 1;
