@@ -64,15 +64,17 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
       ctx.restore();
     }
   }
-  if (pose.pin) {
-    const [x, y, sz, a = 1] = pose.pin;
-    ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y);
-    ctx.lineWidth = 2.2; ctx.strokeStyle = '#9aa0a6'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -1.1 * sz); ctx.stroke(); ctx.strokeStyle = INK; // needle
-    rbox(0, -1.15 * sz, 1.3 * sz, 0.28 * sz, 0.12 * sz, PIN, 2); // collar
-    rbox(0, -1.45 * sz, 0.7 * sz, 0.45 * sz, 0.12 * sz, PIN, 2); // stem
-    ctx.fillStyle = PIN; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(0, -1.85 * sz, 0.6 * sz, 0.32 * sz, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // head
-    ctx.restore();
-  }
+  if (pose.pin) drawPin(...pose.pin);
+  ctx.restore();
+}
+
+// a red pushpin with its point at (x, y), size sz (also drawn stuck in a target the down smash pinned, by the game)
+function drawPin(x, y, sz, a = 1) {
+  ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.2; ctx.strokeStyle = '#9aa0a6'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -1.1 * sz); ctx.stroke(); ctx.strokeStyle = INK; // needle
+  rbox(0, -1.15 * sz, 1.3 * sz, 0.28 * sz, 0.12 * sz, PIN, 2); // collar
+  rbox(0, -1.45 * sz, 0.7 * sz, 0.45 * sz, 0.12 * sz, PIN, 2); // stem
+  ctx.fillStyle = PIN; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(0, -1.85 * sz, 0.6 * sz, 0.32 * sz, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // head
   ctx.restore();
 }
 

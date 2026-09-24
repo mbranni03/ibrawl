@@ -195,9 +195,10 @@ const WUMPUS_MOVESET = {
       },
     },
     downSmash: { // Pin Message: rear up tall with a giant pushpin raised point-down (bigger with the charge), then drive it into the floor
-      // just in front. One close hit that pops the target up weakly, leaving it nearby
+      // just in front. One close hit that pops the target up weakly, leaving it nearby. Charged at all, it pins the target to the floor
+      // first: stuck in place (any hit frees it) for up to pin seconds, a quarter of that barely charged, then the pop
       input: 'down + heavy (X / K), hold to charge', startup: 13, active: 3, endlag: 24, damage: 13, kb: { base: 40, growth: 25, angle: 88 },
-      hitbox: { x: 22, y: -44, w: 30, h: 46 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 9,
+      hitbox: { x: 22, y: -44, w: 30, h: 46 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 9, pin: 1,
       anim: (f, n, c = 0) => {
         const rear = { y: -4, sx: 0.92, sy: 1.12, ears: 2.4, arms: 1.6, legs: legsAll(2, 2) };
         const stab = { x: 6, sx: 1.16, sy: 0.84, rot: 0.35, ears: 0.3, arms: 0.9, legs: [[-5, 0], [0, 0], [0, 0], [3, 0]] };

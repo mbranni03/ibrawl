@@ -100,7 +100,7 @@ ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(
 fighter = FIGHTER.clawd;
 // punching targets: the CPUs picked on the select screen as dummies, or the training bag if none. Each takes hits and knockback like a
 // fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
-const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
+const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false, pinT: 0 }; // held = in Claw'd's claws · pinned = on the end of the up special's cord · pinT = s left stuck under a move's pin
 const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
 let targets = [], foes = [], cpus = [], rolled = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled) · foes = their targets, kept for the hud once out of lives
 function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
@@ -546,6 +546,8 @@ function stepPlayer(dt) {
       b.hit = P.state; P.landed = true;
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
       hitBag(b, m.damage * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), m.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      const pin = m.pin && P.chg > 0 && clawdPose().pin; // charged at all: held where the pose's pin stuck in (a quarter as long … all of m.pin), the knockback saved for later
+      if (pin) Object.assign(b, { pinT: m.pin * (0.25 + 0.75 * P.chg / m.chargeFrames), pop: [b.vx, b.vy], vx: 0, vy: 0, pinAt: [cx + P.face * (ox + pin[0]), P.y + P.h + pin[1], pin[2]] });
     }
   }
   if (!m || P.f < m.startup) { for (const b of targets) b.hit = null; P.landed = false; }
@@ -578,6 +580,7 @@ function stepWorld(dt) {
 
   for (const b of targets) {
     b.hitT = Math.max(0, b.hitT - dt);
+    if (b.pinT > 0) { if ((b.pinT -= dt) > 0) continue; [b.vx, b.vy] = b.pop; } // pinned: stuck where it was hit, then popped free
     if (b.held || b.pinned) continue; // Claw'd places it
     b.vy = Math.min(b.vy + G * dt, 950);
     b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx), (b.ground ? 1800 : 250) * dt); // floor friction / air drag
@@ -607,7 +610,7 @@ function stepSub(dt) {
 // damage + knockback on a target, growing with its damage; bigger hits freeze longer
 function hitBag(b, dmg, kb, dir) {
   dmg *= THINK_POWER[P.think]; // only Claw'd hits targets, so its effort tier scales every hit
-  b.dmg += dmg; b.hitT = 0.3;
+  b.dmg += dmg; b.hitT = 0.3; b.pinT = 0; // a hit knocks it off a pin
   hitstop = Math.round(3 + dmg / 4);
   const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
   b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a);
@@ -778,8 +781,9 @@ function drawSub() {
 // the targets (dummies turned to face Claw'd), shaking when hit; only the training bag floats its damage % above it
 function drawTargets(t) {
   for (const b of targets) {
-    const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh, by = b.y + b.h;
+    const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh + (b.pinT > 0 ? Math.sin(t * 50) * 1.5 : 0), by = b.y + b.h; // pinned: struggling
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
+    if (b.pinT > 0) drawPin(...b.pinAt, Math.min(1, b.pinT * 5)); // Wumpus's pin, still stuck through it (fades as it pops free)
     if (b.id !== 'bag') continue;
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
     const pct = Math.round(b.dmg) + '%';
