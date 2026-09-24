@@ -14,12 +14,12 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<script src="sketch.js"></script>
-<script src="clawd.js"></script>
-<script src="grok.js"></script>
-<script src="wumpus.js"></script>
-<script src="android.js"></script>
-<script src="moveset.js"></script>
+<script src="src/sketch.js"></script>
+<script src="src/characters/clawd.js"></script>
+<script src="src/characters/grok.js"></script>
+<script src="src/characters/wumpus.js"></script>
+<script src="src/characters/android.js"></script>
+<script src="src/characters/clawd-moveset.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -104,7 +104,7 @@ function fight() { restart(); setPaused(false); } // leaves character select: Cl
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
-  else if (menu[i] === 'characters') location.href = 'moves.html'; // storyboard of every move
+  else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
   else if (menu[i] === 'play') picking = true; // character select first
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
