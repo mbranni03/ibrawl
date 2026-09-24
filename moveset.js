@@ -9,6 +9,8 @@
 //   damage  = % added to the target
 //   kb      = knockback: base amount, growth with damage %, launch angle in degrees
 //   hitbox  = { x, y, w, h } top-left offset from the character's bottom-center (up is negative y), facing right
+//   step    = optional forward push (px/s) the move gives the fighter on its first active frame
+//   projectile = optional thing thrown on the first active frame: { x, y } spawn point (like hitbox), speed px/s, life s
 
 // blend between keyframes [[frame, pose], …] with smoothstep easing; fields a key leaves out count as 0 (1 for sx/sy)
 function tween(f, keys) {
@@ -33,6 +35,35 @@ const legsAll = (dx, dy) => [[dx, dy], [dx, dy], [dx, dy], [dx, dy]];
 const TUCK = [[2, -3], [1, -3], [-1, -3], [-2, -3]]; // feet pulled up under the body
 const REACH = legsAll(0, 2);                         // feet stretched down for the floor
 const SQUAT = { sx: 1.2, sy: 0.72, arm: 2 };
+const CROUCH = { sx: 1.18, sy: 0.66, arm: 2 }; // the held crouch
+const AIRBORNE = { arm: -2, legs: TUCK };        // plain floating pose the aerials start and end on
+// a ground roll 120px toward d (1 forward, -1 back): crouch, curl into a ball, one full turn, uncurl still facing the same way
+// a sideways air dodge toward d (1 forward, -1 back): flinch, then streak off stretched along the way it's going, eyes squeezed shut
+const sideDodge = d => f => ({
+  ...tween(f, [
+    [0, AIRBORNE],
+    [2, { sx: 0.9, sy: 1.1, rot: -0.1 * d, arm: -2, legs: TUCK }],
+    [4, { x: 30 * d, sx: 1.3, sy: 0.78, rot: 0.12 * d, arm: d > 0 ? [-4, 2] : [2, -4], legs: legsAll(-6 * d, -2) }],
+    [14, { x: 130 * d, sx: 1.2, sy: 0.84, rot: 0.08 * d, arm: d > 0 ? [-3, 1] : [1, -3], legs: legsAll(-5 * d, -2) }],
+    [18, { x: 140 * d, sx: 0.95, sy: 1.05, rot: -0.04 * d, arm: -2, legs: TUCK }],
+    [28, { ...AIRBORNE, x: 144 * d }],
+  ]),
+  squint: f >= 3 && f < 18, speed: f >= 3 && f < 16 ? d * (1 - (f - 3) / 13) : 0, air: -40,
+});
+const roll = d => f => {
+  const p = tween(f, [
+    [0, {}],
+    [3, { sx: 1.12, sy: 0.82, rot: 0.1 * d, arm: 2 }],
+    [6, { x: 12 * d, sx: 0.86, sy: 0.86, arm: 2, legs: TUCK }],
+    [22, { x: 112 * d, sx: 0.86, sy: 0.86, arm: 2, legs: TUCK }],
+    [25, { x: 120 * d, sx: 1.14, sy: 0.82, arm: 2 }],
+    [30, { x: 120 * d }],
+  ]);
+  const e = Math.min(1, Math.max(0, (f - 4) / 18));
+  return { ...p, rot: d * Math.PI * 2 * e * e * (3 - 2 * e), [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null }; // kicked up opposite the travel
+};
+// hanging off the ledge: body just past the lip, claws hooked over the top, feet dangling
+const HANG = { x: -60, air: 40, sy: 1.08, arm: -20, reach: 3, legs: legsAll(0, 3) };
 
 // a whole jump for the preview: squat, spring, tuck at the peak, reach down, land squash. Only `air` differs by height.
 const hop = (height, n) => f => {
@@ -52,6 +83,12 @@ const hop = (height, n) => f => {
     puff: f >= up && f < up + 10 ? (f - up) / 10 : f >= down ? (f - down) / 7 : null,
   };
 };
+
+// neutral special pacing: third k of the effort bar fills in THINK_FILL[k] frames (each slower than the last), then locks in at a
+// checkpoint for THINK_HOLD. The tier reached is kept until KO; charging again resumes at thinkFrom(tier), right after that checkpoint
+const THINK_FILL = [60, 90, 135], THINK_HOLD = 16;
+const thinkFrom = tier => 6 + THINK_FILL.slice(0, tier).reduce((a, n) => a + n + THINK_HOLD, 0); // frame the tier's segment starts filling
+const THINK_POWER = [1, 1.1, 1.25, 1.5]; // damage + movement speed multiplier at each tier: low, medium, high, ultrathink
 
 const MOVESET = {
   movement: {
@@ -125,7 +162,7 @@ const MOVESET = {
     crouch: {
       input: 'down (grounded)', frames: 60,
       anim: f => { // drop low and wide, hold with a small breath, stand back up
-        const p = tween(f, [[0, {}], [5, { sx: 1.18, sy: 0.66, arm: 2 }], [50, { sx: 1.18, sy: 0.66, arm: 2 }], [60, {}]]);
+        const p = tween(f, [[0, {}], [5, CROUCH], [50, CROUCH], [60, {}]]);
         if (f > 5 && f < 50) p.sy += 0.012 * Math.sin((f - 5) / 45 * Math.PI * 4);
         return p;
       },
@@ -181,7 +218,7 @@ const MOVESET = {
       },
     },
     fastFall: {
-      input: 'down (airborne, falling)', frames: 24,
+      input: 'double-tap down (airborne, falling)', frames: 24,
       anim: (f, n) => { // stretched like a dart, arms up, legs pointed down, streaks overhead
         const p = f / n * Math.PI * 2;
         return {
@@ -215,21 +252,155 @@ const MOVESET = {
     },
   },
 
+  // the floor is the stage top and Claw'd faces the stage; x / air are measured from standing right at the lip.
+  // The game uses them as root motion while on the ledge (grab / hang / getup / jump wind-up), so they matter here.
   ledge: {
-    ledgeGrab:   { input: 'fall near ledge',      anim: null },
-    ledgeHang:   { input: 'none',                 anim: null },
-    ledgeGetup:  { input: 'toward stage',         anim: null },
-    ledgeJump:   { input: 'jump',                 anim: null },
-    ledgeRoll:   { input: 'S',                    anim: null },
-    ledgeDrop:   { input: 'away / down',          anim: null },
+    ledgeGrab: {
+      input: 'fall near ledge', frames: 10,
+      anim: f => tween(f, [ // catch it with both claws, weight drops and stretches, settle into the hang
+        [0, { x: -60, air: 28, sx: 0.9, sy: 1.14, arm: -24, legs: legsAll(0, 3) }],
+        [4, { x: -60, air: 46, sx: 1.06, sy: 0.94, arm: -18, reach: 3, legs: legsAll(0, 5) }],
+        [10, HANG],
+      ]),
+    },
+    ledgeHang: {
+      input: 'none', frames: 60,
+      anim: (f, n) => { // dangling: slow pendulum sway, legs trailing behind it
+        const s = Math.sin(f / n * Math.PI * 2);
+        return { ...HANG, rot: 0.04 * s, legs: [[-s, 3], [-s, 3.5], [-s, 3.5], [-s, 3]], blink: f >= 40 && f < 46 ? 1 : 0 };
+      },
+    },
+    ledgeGetup: {
+      input: 'toward stage / up', frames: 24,
+      anim: f => ({ // dip, haul up over the lip legs tucked, squash down onto the stage
+        ...tween(f, [
+          [0, HANG],
+          [5, { x: -60, air: 46, sx: 1.08, sy: 0.9, arm: -24, reach: 3, legs: legsAll(0, 2) }],
+          [11, { x: -46, air: -6, sx: 0.9, sy: 1.14, rot: 0.25, arm: -8, legs: TUCK }],
+          [16, { x: -14, air: -4, rot: 0.15, legs: TUCK }],
+          [19, { sx: 1.18, sy: 0.78, arm: 2 }],
+          [24, {}],
+        ]),
+        puff: f >= 19 ? (f - 19) / 5 : null,
+      }),
+    },
+    ledgeJump: {
+      input: 'jump', frames: 40, launchAt: 6, // the game hands off to the normal jump arc at launchAt
+      anim: f => tween(f, [ // pull down, spring straight up off the ledge, drift over the stage
+        [0, HANG],
+        [4, { x: -60, air: 48, sx: 1.1, sy: 0.88, arm: -22, reach: 3, legs: legsAll(0, 2) }],
+        [6, { x: -58, air: 40, sx: 0.86, sy: 1.22, arm: -4, legs: legsAll(0, 3) }],
+        [20, { x: -40, air: -90, sx: 1.04, sy: 0.96, arm: -2, legs: TUCK }],
+        [34, { x: -24, air: -40, sx: 0.94, sy: 1.08, arm: -3, legs: REACH }],
+        [40, { x: -20, air: -30, sx: 0.94, sy: 1.08, arm: -3, legs: REACH }],
+      ]),
+    },
+    ledgeRoll: {
+      input: 'dodge (Shift / Z)', frames: 36, intangible: [0, 36], // can't be hurt the whole way
+      anim: f => { // haul up, curl into a ball and roll a full turn onto the stage, pop up standing well inland
+        const p = tween(f, [
+          [0, HANG],
+          [5, { x: -60, air: 46, sx: 1.08, sy: 0.9, arm: -24, reach: 3, legs: legsAll(0, 2) }],
+          [10, { x: -40, air: -10, sx: 0.86, sy: 0.86, arm: 2, legs: TUCK }],
+          [25, { x: 72, air: -4, sx: 0.86, sy: 0.86, arm: 2, legs: TUCK }],
+          [28, { x: 84, sx: 1.16, sy: 0.8, arm: 2 }],
+          [36, { x: 90 }],
+        ]);
+        const e = Math.min(1, Math.max(0, (f - 9) / 17));
+        return { ...p, rot: Math.PI * 2 * e * e * (3 - 2 * e), puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+      },
+    },
+    ledgeAttack: { // haul up with the claw cocked, land in a crouch and sweep it low along the stage
+      input: 'light / heavy (on ledge)', startup: 16, active: 4, endlag: 16, damage: 7, kb: { base: 30, growth: 50, angle: 35 },
+      hitbox: { x: 30, y: -30, w: 52, h: 28 },
+      anim: f => ({
+        ...tween(f, [
+          [0, HANG],
+          [4, { x: -60, air: 46, sx: 1.08, sy: 0.9, arm: -24, reach: 3, legs: legsAll(0, 2) }],
+          [9, { x: -44, air: -8, sx: 0.9, sy: 1.14, rot: 0.25, arm: -8, legs: TUCK }],
+          [13, { x: -16, air: -4, rot: -0.1, reach: -4, arm: [0, -12], legs: TUCK }],
+          [15, { x: -6, sx: 1.14, sy: 0.84, rot: -0.12, reach: -5, arm: [2, -14] }],
+          [16, { x: 4, sx: 1.2, sy: 0.84, rot: 0.14, reach: 26, arm: [-2, 5], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+          [20, { x: 4, sx: 1.18, sy: 0.85, rot: 0.13, reach: 24, arm: [-2, 5], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+          [28, { x: 2, sx: 1.05, sy: 0.96, rot: 0.04, reach: 6, arm: [-1, 1], legs: [[-3, 0], [-3, 0], [-1, 0], [1, 0]] }],
+          [36, {}],
+        ]),
+        speed: f >= 16 && f < 20 ? 0.6 : 0,
+        puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+      }),
+    },
+    ledgeDrop: {
+      input: 'away / down', frames: 24,
+      anim: f => tween(f, [ // let go: arms stay up a moment, then slide down the wall
+        [0, HANG],
+        [4, { x: -62, air: 50, sx: 0.92, sy: 1.1, arm: -10, legs: legsAll(0, 3) }],
+        [16, { x: -66, air: 110, sx: 0.96, sy: 1.04, arm: -4, legs: legsAll(0, 2) }],
+        [24, { x: -66, air: 110, sx: 0.96, sy: 1.04, arm: -4, legs: legsAll(0, 2) }],
+      ]),
+    },
   },
 
   defense: {
-    shield:      { input: 'hold S',               anim: null },
-    spotDodge:   { input: 'S + down',             anim: null },
-    rollForward: { input: 'S + forward',          anim: null },
-    rollBack:    { input: 'S + back',             anim: null },
-    airDodge:    { input: 'S (airborne)',         anim: null },
+    shield: { // hold: crouch and hold a little terminal over its head like a roof (in the game it shrinks as the shield wears down)
+      input: 'hold I', frames: 60,
+      anim: f => {
+        const brace = { sx: 1.14, sy: 0.72, arm: -14, legs: [[-2, 0], [-1, 0], [1, 0], [2, 0]], shield: 1 };
+        const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing behind it
+        return { ...p, squint: f >= 3 && f < 52, eyeY: 4 * (p.shield || 0), wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // preview wears it out over the hold (the game uses the real shield health) // eyes squeezed shut > < and ducked under the terminal, bracing for the hit
+      },
+    },
+    shieldBreak: { // the shield ran out: the terminal shatters, Claw'd pops up and lands dizzy (mash any key to shake it off sooner)
+      input: 'shield runs out', frames: 150, pop: 560,
+      anim: f => {
+        const p = tween(f, [
+          [0, { sx: 0.9, sy: 1.12, arm: -8, blink: 1, legs: legsAll(0, 2) }],
+          [14, { sx: 0.96, sy: 1.05, arm: -4, blink: 1, legs: TUCK }],
+          [28, { sx: 0.94, sy: 1.08, arm: -2, legs: REACH }],
+          [32, { sx: 1.16, sy: 0.82, arm: 3 }],
+          [40, { sx: 1.04, sy: 0.94, arm: 3 }],
+          [140, { sx: 1.04, sy: 0.94, arm: 3 }],
+          [150, {}],
+        ]);
+        const dizzy = f >= 32 && f < 144;
+        return {
+          ...p, air: f < 28 ? -60 * Math.sin(Math.PI * f / 28) : 0, // preview-only pop; the game launches it for real
+          rot: dizzy ? 0.1 * Math.sin((f - 32) / 9) : 0, dizzy: dizzy ? 0.01 + (f - 32) / 40 : 0,
+          shatter: f < 30 ? f / 30 : null, puff: f >= 28 && f < 34 ? (f - 28) / 6 : null,
+          oops: Math.min(1, Math.max(0, Math.min((f - 32) / 6, (110 - f) / 10))), // "context window full"-style toast for a bit after landing
+        };
+      },
+    },
+    // dodges: intangible = [first, last) frames nothing can hurt Claw'd; a roll's x is real movement in the game (root motion)
+    spotDodge: {
+      input: 'dodge (Shift / Z), or down while shielding', frames: 26, intangible: [3, 18],
+      anim: f => tween(f, [ // quick squash, then shrink back "into the page" with eyes shut, and pop out again
+        [0, {}],
+        [3, { sx: 1.15, sy: 0.8, arm: 3 }],
+        [6, { sx: 0.8, sy: 0.84, blink: 1, arm: -2 }],
+        [16, { sx: 0.8, sy: 0.84, blink: 1, arm: -2 }],
+        [21, { sx: 1.1, sy: 0.9, arm: 1 }],
+        [26, {}],
+      ]),
+    },
+    rollForward: { input: 'dodge + forward, or forward while shielding', frames: 30, intangible: [4, 20], anim: roll(1) },
+    rollBack:    { input: 'dodge + back, or back while shielding', frames: 30, intangible: [4, 20], anim: roll(-1) },
+    airDodgeForward: { input: 'dodge + forward (airborne)', frames: 28, anim: sideDodge(1) }, // the game swaps these in for sideways air dodges
+    airDodgeBack:    { input: 'dodge + back (airborne)',    frames: 28, anim: sideDodge(-1) },
+    airDodge: { // once per airtime: a burst of speed toward the held direction (none = stall in place), then free to act
+      input: 'dodge (airborne) + any direction', frames: 28, intangible: [2, 18], speed: 720, burst: 12, landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [2, { sx: 1.1, sy: 0.9, arm: 3, legs: TUCK }],
+          [5, { sx: 0.8, sy: 0.84, blink: 1, arm: -2, legs: TUCK }],
+          [18, { sx: 0.8, sy: 0.84, blink: 1, arm: -2, legs: TUCK }],
+          [24, { sx: 1.05, sy: 0.97, arm: -2, legs: TUCK }],
+          [28, AIRBORNE],
+        ]),
+        air: -40,
+      }),
+    },
   },
 
   // getting hit
@@ -244,37 +415,239 @@ const MOVESET = {
   },
 
   groundAttacks: {
-    jab1:        { input: 'A',                        anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    jab2:        { input: 'A (after jab1)',           anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    jab3:        { input: 'A (after jab2)',           anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    dashAttack:  { input: 'A while running',          anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    forwardTilt: { input: 'forward + A',              anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    upTilt:      { input: 'up + A',                   anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    downTilt:    { input: 'down + A',                 anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
+    jab1: { // quick front-claw poke: tiny wind-up, snap out on frame 3, feet stay planted
+      input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
+      hitbox: { x: 36, y: -34, w: 30, h: 18 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [2, { x: -2, sx: 1.04, sy: 0.97, rot: -0.06, reach: -3, arm: [-1, 1], legs: legsAll(2, 0) }],
+          [3, { x: 4, sx: 1.08, sy: 0.95, rot: 0.1, reach: 20, arm: [2, 0], legs: [[-4, 0], [-4, 0], [0, 0], [2, 0]] }],
+          [6, { x: 4, sx: 1.06, sy: 0.96, rot: 0.09, reach: 18, arm: [2, 0], legs: [[-4, 0], [-4, 0], [0, 0], [2, 0]] }],
+          [11, { x: 2, sx: 1.02, sy: 0.99, rot: 0.03, reach: 4, arm: [1, 0], legs: [[-2, 0], [-2, 0], [0, 0], [1, 0]] }],
+          [19, {}],
+        ]),
+        speed: f >= 3 && f < 6 ? 0.4 : 0,
+      }),
+    },
+    jab2: { // rising swipe: the claw scoops out and up, body stretching tall with it
+      input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
+      hitbox: { x: 32, y: -52, w: 28, h: 28 },
+      anim: f => tween(f, [
+        [0, {}],
+        [2, { x: -1, sx: 0.98, sy: 1.03, rot: 0.03, reach: 2, arm: [0, 4], legs: legsAll(1, 0) }],
+        [3, { x: 3, y: -2, sx: 0.96, sy: 1.07, rot: -0.05, reach: 16, arm: [2, -10], legs: legsAll(-3, 2) }],
+        [6, { x: 3, y: -2, sx: 0.97, sy: 1.06, rot: -0.06, reach: 12, arm: [2, -15], legs: legsAll(-3, 2) }],
+        [12, { x: 1, sx: 0.99, sy: 1.01, rot: -0.02, reach: 3, arm: [1, -4], legs: legsAll(-1, 0) }],
+        [21, {}],
+      ]),
+    },
+    jab3: { // finisher: coil back, then throw the whole body forward behind a full-length claw
+      input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
+      hitbox: { x: 30, y: -40, w: 46, h: 34 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -5, sx: 1.12, sy: 0.86, rot: -0.12, reach: -4, arm: [-2, 3], legs: legsAll(5, 0) }],
+          [5, { x: 14, y: -2, sx: 1.2, sy: 0.86, rot: 0.2, reach: 26, arm: [-4, 0], legs: [[-12, 2], [-10, 2], [-2, 2], [2, 2]] }],
+          [8, { x: 15, y: -2, sx: 1.18, sy: 0.87, rot: 0.19, reach: 24, arm: [-4, 0], legs: [[-12, 2], [-10, 2], [-2, 2], [2, 2]] }],
+          [16, { x: 10, sx: 1.06, sy: 0.95, rot: 0.07, reach: 8, arm: [-1, 0], legs: [[-6, 0], [-5, 0], [-1, 0], [1, 0]] }],
+          [32, {}],
+        ]),
+        speed: f >= 5 && f < 12 ? 1 - (f - 5) / 7 : 0,
+        dust: f >= 5 && f < 17 ? (f - 5) / 12 : null,
+      }),
+    },
+    dashAttack: { // claw-first lunge out of a run: hop low and long, slide on the momentum
+      input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
+      hitbox: { x: 22, y: -40, w: 50, h: 36 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -3, sx: 1.06, sy: 0.92, rot: -0.08, reach: -3, arm: [0, 3], legs: legsAll(3, 0) }],
+          [6, { x: 10, y: -4, sx: 1.25, sy: 0.8, rot: 0.1, reach: 22, arm: [-4, 1], legs: [[-10, 3], [-8, 3], [2, 3], [5, 2]] }],
+          [14, { x: 12, y: -2, sx: 1.22, sy: 0.82, rot: 0.08, reach: 20, arm: [-4, 1], legs: [[-10, 2], [-8, 2], [2, 2], [5, 1]] }],
+          [22, { x: 6, sx: 1.08, sy: 0.92, rot: 0.03, reach: 6, arm: [-1, 0], legs: [[-4, 0], [-3, 0], [0, 0], [1, 0]] }],
+          [34, {}],
+        ]),
+        speed: f >= 6 && f < 20 ? 1 - (f - 6) / 14 : 0,
+        dust: f >= 6 && f < 18 ? (f - 6) / 12 : null,
+      }),
+    },
+    forwardTilt: { // step in behind a long straight claw: jab's reach and then some
+      input: 'forward + light', step: 260, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
+      hitbox: { x: 36, y: -38, w: 42, h: 22 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [5, { x: -4, sx: 0.96, sy: 1.04, rot: -0.1, reach: -4, arm: [1, -5], legs: legsAll(4, 0) }],
+          [6, { x: 8, sx: 1.14, sy: 0.92, rot: 0.08, reach: 26, arm: [-3, 0], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+          [9, { x: 8, sx: 1.12, sy: 0.93, rot: 0.07, reach: 24, arm: [-3, 0], legs: [[-8, 0], [-8, 0], [-2, 0], [3, 0]] }],
+          [16, { x: 4, sx: 1.04, sy: 0.98, rot: 0.03, reach: 8, arm: [-1, 0], legs: [[-4, 0], [-4, 0], [-1, 0], [1, 0]] }],
+          [27, {}],
+        ]),
+        speed: f >= 6 && f < 10 ? 0.5 : 0,
+      }),
+    },
+    upTilt: { // dip, then spring tall and throw the claw straight up past the head
+      input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
+      hitbox: { x: 16, y: -90, w: 40, h: 40 },
+      anim: f => tween(f, [
+        [0, {}],
+        [4, { sx: 1.12, sy: 0.84, rot: 0.06, arm: [2, 6] }],
+        [5, { y: -4, sx: 0.9, sy: 1.22, rot: -0.12, reach: 5, arm: [0, -28], legs: legsAll(0, 4) }],
+        [9, { y: -3, sx: 0.92, sy: 1.2, rot: -0.11, reach: 4, arm: [0, -30], legs: legsAll(0, 3) }],
+        [16, { sx: 0.98, sy: 1.05, rot: -0.04, reach: 2, arm: [0, -8] }],
+        [25, {}],
+      ]),
+    },
+    downTilt: { // from the crouch: a quick low claw poke along the floor, then back down
+      input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
+      hitbox: { x: 38, y: -20, w: 40, h: 18 },
+      anim: f => tween(f, [
+        [0, CROUCH],
+        [4, { ...CROUCH, x: -2, rot: -0.04, reach: -3, arm: [2, 0] }],
+        [5, { ...CROUCH, x: 5, sx: 1.24, rot: 0.06, reach: 26, arm: [2, 6], legs: [[-5, 0], [-5, 0], [0, 0], [2, 0]] }],
+        [8, { ...CROUCH, x: 5, sx: 1.23, rot: 0.06, reach: 24, arm: [2, 6], legs: [[-5, 0], [-5, 0], [0, 0], [2, 0]] }],
+        [14, { ...CROUCH, x: 2, reach: 6, arm: [2, 3], legs: [[-2, 0], [-2, 0], [0, 0], [1, 0]] }],
+        [20, CROUCH],
+      ]),
+    },
     getupAttack: { input: 'A (from knockdown)',       anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
-    ledgeAttack: { input: 'A (on ledge)',             anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
   },
 
   // hold the button to charge; chargeFrames = max hold, chargeMult = damage multiplier at full charge
   smashAttacks: {
-    forwardSmash:{ input: 'hard forward + A (hold)',  anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, chargeFrames: null, chargeMult: null },
+    forwardSmash: { // heavy: rear way back with the claw cocked high (charge holds here, frame 10), then chop forward with the whole body
+      input: 'heavy (X / K), hold to charge', step: 320, startup: 14, active: 4, endlag: 30, damage: 14, kb: { base: 30, growth: 100, angle: 38 },
+      hitbox: { x: 34, y: -38, w: 62, h: 38 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [10, { x: -8, sx: 0.94, sy: 1.08, rot: -0.22, reach: -5, arm: [2, -12], legs: legsAll(8, 0) }],
+          [13, { x: -9, sx: 0.93, sy: 1.09, rot: -0.24, reach: -6, arm: [2, -13], legs: legsAll(9, 0) }],
+          [14, { x: 18, y: -2, sx: 1.26, sy: 0.82, rot: 0.18, reach: 30, arm: [-5, -2], legs: [[-16, 2], [-14, 2], [-4, 2], [2, 2]] }],
+          [18, { x: 19, y: -2, sx: 1.24, sy: 0.83, rot: 0.17, reach: 28, arm: [-5, -2], legs: [[-16, 2], [-14, 2], [-4, 2], [2, 2]] }],
+          [30, { x: 14, sx: 1.1, sy: 0.92, rot: 0.08, reach: 10, arm: [-2, 0], legs: [[-10, 0], [-8, 0], [-2, 0], [1, 0]] }],
+          [48, {}],
+        ]),
+        speed: f >= 14 && f < 24 ? 1 - (f - 14) / 10 : 0,
+        dust: f >= 14 && f < 26 ? (f - 14) / 12 : null,
+      }),
+    },
     upSmash:     { input: 'hard up + A (hold)',       anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, chargeFrames: null, chargeMult: null },
     downSmash:   { input: 'hard down + A (hold)',     anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, chargeFrames: null, chargeMult: null },
   },
 
   // landingLag = frames stuck on the ground if you land mid-attack
   aerials: {
-    neutralAir:  { input: 'A (airborne)',             anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, landingLag: null },
-    forwardAir:  { input: 'forward + A (airborne)',   anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, landingLag: null },
-    backAir:     { input: 'back + A (airborne)',      anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, landingLag: null },
-    upAir:       { input: 'up + A (airborne)',        anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, landingLag: null },
-    downAir:     { input: 'down + A (airborne)',      anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, landingLag: null },
+    // aerials are drawn with a preview-only air: -40 so they float in the viewer; frame 0 / the last frame = the plain airborne pose
+    neutralAir: { // tuck and spin a full turn with both claws out: hits all around
+      input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
+      hitbox: { x: -46, y: -56, w: 92, h: 62 }, landingLag: 8,
+      anim: f => {
+        const p = tween(f, [[0, AIRBORNE], [3, { sx: 0.92, sy: 1.08, rot: -0.25, arm: [-4, -4], legs: TUCK }],
+          [4, { sx: 1.08, sy: 0.94, reach: 8, legs: TUCK }], [13, { sx: 1.08, sy: 0.94, reach: 8, legs: TUCK }], [26, AIRBORNE]]);
+        const e = 1 - (1 - Math.min(1, Math.max(0, (f - 4) / 9))) ** 2; // spin eases out
+        return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40 };
+      },
+    },
+    forwardAir: { // rear back with the claw high, then chop it down in front
+      input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
+      hitbox: { x: 30, y: -44, w: 46, h: 46 }, landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [6, { x: -3, sx: 0.94, sy: 1.08, rot: -0.28, reach: 0, arm: [0, -14], legs: TUCK }],
+          [7, { x: 5, sx: 1.14, sy: 0.9, rot: 0.32, reach: 22, arm: [-3, 6], legs: legsAll(-3, -2) }],
+          [11, { x: 5, sx: 1.12, sy: 0.91, rot: 0.3, reach: 20, arm: [-3, 6], legs: legsAll(-3, -2) }],
+          [18, { x: 2, sx: 1.04, sy: 0.97, rot: 0.1, reach: 6, arm: [-2, 2], legs: TUCK }],
+          [27, AIRBORNE],
+        ]),
+        speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
+      }),
+    },
+    backAir: { // tip forward and mule-kick both back legs out behind
+      input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
+      hitbox: { x: -68, y: -36, w: 40, h: 32 }, landingLag: 9,
+      anim: f => tween(f, [
+        [0, { ...AIRBORNE, air: -40 }],
+        [5, { x: 3, sx: 0.94, sy: 1.06, rot: -0.1, arm: [-2, -2], legs: [[4, -4], [3, -4], [-1, -3], [-2, -3]], air: -40 }],
+        [6, { x: -6, sx: 1.1, sy: 0.92, rot: 0.34, arm: [-5, 2], legs: [[-18, -4], [-15, -2], [-1, -3], [-2, -3]], air: -40 }],
+        [10, { x: -6, sx: 1.09, sy: 0.93, rot: 0.32, arm: [-5, 2], legs: [[-17, -4], [-14, -2], [-1, -3], [-2, -3]], air: -40 }],
+        [16, { x: -2, sx: 1.03, sy: 0.98, rot: 0.1, arm: [-3, 0], legs: [[-4, -3], [-3, -3], [-1, -3], [-2, -3]], air: -40 }],
+        [24, { ...AIRBORNE, air: -40 }],
+      ]),
+    },
+    upAir: { // stretch tall and swipe both claws up over the head
+      input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
+      hitbox: { x: -34, y: -98, w: 70, h: 48 }, landingLag: 7,
+      anim: f => tween(f, [
+        [0, { ...AIRBORNE, air: -40 }],
+        [4, { sx: 1.12, sy: 0.86, rot: 0.08, arm: [4, 4], legs: TUCK, air: -40 }],
+        [5, { y: -4, sx: 0.88, sy: 1.22, rot: -0.14, reach: 4, arm: [-22, -30], legs: legsAll(0, 4), air: -40 }],
+        [10, { y: -3, sx: 0.9, sy: 1.2, rot: -0.12, reach: 3, arm: [-24, -30], legs: legsAll(0, 3), air: -40 }],
+        [17, { sx: 0.98, sy: 1.05, rot: -0.04, arm: [-6, -8], legs: TUCK, air: -40 }],
+        [24, { ...AIRBORNE, air: -40 }],
+      ]),
+    },
+    downAir: { // stomp: claws up, all four feet driven straight down. Spikes
+      input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
+      hitbox: { x: -34, y: -8, w: 68, h: 28 }, landingLag: 14,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [7, { y: -6, sx: 1.12, sy: 0.84, arm: [-8, -8], legs: legsAll(0, -5) }],
+          [8, { y: -2, sx: 0.92, sy: 1.1, arm: [-10, -10], legs: [[-2, 13], [-1, 14], [1, 14], [2, 13]] }],
+          [14, { y: -2, sx: 0.93, sy: 1.09, arm: [-10, -10], legs: [[-2, 12], [-1, 13], [1, 13], [2, 12]] }],
+          [22, { sx: 1, sy: 1, arm: [-4, -4], legs: legsAll(0, 3) }],
+          [32, AIRBORNE],
+        ]),
+        fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40,
+      }),
+    },
   },
 
   // usable on the ground and in the air
   specials: {
-    neutralSpecial: { input: 'B',                     anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'usually a projectile' },
-    sideSpecial:    { input: 'forward/back + B',      anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'usually a lunge' },
+    neutralSpecial: { // think harder: clench up, eyes squeezed > <, and climb the effort tiers low → medium → high → ultrathink.
+      // Each segment of the bar fills (THINK_FILL), then locks in at a checkpoint for THINK_HOLD frames: Claw'd pops, grows a little,
+      // shakes harder and gains an aura shell for every tier reached (pose.aura = tier, pose.burst = the tier-up ring)
+      input: 'B (V / L), no direction · hold to charge, ground or air', frames: 380, chargeFrames: thinkFrom(3) - THINK_HOLD, power: THINK_POWER, // frames of holding to reach ultrathink
+      anim: f => {
+        const at = k => thinkFrom(k) - THINK_HOLD, sh = f % 4 < 2 ? 1 : -1; // at = frame tier k is reached · which way this frame shakes
+        const tier = [1, 2, 3].filter(k => f >= at(k)).length;
+        const e = tier >= 3 ? 1 : (tier + Math.min(1, Math.max(0, (f - thinkFrom(tier)) / THINK_FILL[tier]))) / 3; // bar fill, 0 … 1 across the three segments
+        const since = tier ? f - at(tier) : Infinity, pop = since < 12 ? 1 - since / 12 : 0; // 1 → 0 just after a tier-up
+        const grow = 1 + 0.05 * tier;
+        const p = tween(Math.min(f, 6), [[0, {}], [6, { sx: 1.12, sy: 0.84, arm: 3, reach: -2, legs: [[-3, 0], [-2, 0], [2, 0], [3, 0]] }]]);
+        if (f >= 6) Object.assign(p, {
+          x: sh * (0.5 + 0.7 * tier + 0.5 * e),
+          sx: 1.12 * grow * (1 - 0.06 * pop), sy: (0.84 + 0.04 * e) * grow * (1 + 0.14 * pop), // swells a bit per tier, stretches up on the pop
+          arm: 3 - 3 * tier - 4 * pop, // arms flex higher each tier, thrown up on the pop
+          effort: e, aura: tier, burst: since < 16 ? since / 16 : null,
+        });
+        return { ...p, squint: f >= 3 };
+      },
+    },
+    sideSpecial: { // pull out a Claude spark, wind it up over the head, and hurl it forward spinning
+      input: 'B (V / L) + a direction, ground or air · turns that way first', startup: 12, active: 2, endlag: 20, damage: 6, kb: { base: 20, growth: 45, angle: 30 },
+      hitbox: null, landingLag: 10, projectile: { x: 52, y: -38, speed: 760, life: 0.75 },
+      anim: f => {
+        const p = tween(f, [
+          [0, {}],
+          [3, { x: -1, sx: 1.04, sy: 0.97, arm: [0, -4], legs: legsAll(1, 0) }],
+          [10, { x: -7, sx: 0.94, sy: 1.08, rot: -0.24, reach: -3, arm: [3, -16], legs: legsAll(7, 0) }],
+          [11, { x: -8, sx: 0.93, sy: 1.09, rot: -0.26, reach: -4, arm: [3, -17], legs: legsAll(8, 0) }],
+          [12, { x: 10, y: -2, sx: 1.18, sy: 0.88, rot: 0.22, reach: 24, arm: [-4, 2], legs: [[-12, 2], [-10, 2], [-2, 2], [2, 2]] }],
+          [15, { x: 10, y: -2, sx: 1.16, sy: 0.89, rot: 0.21, reach: 22, arm: [-4, 2], legs: [[-12, 2], [-10, 2], [-2, 2], [2, 2]] }],
+          [22, { x: 5, sx: 1.05, sy: 0.96, rot: 0.08, reach: 8, arm: [-1, 0], legs: [[-6, 0], [-5, 0], [-1, 0], [1, 0]] }],
+          [34, {}],
+        ]);
+        if (f >= 1 && f < 12) { const k = Math.min(1, f / 10); p.spark = [46 - 14 * k, -30 - 30 * k, f * 0.35]; } // rides the claw up, spinning
+        return p;
+      },
+    },
     upSpecial:      { input: 'up + B',                anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'recovery move; helpless after' },
     downSpecial:    { input: 'down + B',              anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null, notes: 'counter / reflector / etc.' },
   },

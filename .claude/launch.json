@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "ibrawl", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8123"], "port": 8123 }
+    { "name": "ibrawl", "runtimeExecutable": "sh", "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8123}"], "port": 8123, "autoPort": true }
   ]
 }

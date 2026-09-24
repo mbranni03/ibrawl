@@ -132,7 +132,10 @@ function drawFigure(fr) {
   }
   drawClawdFx(0, 0, pose);
   drawClawd(0, air, pose);
+  const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
+  if (pr && st >= 0) drawSpark(pr.x + pr.speed * st, air + pr.y, SPARK_R, st * 14);
   if (!$('boxes').checked) return;
+  if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - SPARK_R, y: air + pr.y - SPARK_R, w: 2 * SPARK_R, h: 2 * SPARK_R }, BOX, 'rgba(224,82,58,0.18)');
   const hurt = clawdHurtbox(pose); hurt.y += air;
   drawRect(hurt, '#c9a227', 'rgba(230,190,60,0.22)');
   if (phaseAt(fr) === 'active' && move.hitbox) { // hitbox is relative to the fighter's bottom-center, facing right
@@ -144,11 +147,13 @@ function drawFigure(fr) {
 function renderBoard() {
   const main = ctx; ctx = bctx;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(boardPaper, 0, 0);
-  const frames = panelFrames(), fi = Math.floor(f), { move } = list[cur];
+  const frames = panelFrames(), fi = Math.floor(f), { move, group } = list[cur];
   // fit the move's whole height range (jumps above, drops below the floor) into the panel
   const airs = frames.map(fr => move.anim(fr, total).air || 0);
-  const hi = 55 - Math.min(0, ...airs), lo = Math.max(0, ...airs);
-  const s = Math.min(1.2, (PH - 44) / (hi + lo)), floorY = 34 + hi * s;
+  const hi = (frames.some(fr => move.anim(fr, total).effort != null) ? 130 : 55) - Math.min(0, ...airs), lo = Math.max(0, ...airs); // room for the effort bar overhead
+  // …and its sideways travel (rolls, lunges), centring the panel on it
+  const xs = frames.map(fr => move.anim(fr, total).x || 0), x0 = Math.min(0, ...xs), x1 = Math.max(0, ...xs);
+  const s = Math.min(1.2, (PH - 44) / (hi + lo), (PW - 24) / (x1 - x0 + 100)), floorY = 34 + hi * s, ox = PW / 2 - (x0 + x1) / 2 * s;
   frames.forEach((fr, i) => {
     const now = fi >= fr && (i === frames.length - 1 || fi < frames[i + 1]);
     ctx.setTransform(dpr, 0, 0, dpr, (i % COLS) * PW * dpr, Math.floor(i / COLS) * PH * dpr);
@@ -156,8 +161,8 @@ function renderBoard() {
     ctx.strokeStyle = now ? BOX : INK; ctx.lineWidth = now ? 2.4 : 1.2;
     poly([[6, 6], [PW - 6, 6], [PW - 6, PH - 6], [6, PH - 6]], 0.8);
     ctx.save(); ctx.beginPath(); ctx.rect(7, 7, PW - 14, PH - 14); ctx.clip();
-    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(22, floorY, PW - 22, floorY, 0.6, 1);
-    ctx.translate(PW / 2, floorY); ctx.scale(s, s); drawFigure(fr); ctx.restore();
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(group === 'ledge' ? ox : 22, floorY, PW - 22, floorY, 0.6, 1);
+    ctx.translate(ox, floorY); ctx.scale(s, s); drawFigure(fr); ctx.restore();
     ctx.font = '600 18px Caveat, cursive'; ctx.fillStyle = INK; ctx.textAlign = 'left';
     ctx.fillText(`f${fr + 1}`, 14, 26);
     const ph = phaseAt(fr);
@@ -178,11 +183,11 @@ function render(t) {
   ctx.setTransform(dpr * SCALE, 0, 0, dpr * SCALE, 0, 0);
   ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = INK;
 
-  // little floor
-  hatch([[100, GROUND], [380, GROUND], [365, GROUND + 20], [115, GROUND + 20]], 8, 0.3);
-  ctx.lineWidth = 2; line(92, GROUND, 388, GROUND, 1.2);
+  // little floor; for ledge moves it stops at the lip Claw'd hangs from
+  const { move, group } = list[cur], lip = group === 'ledge' ? VW / 2 : null;
+  hatch([[lip ?? 100, GROUND], [380, GROUND], [365, GROUND + 20], [lip ?? 115, GROUND + 20]], 8, 0.3);
+  ctx.lineWidth = 2; line(lip ?? 92, GROUND, 388, GROUND, 1.2);
 
-  const { move } = list[cur];
   ctx.save(); ctx.translate(VW / 2, GROUND); drawFigure(Math.floor(f)); ctx.restore();
 
   if (!move.anim) {
