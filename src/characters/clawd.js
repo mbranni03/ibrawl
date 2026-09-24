@@ -19,6 +19,7 @@
 //   aura = effort tier 0 … 3: glow, one halo per tier, rising sparks · burst = 0 … 1 progress of a tier-up ring
 //   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet
 //   blast = [0 … 1, angle] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was
+//   body = () => draws another fighter in place of Claw'd's body, legs and eyes (every effect above still drawn around it)
 const CLAWD = '#d97757';
 const CU = 5, CV = 10; // one grid cell, px (terminal half-cells are twice as tall as wide)
 
@@ -67,42 +68,45 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
     ctx.restore();
   }
 
+  if (pose.body) pose.body(); // another fighter doing Claw'd's moves: its own body instead of his, inside all his effects
   ctx.save();
   ctx.translate(mx, my); ctx.rotate((pose.rot || 0) * face); ctx.translate(-mx, -my);
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
 
-  // legs (behind the body)
-  [4, 6, 11, 13].forEach((lx, i) => {
-    const [dx, dy] = pose.legs?.[face > 0 ? i : 3 - i] || [0, 0], fx = dx * face;
-    const leg = [at(lx, 3.8), at(lx + 1, 3.8), [at(lx + 1, 5)[0] + fx, at(0, 5)[1] + dy], [at(lx, 5)[0] + fx, at(0, 5)[1] + dy]];
-    ctx.fillStyle = CLAWD; path(leg); ctx.fill();
-    ctx.lineWidth = 2; poly(leg, 0.8);
-  });
+  if (!pose.body) {
+    // legs (behind the body)
+    [4, 6, 11, 13].forEach((lx, i) => {
+      const [dx, dy] = pose.legs?.[face > 0 ? i : 3 - i] || [0, 0], fx = dx * face;
+      const leg = [at(lx, 3.8), at(lx + 1, 3.8), [at(lx + 1, 5)[0] + fx, at(0, 5)[1] + dy], [at(lx, 5)[0] + fx, at(0, 5)[1] + dy]];
+      ctx.fillStyle = CLAWD; path(leg); ctx.fill();
+      ctx.lineWidth = 2; poly(leg, 0.8);
+    });
 
-  // body + arm nubs as one silhouette
-  const body = [at(3, 0), at(15, 0), at(15, 2, ar), at(17, 2, ar, rr), at(17, 3, ar, rr), at(15, 3, ar), at(15, 4), at(3, 4),
-                at(3, 3, al), at(1, 3, al, rl), at(1, 2, al, rl), at(3, 2, al)];
-  ctx.save(); ctx.translate(j(2.5), j(2.5)); // marker wash, slightly off-register
-  ctx.fillStyle = CLAWD; ctx.globalAlpha = 0.92; path(body); ctx.fill();
-  ctx.restore();
-  hatch([at(3, 3.2), at(15, 3.2), at(15, 4), at(3, 4)], 6, 0.3); // belly shade
-  ctx.lineWidth = 2.6; poly(body, 1.2);
+    // body + arm nubs as one silhouette
+    const body = [at(3, 0), at(15, 0), at(15, 2, ar), at(17, 2, ar, rr), at(17, 3, ar, rr), at(15, 3, ar), at(15, 4), at(3, 4),
+                  at(3, 3, al), at(1, 3, al, rl), at(1, 2, al, rl), at(3, 2, al)];
+    ctx.save(); ctx.translate(j(2.5), j(2.5)); // marker wash, slightly off-register
+    ctx.fillStyle = CLAWD; ctx.globalAlpha = 0.92; path(body); ctx.fill();
+    ctx.restore();
+    hatch([at(3, 3.2), at(15, 3.2), at(15, 4), at(3, 4)], 6, 0.3); // belly shade
+    ctx.lineWidth = 2.6; poly(body, 1.2);
 
-  // eyes: tall pixel blocks, nudged toward facing, squash to a line on blink; squint = squeezed shut as > <
-  const eh = V * (1 - 0.85 * (pose.blink || 0)), shift = face * U * 0.35;
-  ctx.fillStyle = INK; ctx.lineWidth = 2.6;
-  for (const [i, ex] of [5, 12].entries()) {
-    const [x, y] = at(ex, 1, pose.eyeY || 0);
-    if (pose.dizzy) { // spiral eyes, the two winding opposite ways
-      const ecx = x + U / 2 + shift, ecy = y + V / 2, R = Math.min(U, V / 2) * 1.05, sp = (i ? -1 : 1);
-      ctx.lineWidth = 1.6; ctx.beginPath();
-      for (let a = 0; a <= 4 * Math.PI; a += 0.35) { const r = R * a / (4 * Math.PI), q = sp * (a + pose.dizzy * 6.28); ctx.lineTo(ecx + Math.cos(q) * r, ecy + Math.sin(q) * r); }
-      ctx.stroke();
+    // eyes: tall pixel blocks, nudged toward facing, squash to a line on blink; squint = squeezed shut as > <
+    const eh = V * (1 - 0.85 * (pose.blink || 0)), shift = face * U * 0.35;
+    ctx.fillStyle = INK; ctx.lineWidth = 2.6;
+    for (const [i, ex] of [5, 12].entries()) {
+      const [x, y] = at(ex, 1, pose.eyeY || 0);
+      if (pose.dizzy) { // spiral eyes, the two winding opposite ways
+        const ecx = x + U / 2 + shift, ecy = y + V / 2, R = Math.min(U, V / 2) * 1.05, sp = (i ? -1 : 1);
+        ctx.lineWidth = 1.6; ctx.beginPath();
+        for (let a = 0; a <= 4 * Math.PI; a += 0.35) { const r = R * a / (4 * Math.PI), q = sp * (a + pose.dizzy * 6.28); ctx.lineTo(ecx + Math.cos(q) * r, ecy + Math.sin(q) * r); }
+        ctx.stroke();
+      }
+      else if (pose.squint) {
+        const px = x + U / 2 + shift, d = (i ? -1 : 1) * U * 0.8; // left eye points right, right eye points left
+        line(px - d, y + V * 0.1, px + d, y + V / 2, 0.4, 1); line(px + d, y + V / 2, px - d, y + V * 0.9, 0.4, 1);
+      } else ctx.fillRect(x + shift + j(0.6), y + (V - eh) / 2 + j(0.6), U, eh);
     }
-    else if (pose.squint) {
-      const px = x + U / 2 + shift, d = (i ? -1 : 1) * U * 0.8; // left eye points right, right eye points left
-      line(px - d, y + V * 0.1, px + d, y + V / 2, 0.4, 1); line(px + d, y + V / 2, px - d, y + V * 0.9, 0.4, 1);
-    } else ctx.fillRect(x + shift + j(0.6), y + (V - eh) / 2 + j(0.6), U, eh);
   }
   if (pose.spark) drawSpark(mx + face * pose.spark[0], bottom + (pose.y || 0) + pose.spark[1], SPARK_R, face * pose.spark[2]);
   if (pose.shield > 0.05) drawTerminal(mx, oy - 14 * pose.shield, pose.shield, pose.wear || 0); // held low over its head like a roof, overlapping the top of the body

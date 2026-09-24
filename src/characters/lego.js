@@ -3,6 +3,7 @@
 // product shot. Less sketchy than the others on purpose: crisp outlines, shaded fills and gloss so he reads as plastic.
 // pose fields (all optional), written facing right and mirrored for face = -1:
 //   x, y offsets · sx, sy stretch (from the floor) · rot radians (+ = lean forward, around the middle) · blink 0 (open) … 1 (shut)
+//   arm = px (negative = up), or [back, front] · legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these legs
 const LEGO_RED = ['#f5432c', '#d8150a', '#8e0c04'], LEGO_BLUE = ['#3d86ef', '#0f58c8', '#07317a'], LEGO_YEL = ['#fff27a', '#f7d117', '#c99a00'];
 const LEGO_LW = 1.7, LEGO_FINE = 0.9; // silhouette / detail line widths
 
@@ -36,11 +37,14 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
   ctx.translate(0, -36); ctx.rotate(pose.rot || 0); ctx.translate(0, 36); // origin back at the feet
   ctx.lineCap = ctx.lineJoin = 'round';
+  const arm = Array.isArray(pose.arm) ? pose.arm : [pose.arm || 0, pose.arm || 0], feet = [pose.legs?.[0] || [0, 0], pose.legs?.[3] || [0, 0]];
 
-  // legs: square blocks with a thigh step and a foot step, a darker outer side face
-  for (const s of [-1, 1]) {
+  // legs: square blocks with a thigh step and a foot step, a darker outer side face; each shifts whole with its foot,
+  // its top running up under the hips so a lowered leg never comes loose
+  for (const [i, s] of [-1, 1].entries()) {
     const x0 = s < 0 ? -13.2 : 0.2, x1 = x0 + 13;
-    legoPart(() => ctx.rect(x0, -23.5, 13, 23.5), legoShade(LEGO_BLUE, x0, x1));
+    ctx.save(); ctx.translate(...feet[i]);
+    legoPart(() => ctx.rect(x0, -26, 13, 26), legoShade(LEGO_BLUE, x0, x1));
     ctx.save(); ctx.clip();
     legoShadow(x0, -23.5, 13, 3, 0.5); // under the hips
     ctx.fillStyle = LEGO_BLUE[2]; ctx.globalAlpha = 0.45; ctx.fillRect(s < 0 ? x0 : x1 - 1.8, -23.5, 1.8, 23.5); ctx.globalAlpha = 1; // side face
@@ -51,6 +55,7 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
       ctx.strokeStyle = LEGO_BLUE[0]; ctx.globalAlpha = 0.6; legoLine(x0 + 0.8, y + 0.8, x1 - 0.8, y + 0.8); ctx.globalAlpha = 1; ctx.strokeStyle = INK; // lit edge below each step
     }
     legoGloss(x0 + 2.2, -13, 1.4, 8, 0.4);
+    ctx.restore();
   }
   ctx.strokeStyle = INK; ctx.lineWidth = LEGO_FINE; legoLine(-1.4, -23.5, -1.4, -14); legoLine(1.4, -23.5, 1.4, -14); // the leg pin between the thighs
 
@@ -59,10 +64,11 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
   legoShadow(-13.4, -27.4, 26.8, 1.6, 0.4);
 
   // arms first, the torso's sides overlap their inner edges: a rounded shoulder, a straight outer edge, cut square at the sleeve
-  for (const s of [-1, 1]) {
-    const arm = () => { ctx.moveTo(s * 10.6, -50.2); ctx.quadraticCurveTo(s * 19.4, -50.6, s * 20.2, -43.5); ctx.lineTo(s * 20.6, -30.2); ctx.lineTo(s * 14.2, -29.6); ctx.lineTo(s * 12.4, -44); ctx.closePath(); };
-    legoPart(arm, legoShade(LEGO_RED, -20.6, 20.6));
-    ctx.save(); ctx.beginPath(); arm(); ctx.clip(); legoGloss(s * 18 - 0.8, -47, 1.6, 12, s < 0 ? 0.5 : 0.25); ctx.restore();
+  for (const [i, s] of [-1, 1].entries()) {
+    ctx.save(); ctx.translate(0, arm[i]);
+    const sleeve = () => { ctx.moveTo(s * 10.6, -50.2); ctx.quadraticCurveTo(s * 19.4, -50.6, s * 20.2, -43.5); ctx.lineTo(s * 20.6, -30.2); ctx.lineTo(s * 14.2, -29.6); ctx.lineTo(s * 12.4, -44); ctx.closePath(); };
+    legoPart(sleeve, legoShade(LEGO_RED, -20.6, 20.6));
+    ctx.save(); ctx.beginPath(); sleeve(); ctx.clip(); legoGloss(s * 18 - 0.8, -47, 1.6, 12, s < 0 ? 0.5 : 0.25); ctx.restore();
     const hx = s * 17.4; // wrist and hand centre line
     legoPart(() => ctx.rect(hx - 2.1, -30, 4.2, 2.6), legoShade(LEGO_YEL, hx - 2.1, hx + 2.1), LEGO_FINE + 0.3);
     legoShadow(hx - 2.1, -30, 4.2, 1.2, 0.4);
@@ -71,6 +77,7 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
     const hand = ctx.createRadialGradient(hx - s * 1.2, hy - 2, 0.4, hx, hy, R);
     hand.addColorStop(0, LEGO_YEL[0]); hand.addColorStop(0.6, LEGO_YEL[1]); hand.addColorStop(1, LEGO_YEL[2]);
     legoPart(() => { ctx.arc(hx, hy, R, gap + half, gap - half + 6.283); ctx.arc(hx, hy, r, gap - half * 1.35 + 6.283, gap + half * 1.35, true); ctx.closePath(); }, hand, 1.3);
+    ctx.restore();
   }
 
   // torso: a plain flat trapezoid with barely rounded shoulders
