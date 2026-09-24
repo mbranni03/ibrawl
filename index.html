@@ -81,19 +81,20 @@ const FIGHTER = {
 };
 const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo']; // select screen order (LOGOS follows it)
 // punching targets: the CPUs picked on the select screen as dummies, or the training bag if none. Each takes hits and knockback like a
-// fighter (but never fights back) and drops back in where it started when it leaves the blast zone
+// fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
 const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false }; // held = in Claw'd's claws · pinned = on the end of the up special's cord
 const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
-let targets = [], cpus = []; // cpus = fighter ids picked as enemies
+let targets = [], foes = [], cpus = []; // cpus = fighter ids picked as enemies · foes = their targets, kept for the hud once out of lives
 function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
 function makeTargets() {
-  targets = (cpus.length ? cpus : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i] }; spawnTarget(b); return b; });
+  targets = (cpus.length ? cpus : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
+  foes = targets.filter(b => b.lives != null);
 }
 const heldBag = () => targets.find(b => b.held);
 makeTargets();
 const KB = 10; // knockback units → px/s
 
-const keys = {}; let jumpQ = false, downQ = false, ffQ = false, dashQ = false, attackQ = false, heavyQ = false, specialQ = false, dodgeQ = false, grabQ = 0, techQ = 0, techLock = 0, sideQ = false, lastTap = { a: null, t: 0 }, lastDir = 0, pressT = {}, attackT = -1e9, tiltQ = false;
+const keys = {}; let jumpQ = false, downQ = false, dropQ = false, ffQ = false, dashQ = false, attackQ = false, heavyQ = false, specialQ = false, dodgeQ = false, grabQ = 0, techQ = 0, techLock = 0, sideQ = false, lastTap = { a: null, t: 0 }, lastDir = 0, pressT = {}, attackT = -1e9, tiltQ = false;
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', Space: 'jump',
                  ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyI: 'shield', KeyG: 'grab', KeyU: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge: Z / Shift; shield: I
 // ---------- pause menu ----------
@@ -101,7 +102,7 @@ const MENU = ['resume', 'controls', 'restart', 'quit'], HOME_MENU = ['play', 'ch
 // controls screen: two columns of [heading, [[keys, what they do], …]]; descriptions wrap at the ' · ' breaks
 const CONTROLS = [
   [['move', [['← → / A D', 'walk · double-tap to run'], ['Space', 'jump · tap for a short hop · again in the air'],
-             ['↓ / S', 'crouch (+ ← → crawl) · drop through platforms · double-tap in the air: fast fall'],
+             ['↓ / S', 'crouch (+ ← → crawl) · tap: drop through a platform · hold in the air: fall through them · double-tap in the air: fast fall'],
              ['on a ledge', '↑ / toward: climb · ↓ / away: let go · Space: jump · C / X: attack · dodge: roll']]],
    ['defend', [['I', 'hold: shield · + ← →: roll · + ↓: spot dodge'], ['Shift / Z', 'dodge · + ← →: roll · in the air: dodge any way, once per jump'],
                ['tumbling', 'I / dodge just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
@@ -114,9 +115,9 @@ const CONTROLS = [
 let paused = true, sel = 0, showControls = false, over = false, home = true, picking = false, vsT = null, menu = HOME_MENU; // boots to the home screen · picking = character select (after play) · vsT = when the vs screen started (after picking)
 function setPaused(on) {
   paused = on; sel = 0; showControls = false; over = false; home = false; picking = false; vsT = null; menu = MENU;
-  for (const k in keys) keys[k] = false; jumpQ = downQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = grabQ = techQ = techLock = false;
+  for (const k in keys) keys[k] = false; jumpQ = downQ = dropQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = grabQ = techQ = techLock = false;
 }
-function gameOver() { setPaused(true); over = true; menu = ['restart', 'quit']; }
+function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
   stocks = STOCKS; fx.length = shots.length = 0; sub = null; makeTargets();
@@ -168,7 +169,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => {
   const a = KEYMAP[e.code]; if (!a) return;
   keys[a] = false;
-  // only a short tap (< 150ms held) can start a dash / fast fall, so letting go of a held direction and pressing it again just walks
+  // only a short tap (< 150ms held) can start a dash / fast fall / platform drop (Smash's flick), so a held direction just walks / crouches
+  if (a === 'down' && e.timeStamp - pressT.down < 200) dropQ = true; // a bit longer than the dash / fast fall tap
   if (a === 'left' || a === 'right' || a === 'down') lastTap = e.timeStamp - pressT[a] < 150 ? { a, t: e.timeStamp } : { a: null, t: 0 };
 });
 addEventListener('blur', () => { if (!over && !home) setPaused(true); });
@@ -379,7 +381,7 @@ function stepPlayer(dt) {
     if (attackQ && i >= 0 && i < 2 && !tiltQ && !keys.up && !keys.down) { P.nextJab = true; attackQ = 0; } // light during a jab queues the next one (a held direction is fine); a fresh tilt input waits for the cancel window instead
     if (P.nextJab && P.f >= done) { P.nextJab = false; setState(JABS[i + 1]); }
     else if (P.f >= end || (P.f >= end - rec * CANCEL && (dir || jumpQ || attackQ || heavyQ || specialQ || dodgeQ || keys.down)) || (P.landed && P.f >= done && jumpQ)) {
-      if (keys.down && P.on === stage) { P.state = 'crouch'; P.f = 5; } // still holding down: stay crouched
+      if (keys.down) { P.state = 'crouch'; P.f = 5; } // still holding down: stay crouched
       else setState(s === 'downTilt' ? 'crouchUp' : 'idle');
       s = P.state; // free: fall through and act on this frame's input
     }
@@ -427,7 +429,7 @@ function stepPlayer(dt) {
     }
     else if (keys.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
-    else if (downQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = 1; setState('drop'); } // through the platform
+    else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = 1; setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
       if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = 1; setState('air'); puff(); }
     }
@@ -438,7 +440,7 @@ function stepPlayer(dt) {
       else if (!P.turn && dir === P.face) setState('run');
       else if (!P.turn && P.sk >= 16) setState('idle');
     }
-    else if (keys.down && P.on === stage) { // crouch; add a direction to crawl once fully down
+    else if (keys.down) { // crouch (platforms too: only a tap drops through); add a direction to crawl once fully down
       if (dir && (s === 'crouchWalk' || (s === 'crouch' && P.f >= 5))) { P.face = dir; setState('crouchWalk'); }
       else if (!dir && s === 'crouchWalk') { P.state = 'crouch'; P.f = 5; } // back to the held crouch, skipping the squat-down
       else if (s !== 'crouch') setState('crouch');
@@ -474,7 +476,7 @@ function stepPlayer(dt) {
     if (ffQ && P.vy > -150 && !stunned && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
-  downQ = ffQ = dashQ = sideQ = false; techQ = Math.max(0, techQ - 1); techLock = Math.max(0, techLock - 1);
+  downQ = dropQ = ffQ = dashQ = sideQ = false; techQ = Math.max(0, techQ - 1); techLock = Math.max(0, techLock - 1);
   if (P.state === 'neutralSpecial') P.think = Math.max(P.think, NEUTRAL_B.anim(P.f).aura || 0); // checkpoint locked in
   jumpQ = Math.max(0, jumpQ - 1); attackQ = Math.max(0, attackQ - 1); heavyQ = Math.max(0, heavyQ - 1); specialQ = Math.max(0, specialQ - 1); dodgeQ = Math.max(0, dodgeQ - 1); grabQ = Math.max(0, grabQ - 1);
 
@@ -563,8 +565,9 @@ function stepWorld(dt) {
     b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx), (b.ground ? 1800 : 250) * dt); // floor friction / air drag
     move(b, dt, s => { b.vy = 0; b.ground = true; b.on = s; });
     b.rot = b.ground ? b.rot * 0.8 : b.rot + b.vx * dt / 80; // tumbles while flying
-    if (out(b)) spawnTarget(b);
+    if (out(b) && (b.lives == null || --b.lives)) spawnTarget(b);
   }
+  if (targets.some(b => b.lives === 0)) { targets = targets.filter(b => b.lives !== 0); if (!targets.length) return gameOver(true); } // last CPU out: Claw'd wins
 
   for (let i = fx.length - 1; i >= 0; i--) if ((fx[i].t += dt / 0.25) >= 1) fx.splice(i, 1);
 }
@@ -604,12 +607,13 @@ function move(b, dt, onLand) {
 
   const prevBottom = b.y + b.h;
   b.y += b.vy * dt;
-  b.ground = false; b.on = null;
+  const was = b.on; b.ground = false; b.on = null;
   if (overlaps(b, stage)) {
     if (b.vy > 0) { b.y = stage.y - b.h; onLand(stage); }
     else { b.y = stage.y + stage.h; b.vy = 0; }
   }
-  if (b.vy >= 0 && !(b.drop > 0) && !(b === P && keys.down)) for (const pl of plats) { // holding ↓: fall straight through
+  if (b.vy >= 0 && !(b.drop > 0)) for (const pl of plats) {
+    if (b === P && keys.down && pl !== was) continue; // holding ↓: fall straight through (standing on one, the drop waits a beat instead)
     if (b.x + b.w > pl.x && b.x < pl.x + pl.w && prevBottom <= pl.y + 0.5 && b.y + b.h >= pl.y) {
       b.y = pl.y - b.h; onLand(pl);
     }
@@ -732,7 +736,7 @@ function render(t) {
   else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawClawd(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
 
   // hud
-  drawHealth();
+  drawHealth(t);
   if (paused) drawPause(t);
 }
 
@@ -756,11 +760,12 @@ function drawSub() {
   ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; drawClawd(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
 }
 
-// the targets (dummies turned to face Claw'd), shaking when hit, damage % floating above each
+// the targets (dummies turned to face Claw'd), shaking when hit; only the training bag floats its damage % above it
 function drawTargets(t) {
   for (const b of targets) {
     const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh, by = b.y + b.h;
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
+    if (b.id !== 'bag') continue;
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
     const pct = Math.round(b.dmg) + '%';
     ctx.strokeText(pct, bx, b.y - 12); ctx.fillStyle = dmgColor(b.dmg); ctx.fillText(pct, bx, b.y - 12);
@@ -768,19 +773,31 @@ function drawTargets(t) {
   ctx.textAlign = 'left';
 }
 
-function drawHealth() {
-  const sh = P.hitT * 16, bx = W - 120 + (Math.random() - 0.5) * sh, by = 70 + (Math.random() - 0.5) * sh, R = 38; // shakes when hit
-  ctx.fillStyle = dmgColor(P.dmg); ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.28); ctx.fill();
+// hud: Claw'd's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
+function drawHealth(t) {
+  badge(W - 120, P.dmg, P.hitT, () => drawClawd(0, 5 * CV / 2), stocks);
+  foes.forEach((b, i) => {
+    const h = FIGHTER[b.id].box[1], k = Math.min(1, 44 / h / 0.8); // fit the taller fighters in the circle
+    ctx.globalAlpha = b.lives ? 1 : 0.35; // faded once out
+    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, () => { ctx.scale(k, k); FIGHTER[b.id].draw(0, h / 2, {}, -1, t); }, b.lives);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// a fighter's damage badge: its portrait in a circle coloured by damage, the % overlapping it, and stock pips if it has lives
+function badge(x, dmg, hitT, portrait, lives) {
+  const sh = hitT * 16, bx = x + (Math.random() - 0.5) * sh, by = 70 + (Math.random() - 0.5) * sh, R = 38; // shakes when hit
+  ctx.fillStyle = dmgColor(dmg); ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.28); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ellipse(bx, by, R, R, 1.2);
-  ctx.save(); ctx.translate(bx, by); ctx.scale(0.8, 0.8); drawClawd(0, 5 * CV / 2); ctx.restore(); // centred inside
+  ctx.save(); ctx.translate(bx, by); ctx.scale(0.8, 0.8); portrait(); ctx.restore(); // centred inside
   // damage %, overlapping the circle's bottom right, filled with the same colour
-  ctx.font = '700 36px Caveat, cursive'; ctx.lineWidth = 3.5; ctx.textAlign = 'left'; // grows rightward, away from the circle
-  const pct = Math.round(P.dmg) + '%', tx = bx + 12, ty = by + R + 6;
-  ctx.strokeText(pct, tx, ty); ctx.fillStyle = dmgColor(P.dmg); ctx.fillText(pct, tx, ty);
-  // stocks: filled pip = life left, wrapping the circle's bottom-left quarter, starting at the bottom
-  for (let i = 0; i < STOCKS; i++) {
+  ctx.font = '700 36px Caveat, cursive'; ctx.lineWidth = 3.5; ctx.textAlign = 'left'; ctx.strokeStyle = INK; // grows rightward, away from the circle
+  const pct = Math.round(dmg) + '%', tx = bx + 12, ty = by + R + 6;
+  ctx.strokeText(pct, tx, ty); ctx.fillStyle = dmgColor(dmg); ctx.fillText(pct, tx, ty);
+  // stocks: a white pip per life left (lost ones just go), wrapping the circle's bottom-left quarter, starting at the bottom
+  for (let i = 0; i < lives; i++) {
     const a = Math.PI / 2 - 0.04 + i * 0.38, px = bx + (R + 11) * Math.cos(a), py = by + (R + 11) * Math.sin(a);
-    if (i < stocks) { ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.28); ctx.fill(); }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.28); ctx.fill();
     ctx.lineWidth = 1.6; ellipse(px, py, 5, 5, 0.5);
   }
 }
@@ -812,7 +829,7 @@ function drawPause(t) {
   ctx.fillStyle = ctx.strokeStyle = home ? INK : '#efe7d6'; ctx.textAlign = 'center';
   if (home && !showControls) {
     drawTitle(t);
-  } else if (!showControls) { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? 'game over' : 'paused', W / 2, H / 2 - 70); }
+  } else if (!showControls) { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? (over === 'win' ? 'victory!' : 'defeat') : 'paused', W / 2, H / 2 - 70); }
   if (showControls) drawControls(home ? INK : '#efe7d6');
   else {
     ctx.font = '600 40px Caveat, cursive';
