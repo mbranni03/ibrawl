@@ -34,7 +34,6 @@ const paper = makePaper(W, H, dpr);
 const stage = { x: 240, y: 500, w: 800, h: 110 }; // solid collision box
 const stagePoly = [[240, 500], [1040, 500], [1040, 530], [960, 610], [320, 610], [240, 530]];
 const plats = [{ x: 330, y: 375, w: 210 }, { x: 740, y: 375, w: 210 }, { x: 535, y: 255, w: 210 }]; // pass-through
-const SPIKES = { x: 955, y: 484, w: 75, h: 16, dmg: 12, kb: { base: 60, growth: 60, angle: 70 } }; // hazard on the stage's right side
 const BLAST = { l: -220, r: W + 220, t: -360, b: H + 200 };
 
 // ---------- player ----------
@@ -514,10 +513,6 @@ function stepPlayer(dt) {
   else if ((P.state === 'upSpecial' && P.teth.side) || P.state === 'respawn') {} // reeling / on the platform: already placed
   else { move(P, dt, s => land(s, wasGround)); grabLedge(); }
 
-  // spikes: damage + a pop up and back toward the stage centre, harder the more damage you have; brief i-frames so it's one hit per touch
-  if (!(P.inv > 0) && !intangible() && overlaps(P, SPIKES) && P.state === 'shield') { P.shield -= SHIELD_HIT; P.inv = 0.6; hitstop = 4; } // the terminal takes it
-  else if (!(P.inv > 0) && !intangible() && overlaps(P, SPIKES)) { P.inv = 0.6; hitClawd(SPIKES.dmg, SPIKES.kb, Math.sign(stage.x + stage.w / 2 - (P.x + P.w / 2))); }
-
   // attack hitboxes vs the targets: one hit on each per attack, knockback grows with its damage (and a smash's charge)
   const m = MOVES[P.state], cx = P.x + P.w / 2;
   if (m?.hitbox) {
@@ -699,13 +694,6 @@ function render(t) {
   hatch([[240, 532], [1040, 532], [960, 610], [320, 610]]);
   ctx.lineWidth = 2.6; poly(stagePoly, 1.6);
   ctx.lineWidth = 1.4; line(250, 512, 1030, 512, 1.2, 1);
-
-  // spikes
-  ctx.fillStyle = '#cfc4b0'; ctx.lineWidth = 2;
-  for (let x = SPIKES.x; x < SPIKES.x + SPIKES.w; x += 15) {
-    const tri = [[x, SPIKES.y + SPIKES.h], [x + 7.5, SPIKES.y], [x + 15, SPIKES.y + SPIKES.h]];
-    path(tri); ctx.fill(); poly(tri, 0.6);
-  }
 
   // platforms
   for (const pl of plats) {
