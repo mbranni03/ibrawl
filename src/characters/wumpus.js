@@ -2,7 +2,7 @@
 // and happy closed eyes, on a little bean body and stubby legs, in sketch style.
 // pose fields (all optional), written facing right and mirrored for face = -1:
 //   x, y offsets · sx, sy stretch (from the floor) · rot radians (+ = lean forward, around the middle)
-//   arm = px (negative = up), or [back, front] · reach = px an arm punches out in front (drawn over the body), or [back, front]
+//   arm = px (negative = up), or [back, front] · arms = radians each arm swings out and up from the shoulder, or [back, front] · reach = px an arm punches out in front (drawn over the body), or [back, front]
 //   ears = radians each ear swings out and up from hanging (π = straight up), or [back, front] · legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
 
@@ -13,9 +13,11 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
 
   const pair = v => Array.isArray(v) ? v : [v || 0, v || 0];
-  const arm = pair(pose.arm), reach = Array.isArray(pose.reach) ? pose.reach : [0, pose.reach || 0], ears = pair(pose.ears), feet = [pose.legs?.[0] || [0, 0], pose.legs?.[3] || [0, 0]];
+  const arm = pair(pose.arm), swing = pair(pose.arms), reach = Array.isArray(pose.reach) ? pose.reach : [0, pose.reach || 0], ears = pair(pose.ears), feet = [pose.legs?.[0] || [0, 0], pose.legs?.[3] || [0, 0]];
   for (const [i, lx] of [-6, 6].entries()) { const [dx, dy] = feet[i]; rbox(lx + dx, -8 + dy / 2, 7, 12 + dy, 3.5, WUMPUS, 2); rbox(lx + 1 + dx, -3 + dy, 11, 6, 3, WUMPUS, 2); } // legs + feet
-  for (const [i, s] of [-1, 1].entries()) if (!reach[i]) rbox(s * 12, -22 + arm[i], 6, 12, 3, WUMPUS, 2); // stubby arms, behind the body
+  for (const [i, s] of [-1, 1].entries()) if (!reach[i]) { // stubby arms, behind the body, swinging from the shoulder
+    ctx.save(); ctx.translate(s * 11, -27 + arm[i]); ctx.rotate(-s * swing[i]); rbox(s, 5, 6, 12, 3, WUMPUS, 2); ctx.restore();
+  }
   rbox(0, -23, 22, 24, 10, WUMPUS); // bean body
   for (const i of [0, 1]) if (reach[i]) { const w = Math.max(6, 10 + reach[i]); rbox(3 + w / 2, -24 - 3 * (1 - i) + arm[i], w, 7, 3.5, WUMPUS, 2); } // punching paws
   for (const [i, s] of [-1, 1].entries()) { // ears, behind the head, swinging from where they join it

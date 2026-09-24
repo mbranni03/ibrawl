@@ -1,9 +1,31 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. Groups not here yet (smashes, aerials, specials, grabs, defense, ledge) are still to build.
+// Fields are as in clawd-moveset.js. Groups not here yet (smashes, specials, grabs, defense, ledge) are still to build.
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
+// movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
+// Past ~1.8 rad they disappear behind his head, so raised arms stop there
+const MV = MOVESET.movement, cycle = (f, n, k = 1) => Math.sin(f / n * Math.PI * 2 * k);
+const ease = (f, ks) => tween(f, ks.map(([k, a]) => [k, { a }])).a; // one number eased through [[frame, value], …]
+const armsOn = (m, arms) => ({ ...m, anim: (f, n = m.frames) => ({ ...m.anim(f, n), arms: arms(f, n) }) });
 const WUMPUS_MOVESET = {
-  movement: MOVESET.movement,
+  movement: {
+    ...MV,
+    idle: armsOn(MV.idle, (f, n) => 0.15 + 0.08 * (1 - Math.cos(f / n * Math.PI * 4)) / 2), // breathing out a little with each breath
+    walk: armsOn(MV.walk, (f, n) => { const s = cycle(f, n); return [0.3 + 0.35 * s, 0.3 - 0.35 * s]; }), // waddle: flapping out one side at a time
+    dash: armsOn(MV.dash, f => ease(f, [[0, 0.2], [3, 0], [6, 1.3], [11, 1.2], [16, 0.9], [20, 0.2]])), // flung back by the burst
+    run: armsOn(MV.run, (f, n) => { const s = cycle(f, n); return [0.9 + 0.4 * s, 0.9 - 0.4 * s]; }), // held out wide, pumping
+    skid: armsOn(MV.skid, f => ease(f, [[0, 0.9], [4, 1.7], [13, 1.5], [17, 0.6], [26, 0.2]])), // thrown up to brake, dropped for the turn
+    crouch: armsOn(MV.crouch, f => ease(f, [[0, 0.15], [5, 0.05], [50, 0.05], [60, 0.15]])), // tucked in
+    crouchWalk: armsOn(MV.crouchWalk, (f, n) => { const s = cycle(f, n); return [0.15 + 0.2 * s, 0.15 - 0.2 * s]; }), // little paddles
+    jumpSquat: armsOn(MV.jumpSquat, f => ease(f, [[0, 0.15], [4, 0], [6, 0], [9, 1.8], [14, 1.6]])), // down, then flung up for the jump
+    fullHop: armsOn(MV.fullHop, (f, n) => ease(f / n, [[0, 1.6], [0.3, 1.8], [0.65, 1.3], [1, 1]])), // raised on the way up, lowering past the peak
+    shortHop: armsOn(MV.shortHop, (f, n) => ease(f / n, [[0, 1.6], [0.3, 1.8], [0.65, 1.3], [1, 1]])),
+    doubleJump: armsOn(MV.doubleJump, f => ease(f, [[0, 1], [3, 0.4], [6, 1.8], [20, 1.4], [28, 1.2], [36, 1]])), // out wide through the flip
+    fall: armsOn(MV.fall, (f, n) => { const s = cycle(f, n, 2); return [1.3 + 0.3 * s, 1.3 - 0.3 * s]; }), // up and flapping
+    fastFall: armsOn(MV.fastFall, () => 0), // pinned to its sides, like a dart
+    land: armsOn(MV.land, f => ease(f, [[0, 1.6], [3, 0.6], [8, 0.1], [18, 0.15]])), // swung down by the squash
+    platformDrop: armsOn(MV.platformDrop, f => ease(f, [[0, 0.15], [4, 0], [8, 1.6], [30, 1.8], [40, 1.8]])), // up as it slips through
+  },
   groundAttacks: {
     jab1: { // ping: a quick poke with the front paw, feet planted
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
@@ -125,6 +147,80 @@ const WUMPUS_MOVESET = {
         ]),
         puff: f >= 12 ? (f - 12) / 10 : null,
         say: sayW('reconnecting…', f, 0, 12),
+      }),
+    },
+  },
+  aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose
+    neutralAir: { // loading spinner: fling both ears out and spin a full turn, hitting all around
+      input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
+      hitbox: { x: -50, y: -80, w: 100, h: 80 }, landingLag: 8,
+      anim: f => {
+        const p = tween(f, [[0, AIRBORNE], [3, { sx: 0.94, sy: 1.06, rot: -0.25, arm: -6, ears: 0.6, legs: TUCK }],
+          [4, { sx: 1.06, sy: 0.96, arm: -6, ears: 1.6, legs: TUCK }], [13, { sx: 1.06, sy: 0.96, arm: -6, ears: 1.5, legs: TUCK }], [26, AIRBORNE]]);
+        const e = 1 - (1 - Math.min(1, Math.max(0, (f - 4) / 9))) ** 2; // spin eases out
+        return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40 };
+      },
+    },
+    forwardAir: { // @here: rear the big head back, then nod it down hard in front
+      input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 35 },
+      hitbox: { x: 14, y: -66, w: 42, h: 54 }, landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [6, { x: -3, sx: 0.94, sy: 1.06, rot: -0.35, arm: -6, ears: 0.9, legs: TUCK }],
+          [7, { x: 6, sx: 1.08, sy: 0.94, rot: 0.7, arm: 2, ears: -0.3, legs: legsAll(-3, 0) }],
+          [11, { x: 6, sx: 1.07, sy: 0.95, rot: 0.66, arm: 2, ears: -0.2, legs: legsAll(-3, 0) }],
+          [18, { x: 2, rot: 0.2, ears: 0.3, legs: TUCK }],
+          [27, AIRBORNE],
+        ]),
+        speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
+        say: sayW('@here', f, 7, 24),
+      }),
+    },
+    backAir: { // /kick: tip right over forward and shove both feet out behind
+      input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
+      hitbox: { x: -56, y: -36, w: 36, h: 32 }, landingLag: 9,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [5, { x: 3, sx: 0.94, sy: 1.06, rot: -0.15, arm: -4, ears: 0.2, legs: legsAll(3, -4) }],
+          [6, { x: -4, sx: 1.04, sy: 0.96, rot: 0.9, arm: -8, ears: [0.9, -0.2], legs: legsAll(-3, 4) }],
+          [10, { x: -4, sx: 1.04, sy: 0.96, rot: 0.86, arm: -8, ears: [0.8, -0.2], legs: legsAll(-3, 4) }],
+          [16, { x: -1, rot: 0.3, arm: -3, ears: 0.2, legs: TUCK }],
+          [24, AIRBORNE],
+        ]),
+        speed: f >= 6 && f < 10 ? -0.5 : 0, air: -40,
+        say: sayW('/kick', f, 6, 22),
+      }),
+    },
+    upAir: { // stretch tall and scissor both ears up over the head
+      input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
+      hitbox: { x: -34, y: -100, w: 68, h: 44 }, landingLag: 7,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [4, { sx: 1.1, sy: 0.88, arm: 2, ears: [0.2, 0.6], legs: TUCK }],
+          [5, { y: -4, sx: 0.9, sy: 1.15, arm: -10, ears: [3.1, 2.4], legs: legsAll(0, 4) }],
+          [10, { y: -3, sx: 0.92, sy: 1.13, arm: -10, ears: [2.6, 3.4], legs: legsAll(0, 3) }],
+          [17, { sx: 0.98, sy: 1.04, arm: -4, ears: 1, legs: TUCK }],
+          [24, AIRBORNE],
+        ]),
+        air: -40,
+      }),
+    },
+    downAir: { // stomp: ears flung up, both feet driven straight down. Spikes
+      input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
+      hitbox: { x: -24, y: -8, w: 48, h: 28 }, landingLag: 14,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [7, { y: -6, sx: 1.1, sy: 0.86, arm: -6, ears: 1.2, legs: legsAll(0, -5) }],
+          [8, { y: -2, sx: 0.94, sy: 1.08, arm: -10, ears: 2.8, legs: legsAll(0, 12) }],
+          [14, { y: -2, sx: 0.95, sy: 1.07, arm: -10, ears: 2.9, legs: legsAll(0, 11) }],
+          [22, { arm: -4, ears: 1, legs: legsAll(0, 3) }],
+          [32, AIRBORNE],
+        ]),
+        fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40,
       }),
     },
   },
