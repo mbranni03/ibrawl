@@ -6,7 +6,7 @@
 const duoFeet = (back, front) => [back, [0, 0], [0, 0], front];
 // a caption over Duo's head from frame a to b, fading in and out (Claw'd's say)
 const duoSay = (text, f, a, b) => f >= a && f < b ? [text, Math.min(1, (f - a) / 3, (b - f) / 5)] : null;
-const DUO_GA = MOVESET.groundAttacks, DUO_AA = MOVESET.aerials; // frame data starts as Claw'd's; the hitboxes and poses are Duo's
+const DUO_GA = MOVESET.groundAttacks, DUO_SA = MOVESET.smashAttacks, DUO_AA = MOVESET.aerials; // frame data starts as Claw'd's; the hitboxes and poses are Duo's
 const DUO_AIR = { arm: -12, legs: duoFeet([1, -2], [-1, -2]) }; // wings half out, feet tucked: the plain airborne pose aerials start and end on
 // Claw'd's arm swings are sized for his little nubs: the movement Duo borrows from him swings its wings 4x as far
 const duoWings = m => m.anim ? { ...m, anim: (f, n) => { const p = m.anim(f, n); return p.arm == null ? p : { ...p, arm: Array.isArray(p.arm) ? p.arm.map(a => 4 * a) : 4 * p.arm }; } } : m;
@@ -217,6 +217,74 @@ const DUO_MOVESET = {
         blink: f >= 8 && f < 14 ? 0.5 : 0,
         fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40, say: duoSay('streak lost.', f, 8, 32),
       }),
+    },
+  },
+  smashAttacks: { // c = 0 … 1 charge held (the game passes it; the viewer shows none)
+    forwardSmash: { ...DUO_SA.forwardSmash, // pop quiz: hold up a flash card and study it (charge holds here, frame 10), then slam it forward and
+      // it turns over: ✓ correct is a big hit, ✗ wrong a feeble one. The game rolls the answer on release: odds right uncharged … fully charged
+      hitbox: { x: 30, y: -56, w: 50, h: 42 }, damage: 15, odds: 0.5, oddsCharged: 0.9, missDamage: 5, missKb: { base: 15, growth: 40, angle: 38 },
+      anim: (f, n, c = 0, roll = true) => { // roll = the answer (false = wrong; anything else shows it right)
+        const right = roll !== false, p = tween(f, [
+          [0, { card: [18, -22, 0.4] }],
+          [5, { x: -2, rot: -0.04, arm: [2, -30], legs: duoFeet([1, 0], [0, 0]), card: [34, -46, -0.1] }],
+          [10, { x: -3, sx: 0.98, sy: 1.02, rot: -0.06, arm: [2, -32], card: [34, -47, -0.1] }],
+          [13, { x: -8, sx: 0.93, sy: 1.09, rot: -0.22, arm: [4, -46], legs: duoFeet([8, 0], [4, 0]), card: [12, -72, -0.6] }],
+          [14, { x: 18, y: -2, sx: 1.2, sy: 0.86, rot: 0.18, arm: [-10, -16], legs: duoFeet([-16, 2], [2, 2]), card: [52, -36, 0.35] }],
+          [18, { x: 19, y: -2, sx: 1.18, sy: 0.87, rot: 0.17, arm: [-10, -16], legs: duoFeet([-16, 2], [2, 2]), card: [53, -35, 0.3] }],
+          [30, { x: 14, sx: 1.08, sy: 0.93, rot: 0.08, arm: [-4, -14], legs: duoFeet([-10, 0], [1, 0]), card: [46, -36, 0.2] }],
+          [48, { card: [36, -34, 0.1] }],
+        ]);
+        const after = f >= 18 && f < 44 ? Math.sin((f - 18) / 26 * Math.PI) : 0; // right: a happy hop · wrong: slumps, eyes half shut
+        if (right) p.y = (p.y || 0) - 6 * after; else { p.sy -= 0.08 * after; p.rot += 0.12 * after; p.blink = 0.5 * after; }
+        return {
+          ...p, card: f >= 2 && f < 44 ? [...p.card, f < 14 ? 0 : right ? 1 : -1, f >= 13 && f < 15 ? Math.cos((f - 13) / 2 * Math.PI) : 1] : null,
+          speed: f >= 14 && f < 24 ? 1 - (f - 14) / 10 : 0, dust: f >= 14 && f < 26 ? (f - 14) / 12 : null,
+          say: f < 14 ? duoSay('translate: owl', f, 2, 14) : duoSay(right ? '✓ búho! +15 XP' : '✗ correct answer: búho', f, 14, 46),
+        };
+      },
+    },
+    upSmash: { ...DUO_SA.upSmash, // streak flame: crouch as a flame kindles behind it and the streak counts up (charge holds here, frame 8),
+      // then spring up as it erupts into a pillar overhead. The longer the charge, the longer the streak and the taller the fire
+      hitbox: { x: -36, y: -150, w: 72, h: 110 },
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [6, { sx: 1.14, sy: 0.84, arm: [6, 6], legs: duoFeet([-3, 0], [3, 0]) }],
+          [11, { sx: 1.18, sy: 0.8, arm: [7, 7], legs: duoFeet([-3, 0], [3, 0]) }],
+          [12, { y: -8, sx: 0.86, sy: 1.22, arm: [-40, -40], legs: duoFeet([0, 4], [0, 4]) }],
+          [18, { y: -6, sx: 0.88, sy: 1.18, arm: [-44, -44], legs: duoFeet([0, 3], [0, 3]) }],
+          [30, { sx: 0.97, sy: 1.04, arm: [-14, -14] }],
+          [40, {}],
+        ]);
+        const days = Math.round((1 + 29 * Math.min(1, f / 8)) * (1 + 11.1 * c)); // ~30 days uncharged … ~365 at full charge
+        const flame = f < 12 ? [(70 + 40 * c) * Math.min(1, f / 6), 1] // kindling behind it
+          : f < 34 ? [(140 + 50 * c) * Math.min(1, (f - 11) / 3), f < 24 ? 1 : 1 - (f - 24) / 10] : null; // the pillar, then it dies down
+        return {
+          ...p, flame, blink: f >= 3 && f < 12 ? 0.4 : 0, puff: f === 12 ? 0 : null,
+          say: f < 12 ? duoSay(`🔥 day ${days}`, f, 2, 12) : [...(duoSay(`🔥 ${days}-day streak!`, f, 12, 38) || ['', 0]), Math.max(0, (flame?.[0] || 0) - 60)], // up over the fire
+        };
+      },
+    },
+    downSmash: { ...DUO_SA.downSmash, // unskippable ad: duck while an ad panel hovers over each side, its skip timer counting down
+      // (charge holds here, frame 8), then both slam down onto the floor, hitting both sides. Knockback goes away from Duo
+      hitbox: { x: -80, y: -58, w: 160, h: 58 },
+      anim: (f, n, c = 0) => {
+        const p = tween(f, [
+          [0, {}],
+          [8, { sx: 1.16, sy: 0.8, arm: [8, 8], legs: duoFeet([-3, 0], [3, 0]) }],
+          [11, { sx: 1.2, sy: 0.76, arm: [8, 8], legs: duoFeet([-3, 0], [3, 0]) }],
+          [12, { sx: 1.26, sy: 0.7, arm: [4, 4], legs: duoFeet([-4, 0], [4, 0]) }],
+          [22, { sx: 1.12, sy: 0.84, arm: [2, 2] }],
+          [30, { y: -4, sx: 0.94, sy: 1.08, arm: [-20, -20] }],
+          [38, {}],
+        ]);
+        const e = Math.min(1, Math.max(0, (f - 8) / 4)), ads = f < 12 ? [e * e * e, Math.min(1, f / 4)] // hover, then drop hard
+          : f < 38 ? [1, f < 30 ? 1 : 1 - (f - 30) / 8] : null;
+        return {
+          ...p, ads, blink: f >= 3 && f < 22 ? 0.6 : 0, puff: f === 12 ? 0 : null,
+          say: f < 12 ? duoSay(`ad · skip in ${5 - Math.round(4 * c)}…`, f, 2, 12) : f < 26 ? duoSay('✨ try Super free!', f, 12, 26) : duoSay('✕ too small to tap', f, 26, 38),
+        };
+      },
     },
   },
 };

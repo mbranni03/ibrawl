@@ -395,6 +395,7 @@ function stepPlayer(dt) {
     if (m.chargeAt != null) { // smashes: holding heavy freezes the wind-up at chargeAt, up to chargeFrames
       P.held = P.held && keys.heavy;
       if (P.held && P.f > m.chargeAt && P.chg < m.chargeFrames) { P.f = m.chargeAt; P.chg++; }
+      if (m.odds != null && P.roll == null && !P.held && P.f > m.chargeAt) P.roll = Math.random() < m.odds + (m.oddsCharged - m.odds) * P.chg / m.chargeFrames; // let go: a gamble (Duo's pop quiz) comes up right or wrong, better odds the longer it charged
     }
     if (attackQ && i >= 0 && i < 2 && !tiltQ && !keys.up && !keys.down) { P.nextJab = true; attackQ = 0; } // light during a jab queues the next one (a held direction is fine); a fresh tilt input waits for the cancel window instead
     if (P.nextJab && P.f >= done) { P.nextJab = false; setState(JABS[i + 1]); }
@@ -437,7 +438,7 @@ function stepPlayer(dt) {
     else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
-    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
+    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; P.roll = null; setState(keys.up ? 'upSmash' : keys.down ? 'downSmash' : 'forwardSmash'); }
     else if (specialQ && has('specials') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; specialQ = 0; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); } }
     else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab
@@ -543,7 +544,8 @@ function stepPlayer(dt) {
       if (b.hit === P.state || !overlaps(box, b)) continue;
       b.hit = P.state; P.landed = true;
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
-      hitBag(b, m.damage * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), m.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      const miss = P.roll === false && m.missKb; // a gamble that came up wrong hits softer
+      hitBag(b, (miss ? m.missDamage : m.damage) * (m.chargeMult ? 1 + (m.chargeMult - 1) * P.chg / m.chargeFrames : 1), miss ? m.missKb : m.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
     }
   }
   if (!m || P.f < m.startup) { for (const b of targets) b.hit = null; P.landed = false; }
@@ -639,7 +641,7 @@ function move(b, dt, onLand) {
 // which frame of which animation to show for the current state
 function clawdPose() {
   const f = P.f, atk = MOVES[P.state];
-  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0); if (P.held && f === atk.chargeAt) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; return p; } // tremble while charging
+  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0, P.roll); if (P.held && f === atk.chargeAt) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; return p; } // tremble while charging
   switch (P.state) {
     case 'idle': return M.idle.anim(f % 120, 120);
     case 'walk': return M.walk.anim(f % 40, 40);

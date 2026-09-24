@@ -6,10 +6,15 @@
 //   x, y offsets · sx, sy stretch (from the floor) · rot radians (+ = lean forward, around the middle) · blink 0 (open) … 1 (shut)
 //   legs = Claw'd's four [dx, dy] foot offsets in px, back to front: the outer two move these feet
 //   arm = px the wingtips swing about the shoulders (negative = up), or [back, front]: the wings are Duo's arms
+//   flame = [height px, alpha] a streak flame rising from the floor behind Duo (up smash)
+//   ads = [drop 0 (hovering high) … 1 (slammed on the floor), alpha] an ad panel either side of Duo (down smash)
+//   card = [dx, dy, tilt, mark, flip] a quiz card held out, centred dx, dy px from the feet: mark 0 = ?, 1 = ✓, -1 = ✗;
+//          flip = its width as it turns over (1 … 0 edge-on) (forward smash)
 const DUO = '#78c800', DUO_LIT = '#8ee000', DUO_FOOT = '#f49000', DUO_BEAK = '#ffc800';
 const DUO_K = 0.064; // reference units → px: about 68 px wide, 61 tall
 
 function drawDuo(cx, bottom, pose = {}, face = 1) {
+  if (pose.flame) drawStreakFlame(cx + (pose.x || 0) * face, bottom, ...pose.flame);
   ctx.save();
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
   ctx.translate(0, -30); ctx.rotate(pose.rot || 0); ctx.translate(0, 30); // origin back at the feet
@@ -49,6 +54,48 @@ function drawDuo(cx, bottom, pose = {}, face = 1) {
   for (const [fx, fy] of [[913, 690], [1081, 690], [997, 771]]) { ctx.beginPath(); ctx.ellipse(fx, fy, 55, 46, 0, 0, Math.PI); ctx.fill(); }
   duoFace(LW * 0.8, pose.blink, 15);
   ctx.restore();
+  if (pose.ads) for (const side of [-1, 1]) drawAdPanel(cx + (pose.x || 0) * face + side * 56, bottom - 130 * (1 - pose.ads[0]), pose.ads[1]);
+  if (pose.card) { const [dx, dy, tilt, mark, flip = 1] = pose.card; drawQuizCard(cx + ((pose.x || 0) + dx) * face, bottom + (pose.y || 0) + dy, tilt * face, mark, flip); }
+}
+
+// Duolingo's streak flame standing on the floor at x, y: an orange teardrop flicking its tip over, a yellow one inside
+function drawStreakFlame(x, y, h, alpha = 1) {
+  if (h < 1) return;
+  const w = 40 + 0.35 * h, lick = (k, hh, ww) => { // one flame, base centred at 0, 0
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-ww * 0.6, 0, -ww * 0.62, -hh * 0.5, -ww * 0.18, -hh * 0.8);
+    ctx.quadraticCurveTo(-ww * 0.02, -hh * 0.92, ww * 0.12 + k, -hh);
+    ctx.quadraticCurveTo(ww * 0.06, -hh * 0.74, ww * 0.3, -hh * 0.62);
+    ctx.bezierCurveTo(ww * 0.62, -hh * 0.36, ww * 0.6, 0, 0, 0); ctx.closePath();
+  };
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y + 2); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+  const k = j(3);
+  ctx.fillStyle = '#ff9600'; lick(k, h, w); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffc800'; lick(k * 0.5, h * 0.55, w * 0.55); ctx.fill();
+  ctx.restore();
+}
+
+// an unskippable Super Duolingo ad standing on x, y (its bottom centre), with a close button far too small to hit
+function drawAdPanel(x, y, alpha = 1) {
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x + j(0.5), y); ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
+  ctx.fillStyle = '#6f3cd1'; ctx.beginPath(); ctx.roundRect(-22, -58, 44, 58, 6); ctx.fill(); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+  ctx.font = '700 7px ui-monospace, Menlo, monospace'; ctx.fillText('AD', -14, -51);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillText('×', 17, -53); // the close button: good luck
+  ctx.fillStyle = '#fff'; ctx.font = '800 11px ui-monospace, Menlo, monospace'; ctx.fillText('SUPER', 0, -34);
+  ctx.fillStyle = '#ffc800'; ctx.beginPath(); ctx.roundRect(-16, -20, 32, 11, 5.5); ctx.fill();
+  ctx.fillStyle = INK; ctx.font = '700 6px ui-monospace, Menlo, monospace'; ctx.fillText('TRY FREE', 0, -14.5);
+  ctx.restore();
+}
+
+// a quiz flash card centred at x, y: ? until it's answered, then ✓ on green or ✗ on red
+function drawQuizCard(x, y, tilt, mark, flip) {
+  const [bg, edge, sign] = mark > 0 ? ['#d7ffb8', '#58a700', '✓'] : mark < 0 ? ['#ffdfe0', '#ea2b2b', '✗'] : ['#fff', INK, '?'];
+  ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.scale(Math.max(0.06, Math.abs(flip)), 1);
+  ctx.fillStyle = bg; ctx.strokeStyle = edge; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.roundRect(-17 + j(0.5), -13 + j(0.5), 34, 26, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = edge; ctx.font = '700 18px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(sign, 0, 1); ctx.restore();
 }
 
 // Duo's face (also the Duolingo logo), in reference art coordinates: the light green mask, eyes and beak.
