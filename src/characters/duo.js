@@ -8,6 +8,7 @@
 //   arm = px the wingtips swing about the shoulders (negative = up), or [back, front]: the wings are Duo's arms
 //   flame = [height px, alpha] a streak flame rising from the floor behind Duo (up smash)
 //   ads = [drop 0 (hovering high) … 1 (slammed on the floor), alpha] an ad panel either side of Duo (down smash)
+//   heart = [dx, dy, size, alpha] a heart held out / zapped (neutral special) · ice = [height px, alpha] a block of ice shot up out of the floor ahead of Duo (up special)
 //   card = [dx, dy, tilt, mark, flip] a quiz card held out, centred dx, dy px from the feet: mark 0 = ?, 1 = ✓, -1 = ✗;
 //          flip = its width as it turns over (1 … 0 edge-on) (forward smash)
 const DUO = '#78c800', DUO_LIT = '#8ee000', DUO_FOOT = '#f49000', DUO_BEAK = '#ffc800';
@@ -55,11 +56,13 @@ function drawDuo(cx, bottom, pose = {}, face = 1) {
   duoFace(LW * 0.8, pose.blink, 15);
   ctx.restore();
   if (pose.ads) for (const side of [-1, 1]) drawAdPanel(cx + (pose.x || 0) * face + side * 56, bottom - 130 * (1 - pose.ads[0]), pose.ads[1]);
+  if (pose.ice) drawIcePillar(cx + ((pose.x || 0) + 48) * face, bottom + (pose.y || 0), ...pose.ice);
+  if (pose.heart) { const [dx, dy, k, a] = pose.heart; drawHeart(cx + ((pose.x || 0) + dx) * face, bottom + (pose.y || 0) + dy, k, a); }
   if (pose.card) { const [dx, dy, tilt, mark, flip = 1] = pose.card; drawQuizCard(cx + ((pose.x || 0) + dx) * face, bottom + (pose.y || 0) + dy, tilt * face, mark, flip); }
 }
 
 // Duolingo's streak flame standing on the floor at x, y: an orange teardrop flicking its tip over, a yellow one inside
-function drawStreakFlame(x, y, h, alpha = 1) {
+function drawStreakFlame(x, y, h, alpha = 1, outer = '#ff9600', inner = '#ffc800') {
   if (h < 1) return;
   const w = 40 + 0.35 * h, lick = (k, hh, ww) => { // one flame, base centred at 0, 0
     ctx.beginPath(); ctx.moveTo(0, 0);
@@ -70,8 +73,8 @@ function drawStreakFlame(x, y, h, alpha = 1) {
   };
   ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x, y + 2); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
   const k = j(3);
-  ctx.fillStyle = '#ff9600'; lick(k, h, w); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#ffc800'; lick(k * 0.5, h * 0.55, w * 0.55); ctx.fill();
+  ctx.fillStyle = outer; lick(k, h, w); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = inner; lick(k * 0.5, h * 0.55, w * 0.55); ctx.fill();
   ctx.restore();
 }
 
@@ -85,6 +88,43 @@ function drawAdPanel(x, y, alpha = 1) {
   ctx.fillStyle = '#fff'; ctx.font = '800 11px ui-monospace, Menlo, monospace'; ctx.fillText('SUPER', 0, -34);
   ctx.fillStyle = '#ffc800'; ctx.beginPath(); ctx.roundRect(-16, -20, 32, 11, 5.5); ctx.fill();
   ctx.fillStyle = INK; ctx.font = '700 6px ui-monospace, Menlo, monospace'; ctx.fillText('TRY FREE', 0, -14.5);
+  ctx.restore();
+}
+
+// one of Duo's hearts, centred at x, y; size 1 = 26 px across
+function drawHeart(x, y, k = 1, alpha = 1) {
+  if (k <= 0 || alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x + j(0.4), y + j(0.4)); ctx.scale(k, k);
+  ctx.fillStyle = '#ff4b4b'; ctx.strokeStyle = INK; ctx.lineWidth = 2.4 / k; ctx.beginPath(); ctx.moveTo(0, 11);
+  ctx.bezierCurveTo(-4, 7, -13, 1, -13, -5); ctx.bezierCurveTo(-13, -12, -3, -13, 0, -6); ctx.bezierCurveTo(3, -13, 13, -12, 13, -5); ctx.bezierCurveTo(13, 1, 4, 7, 0, 11);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(-6, -6, 3, 2, -0.6, 0, 6.28); ctx.fill(); // shine
+  ctx.restore();
+}
+
+// a push notification from Duo, centred at x, y (the side special's homing shot): the app icon and a guilt trip. k = 0 … 1 popped in
+function drawReminder(x, y, k = 1) {
+  if (k <= 0) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(-36 + j(0.4), -12, 72, 24, 8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#58cc02'; ctx.beginPath(); ctx.roundRect(-31, -8, 16, 16, 4); ctx.fill(); // app icon
+  ctx.fillStyle = '#fff'; for (const ex of [-26, -20]) { ctx.beginPath(); ctx.arc(ex, -1, 2.4, 0, 6.28); ctx.fill(); }
+  ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = '700 7px ui-monospace, Menlo, monospace'; ctx.fillText('Duo', -11, -4.5);
+  ctx.font = '6.5px ui-monospace, Menlo, monospace'; ctx.fillText('misses you 🥺', -11, 4.5);
+  ctx.restore();
+}
+
+// a streak freeze: a block of ice h px tall standing on x, y, a flame frozen inside it
+function drawIcePillar(x, y, h, alpha = 1) {
+  if (h < 1) return;
+  const block = () => { ctx.beginPath(); ctx.roundRect(-22, -h, 44, h, 5); };
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(x + j(0.4), y);
+  ctx.fillStyle = '#d4f3ff'; block(); ctx.fill();
+  ctx.save(); ctx.clip(); drawStreakFlame(0, -6, Math.min(34, h - 8), 0.9, '#1cb0f6', '#ddf4ff'); ctx.restore();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2.4; block(); ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; // shine
+  ctx.beginPath(); ctx.moveTo(-14, 6 - h); ctx.lineTo(-14, Math.min(-6, 22 - h)); ctx.moveTo(-8, 6 - h); ctx.lineTo(-8, Math.min(-6, 12 - h)); ctx.stroke();
   ctx.restore();
 }
 

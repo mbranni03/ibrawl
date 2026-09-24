@@ -287,4 +287,76 @@ const DUO_MOVESET = {
       },
     },
   },
+  specials: {
+    neutralSpecial: { // heart zap: hold up one of its hearts and zap it forward. Duo has 5 a stock: each use spends one and hits harder than
+      // the last (the game passes how many it had before this use); with none left it fizzles
+      input: 'B (V / L), no direction · ground or air · 5 hearts a stock', hearts: 5, startup: 10, active: 4, endlag: 22, damage: 5,
+      kb: { base: 25, growth: 60, angle: 40 }, hitbox: { x: 24, y: -62, w: 54, h: 48 }, landingLag: 10,
+      anim: (f, n, c, had = 5) => {
+        const p = tween(f, [
+          [0, {}],
+          [8, { x: -3, sx: 0.96, sy: 1.05, rot: -0.1, arm: [2, -28], legs: duoFeet([2, 0], [0, 0]) }],
+          [10, { x: 6, sx: 1.1, sy: 0.93, rot: 0.12, arm: [-8, -20], legs: duoFeet([-6, 0], [2, 0]) }],
+          [14, { x: 6, sx: 1.08, sy: 0.94, rot: 0.1, arm: [-8, -20], legs: duoFeet([-6, 0], [2, 0]) }],
+          [36, {}],
+        ]);
+        if (!had) return { // out of hearts: holds up an empty wing, droops
+          ...p, heart: null, sy: p.sy - 0.06 * Math.min(1, f / 10), blink: f >= 10 ? 0.5 : 0, say: duoSay('💔 out of hearts · get Super!', f, 6, 36),
+        };
+        const left = had - 1;
+        return {
+          ...p, blink: f >= 10 && f < 14 ? 0.4 : 0, speed: f >= 10 && f < 14 ? 0.5 : 0,
+          heart: f < 10 ? [30, -44, 0.5 + 0.05 * f, Math.min(1, f / 3)] : f < 20 ? [30 + 3 * (f - 10), -40, 1 + 0.06 * (f - 10), 1 - (f - 10) / 10] : null, // held up, then zapped out
+          say: duoSay('❤'.repeat(left) + '🖤'.repeat(5 - left), f, 10, 36),
+        };
+      },
+    },
+    sideSpecial: { // reminder: flick a wing and a push notification pops out, then drifts after the nearest target, turning to follow it
+      // through anything. One out at a time
+      input: 'B (V / L) + a direction, ground or air · turns that way first', startup: 12, active: 2, endlag: 22, damage: 7,
+      kb: { base: 25, growth: 50, angle: 45 }, hitbox: null, landingLag: 10, projectile: { x: 50, y: -44, speed: 240, life: 3, homing: 2.2, r: 16 },
+      shotArt: drawReminder,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [10, { x: -3, sx: 0.96, sy: 1.04, rot: -0.12, arm: [2, -40], legs: duoFeet([2, 0], [0, 0]) }],
+          [12, { x: 5, sx: 1.08, sy: 0.95, rot: 0.1, arm: [-6, -14], legs: duoFeet([-5, 0], [2, 0]) }],
+          [18, { x: 4, sx: 1.05, sy: 0.97, rot: 0.08, arm: [-6, -16], legs: duoFeet([-4, 0], [1, 0]) }],
+          [36, {}],
+        ]),
+        say: duoSay('🔔 sent', f, 12, 36),
+      }),
+    },
+    upSpecial: { // streak freeze: raise both wings, slam them down, and a block of ice shoots up out of the floor ahead, launching whoever's
+      // standing there. Ground or air (in the air it bursts up from Duo's feet)
+      input: 'up + B (V / L), ground or air', startup: 8, active: 6, endlag: 22, damage: 10, kb: { base: 40, growth: 75, angle: 85 },
+      hitbox: { x: 24, y: -84, w: 48, h: 84 }, landingLag: 12,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [6, { y: -3, sx: 0.92, sy: 1.1, rot: -0.06, arm: [-40, -40], legs: duoFeet([0, 1], [0, 1]) }],
+          [8, { sx: 1.16, sy: 0.84, rot: 0.1, arm: [6, 6], legs: duoFeet([-3, 0], [3, 0]) }],
+          [14, { sx: 1.12, sy: 0.88, rot: 0.08, arm: [4, 4], legs: duoFeet([-3, 0], [3, 0]) }],
+          [36, {}],
+        ]),
+        ice: f < 8 ? null : f < 28 ? [76 * Math.min(1, (f - 7) / 3), 1] : f < 36 ? [76 - 30 * (f - 28) / 8, 1 - (f - 28) / 8] : null, // shoots up, holds, sinks away
+        puff: f === 8 ? 0 : null,
+        say: f >= 8 && f < 36 ? [...duoSay('🧊 streak freeze equipped', f, 8, 36), 16] : null,
+      }),
+    },
+    downSpecial: { // Duo is watching: set a little Duo plush down in front. It sits there staring, and pounces on anything that comes close.
+      // One out at a time; it gives up after a while. sub: scale of Duo · set down px ahead · seconds it waits · pounce = how close is close
+      input: 'down + B (V / L), ground or air · one plush out at a time', startup: 14, active: 2, endlag: 16, damage: 6,
+      kb: { base: 30, growth: 45, angle: 50 }, hitbox: null, landingLag: 10, sub: { scale: 0.5, x: 44, speed: 0, life: 8, report: 0, pounce: 170 },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [8, { x: -2, rot: 0.3, sx: 1.04, sy: 0.94, arm: [-6, -26], legs: duoFeet([2, 0], [-1, 0]) }],
+          [14, { x: 4, rot: 0.42, sx: 1.06, sy: 0.92, arm: [-4, -14], legs: duoFeet([-4, 0], [2, 0]) }],
+          [32, {}],
+        ]),
+        say: duoSay('Duo is watching 👀', f, 12, 32),
+      }),
+    },
+  },
 };
