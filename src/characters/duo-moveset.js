@@ -11,11 +11,19 @@ const DUO_AIR = { arm: -12, legs: duoFeet([1, -2], [-1, -2]) }; // wings half ou
 // holding a grabbed target: leaning back a touch, the front wing clamped round it (carry = where the target sits, as in Claw'd's HOLD)
 const DUO_HOLD = { rot: -0.04, arm: [-10, -20], legs: duoFeet([-3, 0], [2, 0]), carry: [52, -4, 0] };
 const DUO_GR = MOVESET.grabs; // frame data starts as Claw'd's
-// Claw'd's arm swings are sized for his little nubs: the movement Duo borrows from him swings its wings 4x as far
-const duoWings = m => m.anim ? { ...m, anim: (f, n) => { const p = m.anim(f, n); return p.arm == null ? p : { ...p, arm: Array.isArray(p.arm) ? p.arm.map(a => 4 * a) : 4 * p.arm }; } } : m;
+// Claw'd's arm swings are sized for his little nubs: a move Duo borrows from him swings its wings k times as far, and where he
+// squeezes his eyes shut > < Duo just shuts them
+const duoize = (anim, k = 4) => (...a) => {
+  const p = { ...anim(...a) };
+  if (p.arm != null) p.arm = Array.isArray(p.arm) ? p.arm.map(v => k * v) : k * p.arm;
+  if (p.squint) p.blink = Math.max(p.blink || 0, 0.85);
+  return p;
+};
+const duoWings = (m, k) => m.anim ? { ...m, anim: duoize(m.anim, k) } : m;
+const duoBorrow = (group, k) => Object.fromEntries(Object.entries(MOVESET[group]).map(([key, m]) => [key, duoWings(m, k)]));
 const DUO_MOVESET = {
   movement: {
-    ...Object.fromEntries(Object.entries(MOVESET.movement).map(([k, m]) => [k, duoWings(m)])),
+    ...duoBorrow('movement'),
     doubleJump: {
       input: 'jump (airborne) · up to 5 times', frames: 30,
       anim: f => tween(f, [ // wings sweep up, beat down hard to pop it up a little way, then it drops toward the next beat
@@ -443,6 +451,33 @@ const DUO_MOVESET = {
         [22, { rot: 0.06, sx: 1.1, sy: 0.9, arm: -4 }],
         [35, {}],
       ], extra: f => ({ puff: f >= 14 ? (f - 14) / 10 : null, blink: f >= 14 && f < 18 ? 0.6 : 0 }) }),
+    },
+  },
+  // hanging on with both wings hooked over the lip: Claw'd's ledge moves with the wings swung twice as far (four times reaches past the top)
+  ledge: {
+    ...duoBorrow('ledge', 2),
+    ledgeAttack: { ...MOVESET.ledge.ledgeAttack, // haul up, land in a crouch and sweep the front wing low along the stage
+      anim: f => {
+        const p = duoize(MOVESET.ledge.ledgeAttack.anim, 2)(f);
+        if (f >= 13) p.arm = tween(f, [[13, { arm: [0, 8] }], [16, { arm: [-8, -16] }], [20, { arm: [-8, -16] }], [28, { arm: [-2, -4] }], [36, { arm: [0, 0] }]]).arm;
+        return { ...p, say: duoSay('back to class!', f, 16, 36) };
+      },
+    },
+  },
+  defense: { // dodges only: Duo has no shield yet (the game leaves it off for a fighter without its own)
+    spotDodge: duoWings(MOVESET.defense.spotDodge), rollForward: duoWings(MOVESET.defense.rollForward), rollBack: duoWings(MOVESET.defense.rollBack),
+    airDodgeForward: duoWings(MOVESET.defense.airDodgeForward), airDodgeBack: duoWings(MOVESET.defense.airDodgeBack), airDodge: duoWings(MOVESET.defense.airDodge),
+  },
+  reactions: {
+    ...duoBorrow('reactions'),
+    ko: { ...MOVESET.reactions.ko, // spins off shrinking, then a burst of ink and green with one of its hearts popping in the middle
+      anim: f => {
+        const p = duoize(MOVESET.reactions.ko.anim)(f);
+        return p.blast ? { ...p, blast: [...p.blast, DUO, (x, y, r) => drawHeart(x, y, r / 13)] } : p;
+      },
+    },
+    respawn: { ...MOVESET.reactions.respawn, say: '🔧 streak repaired', // lowered back in on the platform
+      anim: f => ({ ...duoize(MOVESET.reactions.respawn.anim)(f), say: ['🔧 streak repaired', f < 100 ? Math.min(1, f / 10) : 0] }),
     },
   },
 };
