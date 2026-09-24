@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ibrawl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #26231f; overflow: hidden; }
+  body { display: grid; place-items: center; }
+  canvas { display: block; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="sketch.js"></script>
+<script src="clawd.js"></script>
+<script src="moveset.js"></script>
+<script>
+const W = 1280, H = 720, STEP = 1 / 60;
+const cv = document.getElementById('c'); ctx = cv.getContext('2d');
+const dpr = Math.min(2, window.devicePixelRatio || 1);
+cv.width = W * dpr; cv.height = H * dpr;
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+const paper = makePaper(W, H, dpr);
+
+// ---------- arena ----------
+const stage = { x: 240, y: 500, w: 800, h: 110 }; // solid collision box
+const stagePoly = [[240, 500], [1040, 500], [1040, 530], [960, 610], [320, 610], [240, 530]];
+const plats = [{ x: 330, y: 375, w: 210 }, { x: 740, y: 375, w: 210 }, { x: 535, y: 255, w: 210 }]; // pass-through
+const BLAST = { l: -220, r: W + 220, t: -360, b: H + 200 };
+
+// ---------- player ----------
+const G = 2300, RUN = 440, DASH = 600, WALK = 190, CRAWL = 110, JUMP = 930, HOP = 640, AIRJUMP = 820;
+const TURN_SPEED = 1.4; // turnaround plays this much faster than a plain brake
+const M = MOVESET.movement;
+// collision box = Claw'd's body + legs (the arm nubs overhang it)
+const P = { x: 610, y: 380, w: 60, h: 50, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false };
+const GROUNDED = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWalk', 'crouchUp', 'squat', 'land'];
+let falls = 0;
+const fx = []; // dust clouds left in the world: { x, y, dir, t }
+
+const keys = {}; let jumpQ = false, downQ = false, dashQ = false, lastTap = { a: null, t: 0 }, lastDir = 0;
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'jump', KeyW: 'jump', Space: 'jump',
+                 ArrowDown: 'down', KeyS: 'down' };
+// ---------- pause menu ----------
+const MENU = ['resume', 'controls', 'restart'];
+const CONTROLS = [['← → / A D', 'walk · double-tap to run'], ['↑ / W / Space', 'jump · tap = short hop · x2'],
+                  ['↓ / S', 'crouch (+ ← → crawl) · drop through · fast fall'], ['Esc', 'pause']];
+let paused = false, sel = 0, showControls = false;
+function setPaused(on) {
+  paused = on; sel = 0; showControls = false;
+  for (const k in keys) keys[k] = false; jumpQ = downQ = dashQ = false;
+}
+function restart() {
+  falls = 0; fx.length = 0;
+  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false });
+}
+function choose(i) {
+  if (MENU[i] === 'controls') showControls = true;
+  else { if (MENU[i] === 'restart') restart(); setPaused(false); }
+}
+addEventListener('keydown', e => {
+  if (e.code === 'Escape') { e.preventDefault(); if (showControls) showControls = false; else setPaused(!paused); return; }
+  if (paused) {
+    const a = KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
+    if (showControls) { if (ok) showControls = false; }
+    else if (a === 'jump' && e.code !== 'Space') sel = (sel + MENU.length - 1) % MENU.length;
+    else if (a === 'down') sel = (sel + 1) % MENU.length;
+    else if (ok) choose(sel);
+    else return;
+    e.preventDefault(); return;
+  }
+  const a = KEYMAP[e.code]; if (!a) return;
+  e.preventDefault();
+  if (!keys[a]) {
+    if (a === 'jump') jumpQ = true;
+    if (a === 'down') downQ = true;
+    if (a === 'left' || a === 'right') { // same direction twice within 250ms = dash
+      lastDir = a === 'left' ? -1 : 1;
+      if (lastTap.a === a && e.timeStamp - lastTap.t < 250) dashQ = true;
+      lastTap = { a, t: e.timeStamp };
+    }
+  }
+  keys[a] = true;
+});
+addEventListener('keyup', e => { const a = KEYMAP[e.code]; if (a) keys[a] = false; });
+addEventListener('blur', () => setPaused(true));
+// mouse: hover highlights, click picks (items drawn in drawPause)
+function menuAt(e) {
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  const i = Math.floor((y - (H / 2 - 26)) / 52);
+  return paused && !showControls && Math.abs(x - W / 2) < 120 && i >= 0 && i < MENU.length ? i : -1;
+}
+cv.addEventListener('mousemove', e => { const i = menuAt(e); if (i >= 0) sel = i; cv.style.cursor = i >= 0 ? 'pointer' : ''; });
+cv.addEventListener('click', e => {
+  if (paused && showControls) { showControls = false; return; }
+  const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
+});
+
+const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const setState = s => { if (P.state !== s) { P.state = s; P.f = 0; } };
+const dust = (dx, dir) => fx.push({ x: P.x + P.w / 2 + dx, y: P.y + P.h, dir, t: 0 });
+const puff = () => { dust(-26, -1); dust(26, 1); };
+
+function land(surface, wasGround) {
+  if (!wasGround) {
+    P.fastFall = false;
+    if (P.vy > 300) { setState('land'); puff(); } else setState('idle');
+  }
+  P.vy = 0; P.ground = true; P.on = surface; P.jumps = 2;
+}
+
+function respawn() {
+  falls++;
+  Object.assign(P, { x: W / 2 - P.w / 2, y: -80, vx: 0, vy: 0, jumps: 1, inv: 1.5, fastFall: false });
+  setState('air');
+}
+
+function update(dt) {
+  P.f++;
+  const dir = keys.left && keys.right ? lastDir : (keys.right ? 1 : 0) - (keys.left ? 1 : 0), s = P.state; // both held: newest wins
+
+  if (P.ground) {
+    if (jumpQ && s !== 'squat') setState('squat');
+    else if (downQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = 1; setState('drop'); } // through the platform
+    else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
+      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = 1; setState('air'); puff(); }
+    }
+    else if (s === 'skid') { // braking slide; pressing the other way at any point turns it into a turnaround
+      if (dir === -P.face) P.turn = true;
+      P.sk += P.turn ? TURN_SPEED : 1; // skid animation progress
+      if (P.turn && P.sk >= 26) { P.face = -P.face; setState(dir === P.face ? 'run' : 'idle'); } // still holding the new way = keep running
+      else if (!P.turn && dir === P.face) setState('run');
+      else if (!P.turn && P.sk >= 16) setState('idle');
+    }
+    else if (keys.down && P.on === stage) { // crouch; add a direction to crawl once fully down
+      if (dir && (s === 'crouchWalk' || (s === 'crouch' && P.f >= 5))) { P.face = dir; setState('crouchWalk'); }
+      else if (!dir && s === 'crouchWalk') { P.state = 'crouch'; P.f = 5; } // back to the held crouch, skipping the squat-down
+      else if (s !== 'crouch') setState('crouch');
+    }
+    else if (s === 'crouch' || s === 'crouchWalk') setState('crouchUp');
+    else if ((s === 'land' && (P.f < 4 || (!dir && P.f < 15))) || (s === 'crouchUp' && !dir && P.f < 10)) {} // let these play out
+    else if (s === 'run' && dir !== P.face) { P.turn = dir === -P.face; P.sk = 0; setState('skid'); dust(P.face * 34, P.face); } // let go or reversed
+    else if (!dir) setState('idle');
+    else if (s === 'run' || (s === 'dash' && P.f >= 16)) setState('run');
+    else if (dashQ || (s === 'dash' && dir !== P.face)) { P.face = dir; P.state = 'dash'; P.f = 0; } // turning mid-dash restarts it
+    else if (s !== 'dash') { P.face = dir; setState('walk'); }
+  } else {
+    if (GROUNDED.includes(s)) { P.jumps = Math.min(P.jumps, 1); setState('air'); } // walked off an edge
+    if (jumpQ && P.jumps > 0) { P.vy = -AIRJUMP; P.jumps = 0; P.fastFall = false; setState('djump'); }
+    if (downQ && P.vy > -150) P.fastFall = true; // tap down near the peak or after
+    if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20)) setState('air');
+  }
+  jumpQ = downQ = dashQ = false;
+
+  // horizontal: ground speed comes from the state, air speed from the stick
+  let target = 0, accel;
+  if (P.ground) {
+    if (['walk', 'dash', 'run', 'crouchWalk'].includes(P.state)) target = P.face * { walk: WALK, dash: DASH, run: RUN, crouchWalk: CRAWL }[P.state];
+    accel = target ? 4200 : P.state === 'skid' ? (P.turn ? 1800 * TURN_SPEED : 1800) : 3600;
+  } else { target = dir * RUN; accel = dir ? 2300 : 700; }
+  const dv = target - P.vx;
+  P.vx += Math.sign(dv) * Math.min(Math.abs(dv), accel * dt);
+  if ((P.state === 'run' && P.f % 12 === 0) || (P.state === 'dash' && P.f === 5)) dust(-P.face * 34, -P.face); // steps / dash launch
+
+  P.vy += G * dt;
+  P.vy = Math.min(P.vy, P.fastFall ? 1500 : 950);
+  if (P.fastFall) P.vy = Math.max(P.vy, 1100);
+
+  const wasGround = P.ground;
+  P.drop = Math.max(0, P.drop - dt);
+  P.inv = Math.max(0, P.inv - dt);
+
+  P.x += P.vx * dt;
+  if (overlaps(P, stage)) { P.x = P.vx > 0 ? stage.x - P.w : stage.x + stage.w; P.vx = 0; }
+
+  const prevBottom = P.y + P.h;
+  P.y += P.vy * dt;
+  P.ground = false; P.on = null;
+  if (overlaps(P, stage)) {
+    if (P.vy > 0) { P.y = stage.y - P.h; land(stage, wasGround); }
+    else { P.y = stage.y + stage.h; P.vy = 0; }
+  }
+  if (P.vy >= 0 && P.drop <= 0) for (const pl of plats) {
+    if (P.x + P.w > pl.x && P.x < pl.x + pl.w && prevBottom <= pl.y + 0.5 && P.y + P.h >= pl.y) {
+      P.y = pl.y - P.h; land(pl, wasGround);
+    }
+  }
+
+  for (let i = fx.length - 1; i >= 0; i--) if ((fx[i].t += dt / 0.25) >= 1) fx.splice(i, 1);
+
+  const cx = P.x + P.w / 2, cy = P.y + P.h / 2;
+  if (cx < BLAST.l || cx > BLAST.r || cy > BLAST.b || cy < BLAST.t) respawn();
+}
+
+// which frame of which animation to show for the current state
+function clawdPose() {
+  const f = P.f;
+  switch (P.state) {
+    case 'idle': return M.idle.anim(f % 120, 120);
+    case 'walk': return M.walk.anim(f % 40, 40);
+    case 'dash': return M.dash.anim(Math.min(f, 16), 20);
+    case 'run': return M.run.anim(f % 24, 24);
+    case 'skid': return M.skid.anim(Math.min(Math.floor(P.sk), P.turn ? 25 : 13), 26); // a plain brake holds before the flip
+    case 'crouch': return M.crouch.anim(f < 50 ? f : 5 + (f - 5) % 45, 60); // loop the held part
+    case 'crouchWalk': return M.crouchWalk.anim(f % 32, 32);
+    case 'crouchUp': return M.crouch.anim(Math.min(50 + f, 59), 60);
+    case 'squat': return M.jumpSquat.anim(Math.min(6, f * 1.5), 14);
+    case 'land': return M.land.anim(Math.min(3 + f, 17), 18);
+    case 'drop': return M.platformDrop.anim(Math.min(8 + f, 30), 40);
+    case 'djump': return M.doubleJump.anim(Math.min(3 + f, 28), 36);
+  }
+  if (P.fastFall) return M.fastFall.anim(f % 24, 24);
+  if (P.vy > 450) return M.fall.anim(f % 40, 40);
+  // rising / floating: pick the jump-arc frame from vertical speed (stretched going up, tucked at the peak, reaching down)
+  return M.fullHop.anim(7 + 48 * Math.min(1, Math.max(0, (P.vy + JUMP) / (JUMP + 450))), 64);
+}
+
+// ---------- render ----------
+function surfaceBelow() {
+  const cx = P.x + P.w / 2, feet = P.y + P.h;
+  let best = null;
+  for (const s of [stage, ...plats]) if (cx > s.x && cx < s.x + s.w && s.y >= feet - 1 && (best === null || s.y < best)) best = s.y;
+  return best;
+}
+
+function render(t) {
+  seed = Math.floor(t * 8) * 7919 + 1;
+  ctx.drawImage(paper, 0, 0, W, H);
+  ctx.lineCap = ctx.lineJoin = 'round';
+
+  // faint pencil background
+  ctx.strokeStyle = INK; ctx.globalAlpha = 0.18; ctx.lineWidth = 1.5;
+  ellipse(1040, 150, 62, 62, 2);
+  line(40, 470, 330, 440, 3, 1); line(330, 440, 620, 468, 3, 1); line(700, 460, 1000, 430, 3, 1); line(1000, 430, 1240, 462, 3, 1);
+  ctx.globalAlpha = 1;
+
+  // main stage
+  ctx.fillStyle = '#e3d9c6'; path(stagePoly); ctx.fill();
+  ctx.strokeStyle = INK;
+  hatch([[240, 532], [1040, 532], [960, 610], [320, 610]]);
+  ctx.lineWidth = 2.6; poly(stagePoly, 1.6);
+  ctx.lineWidth = 1.4; line(250, 512, 1030, 512, 1.2, 1);
+
+  // platforms
+  for (const pl of plats) {
+    const r = [[pl.x, pl.y], [pl.x + pl.w, pl.y], [pl.x + pl.w - 8, pl.y + 12], [pl.x + 8, pl.y + 12]];
+    ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
+    hatch(r, 9, 0.35);
+    ctx.lineWidth = 2.2; poly(r, 1.3);
+  }
+
+  // shadow
+  const sy = surfaceBelow();
+  if (sy !== null) {
+    const dist = sy - (P.y + P.h), s = Math.max(0.25, 1 - dist / 400);
+    ctx.globalAlpha = 0.35 * s;
+    ctx.fillStyle = 'rgba(42,38,34,0.35)';
+    ctx.beginPath(); ctx.ellipse(P.x + P.w / 2, sy, 44 * s, 5 * s, 0, 0, 6.28); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // player (flickers after respawn)
+  for (const d of fx) drawDust(d.x, d.y, d.t, d.dir);
+  // x / air in poses are preview-only root motion; here physics moves Claw'd
+  if (!(P.inv > 0 && Math.floor(t * 14) % 2)) drawClawd(P.x + P.w / 2, P.y + P.h, { ...clawdPose(), x: 0 }, P.face);
+
+  // hud
+  ctx.fillStyle = INK;
+  ctx.font = '600 26px Caveat, cursive';
+  ctx.textAlign = 'right'; ctx.fillText('falls: ' + falls, W - 34, 52); ctx.textAlign = 'left';
+  if (paused) drawPause();
+}
+
+function drawPause() {
+  ctx.fillStyle = 'rgba(38,35,31,0.8)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#efe7d6'; ctx.textAlign = 'center';
+  ctx.font = '700 84px Caveat, cursive'; ctx.fillText(showControls ? 'controls' : 'paused', W / 2, H / 2 - 70);
+  if (showControls) {
+    ctx.font = '600 32px Caveat, cursive';
+    CONTROLS.forEach(([k, d], i) => {
+      const y = H / 2 + 5 + i * 46;
+      ctx.textAlign = 'right'; ctx.globalAlpha = 1; ctx.fillText(k, W / 2 - 150, y);
+      ctx.textAlign = 'left'; ctx.globalAlpha = 0.75; ctx.fillText(d, W / 2 - 110, y);
+    });
+    ctx.textAlign = 'center';
+  } else {
+    ctx.font = '600 40px Caveat, cursive';
+    MENU.forEach((m, i) => {
+      ctx.globalAlpha = i === sel ? 1 : 0.5;
+      ctx.fillText((i === sel ? '›  ' : '') + m + (i === sel ? '  ‹' : ''), W / 2, H / 2 + 10 + i * 52);
+    });
+  }
+  ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive';
+  ctx.fillText(showControls ? 'Esc / Enter / click  back' : '↑ ↓ choose · Enter / Space / click select · Esc resume', W / 2, H / 2 + 200);
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+}
+
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(0.1, (now - last) / 1000); last = now;
+  if (paused) acc = 0;
+  while (acc >= STEP) { update(STEP); acc -= STEP; }
+  render(now / 1000);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
