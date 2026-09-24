@@ -73,6 +73,7 @@
 <script src="../src/characters/grok.js"></script>
 <script src="../src/characters/grok-moveset.js"></script>
 <script src="../src/characters/wumpus.js"></script>
+<script src="../src/characters/wumpus-moveset.js"></script>
 <script src="../src/characters/android.js"></script>
 <script src="../src/characters/duo.js"></script>
 <script src="../src/characters/duo-moveset.js"></script>
@@ -98,7 +99,7 @@ const basic = { ...todo, movement: MOVESET.movement };
 const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
   grok: { name: 'Grok Bot', moves: { ...todo, ...GROK_MOVESET }, draw: drawGrok, fx: drawClawdFx },
-  wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
+  wumpus: { name: 'Wumpus', moves: { ...todo, ...WUMPUS_MOVESET }, draw: drawWumpus, fx: drawClawdFx },
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
   duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
