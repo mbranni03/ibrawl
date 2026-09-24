@@ -131,7 +131,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   if (pose.say) {
     ctx.save(); ctx.globalAlpha *= pose.say[1]; ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK;
     const c = pose.carry, over = c && Math.abs(c[0]) < 45 ? bottom + c[1] - 86 : Infinity; // above a bag carried overhead
-    ctx.fillText(pose.say[0], mx, Math.min(bottom - 78, over)); ctx.restore();
+    ctx.fillText(pose.say[0], mx, Math.min(bottom + Math.min(0, pose.y || 0) - 78, over)); ctx.restore(); // rises with a lifted pose
   }
   if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged, pose.flow); }
   if (pose.shatter != null) { // terminal shards burst up and out from where it was held, tumble and fade

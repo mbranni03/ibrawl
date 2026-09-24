@@ -56,14 +56,14 @@ const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
 // attack states are named after their move. Rebuilt for the fighter in play (versus); a group it doesn't have stays Claw'd's, which has() keeps it out of.
 // Claw'd's specials run on their own states (think, tether, subagent); a fighter with its own (OWN_B) has them as plain moves, on the ground and in the air
 let ATK, AIR, MOVES, OWN_B = false;
 function moveTables(set) {
   const g = k => set[k] || MOVESET[k];
-  OWN_B = !!set.specials && set.specials !== MOVESET.specials;
+  OWN_B = !!set.specials && set.specials !== MOVESET.specials; GR = g('grabs');
   const B = OWN_B ? set.specials : { sideSpecial: SIDE_B, downSpecial: DOWN_B };
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), ...B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), ...B };
@@ -334,14 +334,14 @@ function breakShield() {
 
 // holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart
 function grabBag(b) {
-  Object.assign(b, { held: true, vx: 0, vy: 0 }); P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
+  Object.assign(b, { held: true, vx: 0, vy: 0, pings: 0 }); P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
 }
 function holdStep(dir) {
   const b = heldBag(); if (!b) return setState('idle');
   if (--P.holdT <= 0) { Object.assign(b, { held: false, vx: P.face * 300, vy: -250 }); P.vx = -P.face * 200; return setState('idle'); }
   if (P.state === 'pummel') {
     const m = GR.pummel;
-    if (P.f === m.startup) hitBag(b, m.damage, NO_KB, P.face);
+    if (P.f === m.startup) { hitBag(b, m.damage, NO_KB, P.face); if (m.badge) b.pings++; } // badge: count them up on it
     if (P.f >= m.startup + m.active + m.endlag) setState('hold');
   }
   else if (attackQ) { attackQ = 0; setState('pummel'); }
@@ -813,6 +813,10 @@ function drawTargets(t) {
     const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh + (b.pinT > 0 ? Math.sin(t * 50) * 1.5 : 0), by = b.y + b.h; // pinned: struggling
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
     if (b.pinT > 0) drawPin(...b.pinAt, Math.min(1, b.pinT * 5)); // Wumpus's pin, still stuck through it (fades as it pops free)
+    if (b.held && b.pings) { // unread pings from Wumpus's pummel: a red badge on its shoulder
+      const x = bx + b.w / 2 - 2, y = b.y + 4; ctx.fillStyle = '#ed4245'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.pings, x, y + 0.5); ctx.textBaseline = 'alphabetic';
+    }
     if (b.slowT > 0) { ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK; ctx.fillText(`slowmode · ${Math.ceil(b.slowT)}s`, bx, b.y - (b.id === 'bag' ? 44 : 10)); } // Nelly got it
     if (b.id !== 'bag') continue;
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;

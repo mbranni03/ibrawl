@@ -1,6 +1,6 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. Groups not here yet (grabs, defense, ledge) are still to build.
+// Fields are as in clawd-moveset.js. Groups not here yet (defense, ledge) are still to build.
 let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
@@ -8,6 +8,7 @@ const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f 
 const MV = MOVESET.movement, cycle = (f, n, k = 1) => Math.sin(f / n * Math.PI * 2 * k);
 const ease = (f, ks) => tween(f, ks.map(([k, a]) => [k, { a }])).a; // one number eased through [[frame, value], …]
 const armsOn = (m, arms) => ({ ...m, anim: (f, n = m.frames) => ({ ...m.anim(f, n), arms: arms(f, n) }) });
+const WHOLD = { rot: -0.05, ears: [0.2, 1.4], reach: [14, 16], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]], carry: [50, -4, 0] }; // hugging it: front ear over it, paws on
 const WUMPUS_MOVESET = {
   movement: {
     ...MV,
@@ -294,6 +295,93 @@ const WUMPUS_MOVESET = {
         waves: f >= 4 && f < 20 ? (f - 4) / 16 : null,
         say: sayW('undeafened', f, 4, 24),
       }),
+    },
+  },
+  grabs: { // like Claw'd's (carry = where the held one's bottom-centre goes; throws let go on their startup frame)
+    grab: { // Friend Request: paws out and the front ear flops over it in a hug; a whiff hugs thin air
+      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 18, y: -50, w: 42, h: 46 }, grab: true,
+      anim: f => tween(f, [
+        [0, {}],
+        [4, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, ears: [0.2, -0.3], arms: 0.4 }],
+        [6, { x: 6, sx: 1.1, sy: 0.93, rot: 0.14, ears: [0.3, 1.5], reach: [16, 18], legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [9, { x: 6, sx: 1.1, sy: 0.93, rot: 0.14, ears: [0.3, 1.6], reach: [16, 18], legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [16, { x: 4, sx: 1.03, sy: 0.97, rot: 0.06, ears: 0.5, reach: [4, 4] }],
+        [31, {}],
+      ]),
+    },
+    dashGrab: { // out of a run: dives in for the hug and slides on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 18, y: -50, w: 58, h: 46 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [5, { x: -2, sx: 1.06, sy: 0.92, rot: -0.04, ears: [0.3, -0.2], arms: 0.6 }],
+          [9, { x: 12, y: -2, sx: 1.16, sy: 0.88, rot: 0.22, ears: [0.4, 1.6], reach: [18, 20], legs: [[-8, 2], [0, 0], [0, 0], [4, 1]] }],
+          [12, { x: 14, sx: 1.14, sy: 0.88, rot: 0.2, ears: [0.4, 1.6], reach: [18, 20], legs: [[-8, 1], [0, 0], [0, 0], [4, 0]] }],
+          [24, { x: 8, sx: 1.04, sy: 0.96, rot: 0.06, ears: 0.4, reach: [4, 4] }],
+          [40, {}],
+        ]),
+        speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null,
+      }),
+    },
+    hold: { // got it: hugging tight, rocking a little. Request's still pending
+      input: 'grab connects', frames: 60, breakFree: 90, perDmg: 1.2,
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return { ...WHOLD, rot: -0.05 + 0.03 * b, sx: 1.02 + 0.01 * b, sy: 0.98 - 0.01 * b, carry: [50, -4 + b, 0], say: ['friend request sent', 1] };
+      },
+    },
+    pummel: { // ping: a squeeze, and a red unread badge on it counts up (the game draws that: badge)
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5, badge: true,
+      anim: f => tween(f, [
+        [0, WHOLD],
+        [4, { ...WHOLD, rot: -0.1, sx: 0.96, sy: 1.04, ears: [0.2, 1.1], carry: [48, -6, 0] }],
+        [5, { ...WHOLD, rot: 0.06, sx: 1.06, sy: 0.94, ears: [0.2, 1.7], reach: [18, 20], carry: [52, -2, 0.05] }],
+        [16, WHOLD],
+      ]),
+    },
+    forwardThrow: { // Move to AFK: rear back and shove it off into the AFK channel
+      input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['moving to AFK…', '💤 moved to AFK'], keys: [
+        [0, WHOLD],
+        [7, { x: -4, rot: -0.18, sx: 0.94, sy: 1.06, ears: [0.3, 0.9], reach: [2, 4], legs: legsAll(2, 0), carry: [42, -8, -0.15] }],
+        [10, { x: 6, rot: 0.22, sx: 1.16, sy: 0.88, ears: [0.2, 1.6], reach: [22, 24], legs: [[-8, 0], [0, 0], [0, 0], [4, 0]], carry: [80, -14, 0.2] }],
+        [16, { x: 5, rot: 0.15, sx: 1.08, sy: 0.94, ears: 0.5, reach: [16, 18], carry: [80, -14, 0.2] }],
+        [29, { carry: [80, -14, 0.2] }],
+      ] }),
+    },
+    backThrow: { // Leave Server: hoist it overhead in the ears and heave it out the door behind
+      input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['showing them out…', '👋 left the server'], keys: [
+        [0, WHOLD],
+        [6, { rot: -0.1, sx: 0.92, sy: 1.1, ears: [1.2, 2.4], arms: 1.4, carry: [26, -58, -0.8] }],
+        [12, { rot: -0.35, sx: 0.96, sy: 1.06, ears: [2.6, 2.8], arms: 1.6, carry: [-18, -66, -2.2] }],
+        [16, { rot: -0.45, sx: 1.08, sy: 0.92, ears: [1.8, 1.2], arms: 1.2, carry: [-58, -22, -3] }],
+        [24, { rot: -0.2, ears: 0.5, carry: [-58, -22, -3] }],
+        [37, { carry: [-58, -22, -3] }],
+      ] }),
+    },
+    upThrow: { // Stage: lift it up overhead in the ears and fling it up onto the stage
+      input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['inviting to stage…', '🎙️ invited to speak'], keys: [
+        [0, WHOLD],
+        [6, { sx: 1.1, sy: 0.88, ears: [0.4, 0.8], reach: [8, 10], carry: [50, 0, 0] }],
+        [10, { sx: 1.04, sy: 0.96, ears: [1.6, 1.8], arms: 1, carry: [40, -30, 0] }],
+        [14, { y: -4, sx: 0.9, sy: 1.14, ears: [2.8, 2.8], arms: 1.7, legs: legsAll(0, 3), carry: [14, -86, 0] }],
+        [22, { sx: 0.96, sy: 1.04, ears: 1.2, arms: 0.8, carry: [14, -86, 0] }],
+        [35, { carry: [14, -86, 0] }],
+      ] }),
+    },
+    downThrow: { // Mute: plonk it down, hop up and sit right on its head (muted mic overhead), then it pops out from under
+      input: 'down (holding)', startup: 14, active: 1, endlag: 22, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: throwAnim({ at: 14, n: 37, fly: [2, -9, 0.1], say: ['muting…', '🔇 muted'], extra: f => ({ muted: f >= 9 && f < 32 ? Math.min(1, (f - 9) / 3, (32 - f) / 6) : 0 }), keys: [
+        [0, WHOLD],
+        [5, { x: 4, sx: 1.08, sy: 0.9, ears: [0.3, 1], carry: [48, 0, 0] }],
+        [9, { x: 34, y: -64, sx: 0.96, sy: 1.04, ears: 1.2, arms: 1, legs: legsAll(0, -3), carry: [48, 0, 0] }],
+        [12, { x: 44, y: -50, sx: 1.12, sy: 0.84, ears: 0.4, arms: 0.6, carry: [48, 0, 0] }], // sat down on it
+        [14, { x: 44, y: -46, sx: 1.2, sy: 0.78, ears: 0.2, carry: [48, 2, 0] }],
+        [22, { x: 16, y: -18, rot: -0.1, ears: 1, arms: 1, carry: [48, 2, 0] }], // hopping back off as it pops out
+        [37, { carry: [48, 2, 0] }],
+      ] }),
     },
   },
   aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose

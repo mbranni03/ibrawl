@@ -6,9 +6,9 @@
 //   ears = radians each ear swings out and up from hanging (π = straight up), or [back, front]
 //   props, placed like hitboxes (px from bottom-centre + x / y, facing right, not rotated or stretched with the body):
 //   emoji = [x, y, radius, burst 0 … 1, kind = index into EMOJIS] a big emoji, bursting into a super-reaction sparkle ring (forward smash)
-//   rings = 0 … 1 green voice rings rising off its head (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
+//   rings = 0 … 1 green voice rings (and shouted words) rising off its head (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
 //   horn = [x, y (centre), size, blast 0 … 1 or null] an air horn, blasting sound (neutral special) · nelly = [x, y (bottom), t] Nelly the snail in its paws (side special)
-//   waves = 0 … 1 sound rings bursting off its head (the down special's counter)
+//   waves = 0 … 1 sound rings bursting off its head (the down special's counter) · muted = 0 … 1 a struck-through mic over its head (down throw)
 //   worn with the body: shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
 //   legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
@@ -57,7 +57,7 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   }
   ctx.restore();
 
-  if (!pose.emoji && pose.rings == null && !pose.pin && !pose.horn && !pose.nelly && !pose.waves && !pose.trail) return;
+  if (!pose.emoji && pose.rings == null && !pose.pin && !pose.horn && !pose.nelly && !pose.waves && !pose.trail && !pose.muted) return;
   ctx.save(); ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face, 1);
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
   if (pose.emoji) {
@@ -73,10 +73,21 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
     ctx.save(); ctx.strokeStyle = SPEAK; ctx.lineWidth = 3.5;
     for (let k = 0; k < 3; k++) { const u = Math.min(1, Math.max(0, pose.rings * 1.5 - k * 0.25)); if (!u || u >= 1) continue;
       ctx.globalAlpha = 1 - u; ctx.beginPath(); ctx.ellipse(0, -74 - 80 * u, 22 + 18 * u, 7 + 4 * u, 0, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.textAlign = 'center'; ctx.lineJoin = 'round'; ctx.fillStyle = SPEAK; ctx.strokeStyle = INK;
+    for (const [word, delay, dx] of [['HELLO?', 0, -14], ['CAN YOU HEAR ME?', 0.22, 12], ['!!!', 0.45, -4]]) { // the shouting, flying up the column
+      const u = Math.min(1, Math.max(0, pose.rings * 1.4 - delay)); if (!u || u >= 1) continue;
+      ctx.globalAlpha = Math.min(1, 6 * u, 2 * (1 - u)); ctx.font = `800 ${Math.round(10 + 5 * u)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.save(); ctx.translate(dx * (1 + u), -84 - 95 * u); ctx.rotate(dx > 0 ? 0.08 : -0.08); ctx.scale(face, 1); ctx.lineWidth = 3; ctx.strokeText(word, 0, 0); ctx.fillText(word, 0, 0); ctx.restore(); // unmirrored facing left
+    }
     ctx.restore();
   }
   if (pose.pin) drawPin(...pose.pin);
   if (pose.horn) drawHorn(...pose.horn);
+  if (pose.muted) { // Discord's muted mic: capsule on a stand, red slash through it
+    ctx.save(); ctx.globalAlpha *= pose.muted; ctx.translate(0, -108); ctx.lineWidth = 2;
+    rbox(0, -4, 9, 15, 4.5, '#e3e5e8', 2); ctx.beginPath(); ctx.arc(0, -2, 8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.moveTo(0, 6); ctx.lineTo(0, 10); ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.stroke();
+    ctx.strokeStyle = PIN; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-10, -12); ctx.lineTo(10, 8); ctx.stroke(); ctx.restore();
+  }
   if (pose.trail) { // Nitro sparkles pouring out under the tank, shrinking and fading the farther they fall behind
     const [a, ph] = pose.trail;
     for (let k = 0; k < 5; k++) { const u = (k + ph) % 5 / 5; ctx.save(); ctx.globalAlpha *= a * (1 - u); ctx.fillStyle = k % 2 ? BOOST : NITRO; ctx.lineWidth = 1.4; star(-21 + (k % 2 ? 7 : -7) * (1 - u * 0.5), 14 + 90 * u, 6 * (1 - u * 0.6)); ctx.restore(); }
