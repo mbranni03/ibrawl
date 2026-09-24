@@ -77,6 +77,7 @@
 <script src="../src/characters/duo.js"></script>
 <script src="../src/characters/duo-moveset.js"></script>
 <script src="../src/characters/snoo.js"></script>
+<script src="../src/characters/lego.js"></script>
 <script>
 const VW = 480, VH = 270, SCALE = 2, GROUND = 200;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -101,6 +102,7 @@ const FIGHTERS = {
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
   duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
+  lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
 };
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait
