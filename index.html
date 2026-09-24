@@ -53,17 +53,23 @@ let hitstop = 0;
 let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
-const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+const JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
-const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
-const ATK = { ...MOVESET.groundAttacks, ...MOVESET.smashAttacks, sideSpecial: SIDE_B, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab }, AIR = { ...MOVESET.aerials, sideSpecial: SIDE_B, downSpecial: DOWN_B }; // attack states are named after their move
-const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
-const US = MOVESET.specials.upSpecial; // MCP tether: its own state, runs off P.teth
-const MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
+const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+const DODGES = ['spotDodge', 'rollForward', 'rollBack'];
+// the fighter in play's moves, by group: its own, with any it hasn't made yet borrowed from Claw'd's (has() still switches whole groups off)
+let L, GR, SIDE_B, DOWN_B, ATK, AIR, NEUTRAL_B, US, MOVES, R, D, AD, SB;
+function loadMoves(set) {
+  const S = g => ({ ...MOVESET[g], ...set[g] });
+  L = S('ledge'); GR = S('grabs'); R = S('reactions'); D = S('defense'); AD = D.airDodge; SB = D.shieldBreak;
+  const sp = S('specials'); NEUTRAL_B = sp.neutralSpecial; US = sp.upSpecial; // US = MCP tether: its own state, runs off P.teth
+  SIDE_B = sp.sideSpecial; DOWN_B = sp.downSpecial; // usable on the ground and in the air, so they live in both maps
+  ATK = { ...S('groundAttacks'), ...S('smashAttacks'), sideSpecial: SIDE_B, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab }; AIR = { ...S('aerials'), sideSpecial: SIDE_B, downSpecial: DOWN_B }; // attack states are named after their move
+  MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
+}
+loadMoves(MOVESET);
 const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; // resume from the last checkpoint reached
-const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
-const D = MOVESET.defense, DODGES = ['spotDodge', 'rollForward', 'rollBack'], AD = D.airDodge, SB = D.shieldBreak;
+const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
@@ -136,7 +142,7 @@ function restart() {
 function fight() { restart(); setPaused(false); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
 const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
-function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box; }
+function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; loadMoves(fighter.set); [P.w, P.h] = fighter.box; }
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
