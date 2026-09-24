@@ -1,6 +1,7 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. Groups not here yet (smashes, specials, grabs, defense, ledge) are still to build.
+// Fields are as in clawd-moveset.js. Groups not here yet (specials, grabs, defense, ledge) are still to build.
+let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
 // Past ~1.8 rad they disappear behind his head, so raised arms stop there
@@ -148,6 +149,71 @@ const WUMPUS_MOVESET = {
         puff: f >= 12 ? (f - 12) / 10 : null,
         say: sayW('reconnecting…', f, 0, 12),
       }),
+    },
+  },
+  smashAttacks: { // hold heavy to charge: the pose freezes at chargeAt and c = 0 … 1 is how much charge is held so far (the viewer shows none)
+    forwardSmash: { // Super Reaction: pop a big emoji (a random one of EMOJIS) out overhead and hold it up in the ears (it swells with the charge), then slam it
+      // down in front, where it bursts into the super-reaction sparkle ring
+      input: 'heavy (X / K), hold to charge', step: 200, startup: 15, active: 4, endlag: 30, damage: 14, kb: { base: 30, growth: 100, angle: 38 },
+      hitbox: { x: 26, y: -50, w: 48, h: 50 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 11,
+      anim: (f, n, c = 0) => {
+        if (f === 0) reaction = Math.floor(Math.random() * EMOJIS.length); // rolled as it starts (invisible at frame 0), kept for the rest
+        const slam = { sx: 1.14, sy: 0.9, rot: 0.3, ears: 0.6, arms: 1.4, legs: [[-8, 2], [0, 0], [0, 0], [3, 2]] };
+        const p = tween(f, [
+          [0, { emoji: [4, -62, 0, 0] }],
+          [4, { x: -2, sy: 1.04, ears: 1.6, arms: 0.4, emoji: [2, -80, 8, 0] }],
+          [11, { x: -6, sx: 0.94, sy: 1.08, rot: -0.22, ears: 2.8, arms: 0.6, legs: legsAll(6, 0), emoji: [-8, -94, 15, 0] }],
+          [14, { x: -7, sx: 0.93, sy: 1.09, rot: -0.25, ears: 2.9, arms: 0.6, legs: legsAll(7, 0), emoji: [-9, -96, 15, 0] }],
+          [15, { ...slam, x: 14, y: -2, emoji: [48, -26, 17, 0] }],
+          [19, { ...slam, x: 15, y: -2, emoji: [50, -26, 17, 0] }],
+          [32, { x: 10, rot: 0.08, ears: 0.3, arms: 0.3, legs: [[-4, 0], [0, 0], [0, 0], [1, 0]], emoji: [50, -26, 17, 0] }],
+          [49, {}],
+        ]);
+        if (f >= 11 && f < 15) p.emoji[2] += 5 * c + Math.sin(f * 1.3) * c; // swelling, pulsing with the charge
+        p.emoji = f < 31 ? [...p.emoji.slice(0, 3), f >= 15 ? (f - 15) / 16 : 0, reaction] : null;
+        return { ...p, speed: f >= 15 && f < 25 ? 1 - (f - 15) / 10 : 0, dust: f >= 15 && f < 27 ? (f - 15) / 12 : null };
+      },
+    },
+    upSmash: { // Server Boost: squat over a pink boost gem glowing at its feet (brighter with the charge), then it rockets straight up
+      // past its face, Wumpus hopping after it, and bursts overhead
+      input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 22, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
+      hitbox: { x: -12, y: -134, w: 52, h: 124 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
+      anim: (f, n, c = 0) => {
+        const up = { sx: 0.9, sy: 1.14, rot: -0.1, ears: 2.8, arms: 1.7, legs: legsAll(0, 3) };
+        const p = tween(f, [
+          [0, { gem: [24, -4, 0, 0] }],
+          [6, { sx: 1.12, sy: 0.86, rot: 0.08, ears: 0.4, arms: 0.1, gem: [24, -9, 9, 0.3] }],
+          [11, { sx: 1.15, sy: 0.84, rot: 0.1, ears: 0.5, arms: 0.1, gem: [24, -9, 10, 0.5] }],
+          [12, { ...up, y: -6, sx: 0.88, sy: 1.16, rot: -0.08, ears: 2.6, arms: 1.6, gem: [16, -70, 12, 1] }],
+          [18, { ...up, y: -5, gem: [10, -118, 13, 1] }],
+          [30, { sx: 0.97, sy: 1.03, ears: 1, arms: 0.6, gem: [8, -128, 13, 0.4] }],
+          [40, { gem: [8, -128, 13, 0] }],
+        ]);
+        if (f >= 8 && f < 12) { p.gem[2] += 2 * c; p.gem[3] = Math.min(1, p.gem[3] + 0.5 * c); }
+        p.gem = f < 29 ? [...p.gem.slice(0, 4), f >= 17 ? (f - 17) / 12 : 0] : null;
+        return { ...p, puff: f === 12 ? 0 : f > 12 && f < 24 ? (f - 12) / 12 : null };
+      },
+    },
+    downSmash: { // Pin Message: rear up tall with a giant pushpin raised point-down (bigger with the charge), then drive it into the floor
+      // just in front. One close hit that pops the target up weakly, leaving it nearby
+      input: 'down + heavy (X / K), hold to charge', startup: 13, active: 3, endlag: 24, damage: 13, kb: { base: 40, growth: 25, angle: 88 },
+      hitbox: { x: 22, y: -44, w: 30, h: 46 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 9,
+      anim: (f, n, c = 0) => {
+        const rear = { y: -4, sx: 0.92, sy: 1.12, ears: 2.4, arms: 1.6, legs: legsAll(2, 2) };
+        const stab = { x: 6, sx: 1.16, sy: 0.84, rot: 0.35, ears: 0.3, arms: 0.9, legs: [[-5, 0], [0, 0], [0, 0], [3, 0]] };
+        const p = tween(f, [
+          [0, { pin: [26, -40, 0, 1] }],
+          [5, { y: -2, sy: 1.06, ears: 1.2, arms: 1, pin: [28, -66, 12, 1] }],
+          [9, { ...rear, rot: -0.16, pin: [30, -78, 16, 1] }],
+          [12, { ...rear, rot: -0.18, pin: [30, -80, 16, 1] }],
+          [13, { ...stab, pin: [36, 4, 17, 1] }],
+          [16, { ...stab, pin: [36, 4, 17, 1] }],
+          [26, { x: 3, rot: 0.1, ears: 0.2, arms: 0.3, pin: [36, 4, 17, 1] }],
+          [37, { pin: [36, 4, 17, 0] }],
+        ]);
+        if (f >= 9 && f < 13) p.pin[2] += 6 * c;
+        return { ...p, puff: f === 13 ? 0 : f > 13 && f < 25 ? (f - 13) / 12 : null, say: sayW('pinned a message', f, 13, 36) };
+      },
     },
   },
   aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose
