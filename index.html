@@ -73,9 +73,19 @@ const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'ri
                  ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyI: 'shield', KeyG: 'grab', KeyU: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge: Z / Shift; shield: I
 // ---------- pause menu ----------
 const MENU = ['resume', 'controls', 'restart', 'quit'], HOME_MENU = ['play', 'characters', 'controls'];
-const CONTROLS = [['← → / A D', 'walk · double-tap to run'], ['Space', 'jump · tap = short hop · x2 · ledge: ↑ / toward climb, ↓ / away let go'],
-                  ['↓ / S', 'crouch (+ ← → crawl) · drop through · double-tap in the air: fast fall'],
-                  ['C / J', 'light · jab combo · tap ← → with it = forward tilt · ↑ / ↓ tilts · running = dash attack · in the air: aerials (+ ← → ↑ ↓)'], ['X / K', 'heavy · hold to charge · + ↑ terminal uppercut · + ↓ /compact (hits both sides)'], ['V / L', 'special · + ← → throw a spark · + ↑ MCP tether: plugs into a nearby ledge and reels you in (+ ← → aims lower) · + ↓ send out a subagent · hold alone to think up to ultrathink: more damage + speed per tier, until KO (ground or air)'], ['I', 'hold: shield (terminal) · + ← → roll · + ↓ spot dodge · just before a tumble hits the ground: tech (+ ← → tech roll)'], ['knocked down', 'any key: get up · ← → roll away · C / X: getup attack (hits both sides)'], ['G / U', 'grab (running: dash grab) · holding: C / J pummel · ← → ↑ ↓ throw'], ['Shift / Z', 'dodge: spot dodge · + ← → roll · in the air: dodge any way (once per jump) · on a ledge: roll onto the stage'], ['Esc', 'pause']];
+// controls screen: two columns of [heading, [[keys, what they do], …]]; descriptions wrap at the ' · ' breaks
+const CONTROLS = [
+  [['move', [['← → / A D', 'walk · double-tap to run'], ['Space', 'jump · tap for a short hop · again in the air'],
+             ['↓ / S', 'crouch (+ ← → crawl) · drop through platforms · double-tap in the air: fast fall'],
+             ['on a ledge', '↑ / toward: climb · ↓ / away: let go · Space: jump · C / X: attack · dodge: roll']]],
+   ['defend', [['I', 'hold: shield · + ← →: roll · + ↓: spot dodge'], ['Shift / Z', 'dodge · + ← →: roll · in the air: dodge any way, once per jump'],
+               ['tumbling', 'I / dodge just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
+  [['attack', [['C / J', 'light: jab combo · + ← →: forward tilt · + ↑ ↓: tilts · running: dash attack · in the air: aerials'],
+               ['X / K', 'heavy, hold to charge: forward smash · + ↑: terminal uppercut · + ↓: /compact'],
+               ['V / L', 'special · hold: think, up to ultrathink · + ← →: spark · + ↑: MCP tether · + ↓: subagent']]],
+   ['grab', [['G / U', 'grab · running: dash grab'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
+   ['menu', [['Esc', 'pause']]]],
+];
 let paused = true, sel = 0, showControls = false, over = false, home = true, menu = HOME_MENU; // boots to the home screen
 function setPaused(on) {
   paused = on; sel = 0; showControls = false; over = false; home = false; menu = MENU;
@@ -730,31 +740,53 @@ function drawHealth() {
 function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
   if (home) ctx.drawImage(paper, 0, 0, W, H);
-  else { ctx.fillStyle = 'rgba(38,35,31,0.8)'; ctx.fillRect(0, 0, W, H); }
+  else { ctx.fillStyle = `rgba(38,35,31,${showControls ? 0.94 : 0.8})`; ctx.fillRect(0, 0, W, H); } // near-solid behind the dense controls text
   ctx.fillStyle = ctx.strokeStyle = home ? INK : '#efe7d6'; ctx.textAlign = 'center';
   if (home && !showControls) {
     ctx.save(); ctx.translate(W / 2, H / 2 - 52); ctx.scale(1.5, 1.5); drawClawd(0, 0, { ...M.idle.anim(Math.floor(t * 60) % 120, 120), x: 0 }); ctx.restore();
     ctx.strokeStyle = INK; ctx.lineWidth = 2; line(W / 2 - 110, H / 2 - 50, W / 2 + 110, H / 2 - 50, 1.2, 1);
     ctx.fillStyle = INK;
-  } else { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? 'game over' : showControls ? 'controls' : 'paused', W / 2, H / 2 - 70); }
-  if (showControls) {
-    ctx.font = '600 32px Caveat, cursive';
-    CONTROLS.forEach(([k, d], i) => {
-      const y = H / 2 - 5 + i * 42;
-      ctx.textAlign = 'right'; ctx.globalAlpha = 1; ctx.fillText(k, W / 2 - 150, y);
-      ctx.textAlign = 'left'; ctx.globalAlpha = 0.75; ctx.fillText(d, W / 2 - 110, y);
-    });
-    ctx.textAlign = 'center';
-  } else {
+  } else if (!showControls) { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? 'game over' : 'paused', W / 2, H / 2 - 70); }
+  if (showControls) drawControls(home ? INK : '#efe7d6');
+  else {
     ctx.font = '600 40px Caveat, cursive';
     menu.forEach((m, i) => {
       ctx.globalAlpha = i === sel ? 1 : 0.5;
       ctx.fillText((i === sel ? '›  ' : '') + m + (i === sel ? '  ‹' : ''), W / 2, H / 2 + 10 + i * 52);
     });
   }
-  ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive';
-  ctx.fillText(showControls ? 'Esc / Enter / click  back' : '↑ ↓ choose · Enter / Space / click select' + (over || home ? '' : ' · Esc resume'), W / 2, H / 2 + 250);
+  ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive'; // key hints (none on the home screen)
+  if (showControls || !home) ctx.fillText(showControls ? 'Esc / Enter / click  back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 250);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
+}
+
+// the controls screen: title, then each column's sections (heading + rule, then keys in orange beside their wrapped description)
+function drawControls(fg) {
+  ctx.font = '700 72px Caveat, cursive'; ctx.textAlign = 'center'; ctx.fillText('controls', W / 2, 92);
+  CONTROLS.forEach((col, c) => {
+    const x = c ? 690 : 110; let y = 158;
+    for (const [head, rows] of col) {
+      ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'left'; ctx.font = '700 30px Caveat, cursive';
+      ctx.fillText(head, x, y); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.35; line(x, y + 8, x + 480, y + 8, 1, 1); y += 38;
+      for (const [k, d] of rows) {
+        ctx.globalAlpha = 1; ctx.fillStyle = CLAWD; ctx.textAlign = 'right'; ctx.font = '700 24px Caveat, cursive'; ctx.fillText(k, x + 118, y);
+        ctx.globalAlpha = 0.8; ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.font = '600 23px Caveat, cursive';
+        for (const l of wrap(d, 350)) { ctx.fillText(l, x + 132, y); y += 26; }
+        y += 8;
+      }
+      y += 14;
+    }
+  });
+  ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'center';
+}
+// split text into lines no wider than w, breaking only between ' · ' parts
+function wrap(text, w) {
+  const out = [];
+  for (const part of text.split(' · ')) {
+    const t = out.length ? out[out.length - 1] + ' · ' + part : part;
+    if (out.length && ctx.measureText(t).width <= w) out[out.length - 1] = t; else out.push(part);
+  }
+  return out;
 }
 
 let last = performance.now(), acc = 0;
