@@ -13,9 +13,12 @@
 //   spark = [x, y, spin] a held Claude spark, px from bottom-center like hitboxes (side special wind-up)
 //   squint = eyes squeezed shut as > < · eyeY = px to move the eyes down (ducking under the shield) · effort = 0 … 1 charge strokes + effort bar overhead (neutral special)
 //   tether = [length px, angle above level] an MCP cord + plug out of the front claw · plugged = its plug is in (sparks at the tip)
+//   flow = phase of data packets running up a plugged cord · oopsMsg can also be [headline, detail], oopsOk = success toast
 //   term = [dx, dy from body centre, tilt, size] a terminal swung in the claws (up smash) · swoosh = 0 … 1 its swing trail over the head
 //   compact = 0 … 1 chevrons bursting out both ways along the floor (down smash) · say = [text, alpha] a monospace caption over its head
 //   aura = effort tier 0 … 3: glow, one halo per tier, rising sparks · burst = 0 … 1 progress of a tier-up ring
+//   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet
+//   blast = [0 … 1, angle] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was
 const CLAWD = '#d97757';
 const CU = 5, CV = 10; // one grid cell, px (terminal half-cells are twice as tall as wide)
 
@@ -40,6 +43,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   const rch = pose.reach || 0, [rl, rr] = face > 0 ? [0, rch] : [-rch, 0];
 
   const mx = ox + 9 * U, my = oy + 2.5 * V;
+  if (pose.blast) return drawBlast(mx, my, ...pose.blast);
   if (pose.speed) { // motion lines trailing off the back edge (negative speed = moving backwards: off the front edge)
     const sp = Math.abs(pose.speed), sd = face * Math.sign(pose.speed);
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.6 * sp;
@@ -54,6 +58,14 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   }
 
   if (pose.aura) drawAura(mx, my, 7.5 * U, 2.5 * V, bottom + (pose.y || 0), pose.aura);
+  if (pose.pad) { // respawn platform: a slab with a Claude spark on its front, faint hover dashes under it
+    const py = bottom + (pose.y || 0) + 2, sl = [[mx - 50, py], [mx + 50, py], [mx + 42, py + 10], [mx - 42, py + 10]];
+    ctx.save(); ctx.globalAlpha *= pose.pad; ctx.strokeStyle = INK;
+    ctx.fillStyle = '#e3d9c6'; path(sl); ctx.fill(); ctx.lineWidth = 2.2; poly(sl, 1);
+    drawSpark(mx, py + 5, 6);
+    ctx.lineWidth = 1.4; ctx.globalAlpha *= 0.4; for (const dx of [-24, 0, 24]) line(mx + dx, py + 16, mx + dx, py + 24, 0.6, 1);
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.translate(mx, my); ctx.rotate((pose.rot || 0) * face); ctx.translate(-mx, -my);
@@ -96,6 +108,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   if (pose.shield > 0.05) drawTerminal(mx, oy - 14 * pose.shield, pose.shield, pose.wear || 0); // held low over its head like a roof, overlapping the top of the body
   ctx.restore();
 
+  if (pose.ring != null) { ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.globalAlpha *= 1 - pose.ring; ellipse(mx, my, 9 * U * (1 + pose.ring), 3 * V * (1 + pose.ring), 1); ctx.restore(); }
   if (pose.swoosh > 0) { // the swing's trail: two arcs from in front, over the head, to behind
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.globalAlpha *= 0.5 * pose.swoosh;
     for (const r of [62, 76]) { ctx.beginPath(); face > 0 ? ctx.arc(mx, my, r, -0.25, -2.6, true) : ctx.arc(mx, my, r, Math.PI + 0.25, Math.PI + 2.6); ctx.stroke(); }
@@ -113,9 +126,10 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   }
   if (pose.say) {
     ctx.save(); ctx.globalAlpha *= pose.say[1]; ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK;
-    ctx.fillText(pose.say[0], mx, bottom - 78); ctx.restore();
+    const c = pose.carry, over = c && Math.abs(c[0]) < 45 ? bottom + c[1] - 86 : Infinity; // above a bag carried overhead
+    ctx.fillText(pose.say[0], mx, Math.min(bottom - 78, over)); ctx.restore();
   }
-  if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged); }
+  if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged, pose.flow); }
   if (pose.shatter != null) { // terminal shards burst up and out from where it was held, tumble and fade
     const t = pose.shatter; ctx.save(); ctx.globalAlpha *= 1 - t; ctx.fillStyle = INK; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
     for (const [dx, dy, vx, vy, r] of SHARDS) {
@@ -125,13 +139,13 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
     }
     ctx.restore();
   }
-  if (pose.oops > 0) drawOops(mx, oy - 34, pose.oops, OOPS[pose.oopsMsg || 0]);
+  if (pose.oops > 0) drawOops(mx, oy - 34, pose.oops, Array.isArray(pose.oopsMsg) ? pose.oopsMsg : OOPS[pose.oopsMsg || 0], pose.oopsOk);
   if (pose.dizzy) { // three little stars circling over its head (the ones behind drawn smaller and fainter)
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.fillStyle = '#f2c94c';
     for (let k = 0; k < 3; k++) {
       const a = (pose.dizzy + k / 3) * 6.28, depth = 0.75 + 0.25 * Math.sin(a);
       ctx.globalAlpha = 0.55 + 0.45 * depth;
-      drawStar(mx + Math.cos(a) * 7 * U, oy - 10 + Math.sin(a) * 0.6 * V, 5.5 * depth);
+      drawStar(mx + Math.cos(a) * 7 * U, oy - 10 - (Math.cos(pose.rot || 0) < 0 ? 16 : 0) + Math.sin(a) * 0.6 * V, 5.5 * depth); // upside down: above its legs
     }
     ctx.restore();
   }
@@ -209,6 +223,33 @@ function drawEffort(x, y, e, tier) {
   ctx.restore();
 }
 
+// the training bag (the game's dummy; the move viewer draws it for grabs): a burlap sack tied at the neck, bottom-center at (x, y),
+// turned rot about its middle
+const SACK = [[-9, -76], [9, -76], [6, -66], [20, -56], [22, -12], [15, 0], [-15, 0], [-22, -12], [-20, -56], [-6, -66]];
+function drawSack(x, y, rot = 0) {
+  ctx.save();
+  ctx.translate(x, y - 38); ctx.rotate(rot); ctx.translate(0, 38);
+  ctx.fillStyle = '#d8c49a'; path(SACK); ctx.fill();
+  ctx.strokeStyle = INK; hatch([[-22, -18], [22, -18], [15, 0], [-15, 0]], 6, 0.3);
+  ctx.lineWidth = 2.4; poly(SACK, 1.1);
+  ctx.lineWidth = 2; line(-8, -66, 8, -66, 0.8, 1); line(-4, -64, -10, -58, 0.8, 1); // rope tie
+  ctx.fillStyle = INK; ctx.fillRect(-9, -44, 4, 7); ctx.fillRect(5, -44, 4, 7); // eyes
+  ctx.restore();
+}
+
+// KO blast: a fan of thick ink / orange rays shooting out toward ang and a big Claude spark, all fading out as t goes 0 → 1
+function drawBlast(x, y, t, ang) {
+  const e = 1 - (1 - Math.min(1, t * 3)) ** 2; // shoots out fast
+  ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= Math.min(1, (1 - t) * 2.5);
+  for (let k = 0; k < 11; k++) {
+    const a = ang + (k - 5) * 0.13, l = (120 + 160 * (k * 0.618 % 1)) * e;
+    ctx.strokeStyle = k % 2 ? CLAWD : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
+    line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 1.5, 1);
+  }
+  drawSpark(x, y, SPARK_R * (1 + 2 * e), t * 3);
+  ctx.restore();
+}
+
 // dust clouds, drawn at the floor under Claw'd rather than at the body (which may be in the air)
 function drawClawdFx(cx, floor, pose = {}, face = 1) {
   if (pose.dust != null) drawDust(cx - face * 34, floor, pose.dust, -face);
@@ -222,10 +263,11 @@ function clawdHand(pose = {}, face = 1) {
   return [face * ((pose.x || 0) + 8 * U + (pose.reach || 0)), (pose.y || 0) - 2.5 * V + af];
 }
 // MCP cord from (ax, ay) to a plug at (tx, ty): sags while slack, taut once plugged in (then a few sparks where it bites)
-function drawTether(ax, ay, tx, ty, plugged) {
+function drawTether(ax, ay, tx, ty, plugged, flow) { // flow = phase of data packets running up the cord to Claw'd (plugged into an enemy)
   const dx = tx - ax, dy = ty - ay, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, sag = plugged ? 0 : Math.min(18, l * 0.12);
   ctx.save(); ctx.strokeStyle = INK; ctx.lineCap = 'round';
   ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo((ax + tx) / 2 + j(1.5), (ay + ty) / 2 + sag + j(1.5), tx, ty); ctx.stroke();
+  if (flow != null) { ctx.fillStyle = CLAWD; ctx.lineWidth = 1.4; for (let k = 0; k < 3; k++) { const u = 1 - (flow + k / 3) % 1, px = ax + dx * u, py = ay + dy * u; ctx.fillRect(px - 3, py - 3, 6, 6); ctx.strokeRect(px - 3, py - 3, 6, 6); } }
   ctx.translate(tx, ty); ctx.rotate(Math.atan2(uy, ux));
   ctx.lineWidth = 2; line(5, -3.5, 12, -3.5, 0.3, 1); line(5, 3.5, 12, 3.5, 0.3, 1); // prongs
   const plug = [[-10, -6.5], [5, -6.5], [5, 6.5], [-10, 6.5]];
@@ -282,6 +324,7 @@ function drawStar(x, y, r) {
 
 // error toasts (broken shield, missed tether), Claude Code style: [headline, detail]
 const DONE = ['subagent done', 'returned 1 result']; // the down special's subagent reporting back (drawn with ok)
+const LINKED = ['mcp connected', 'bag-server · 3 tools']; // the up special's plug went into an enemy (drawn with ok)
 const OOPS = [['context window full', '100% used · try /compact'], ['out of credits', '$0.00 left · please top up'], ['connection refused', 'mcp server · retrying in 3s…']]; // last: missed up special
 // a small sketched error toast floating over its head: paper card, red accent bar, headline + detail; a = 0 … 1 fades / rises in
 function drawOops(cx, y, a, [head, sub], ok) { // ok = a success toast: green accent and ✓

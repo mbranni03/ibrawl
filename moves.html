@@ -131,6 +131,7 @@ function drawFigure(fr) {
     ctx.beginPath(); ctx.ellipse(x, 0, 44 * s, 4 * s, 0, 0, 6.28); ctx.fill();
   }
   drawClawdFx(0, 0, pose);
+  if (pose.carry) drawSack(pose.carry[0], air + pose.carry[1], pose.carry[2]); // grabbed bag, behind the claws
   drawClawd(0, air, pose);
   const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
   if (pr && st >= 0) drawSpark(pr.x + pr.speed * st, air + pr.y, SPARK_R, st * 14);
@@ -150,9 +151,10 @@ function renderBoard() {
   const frames = panelFrames(), fi = Math.floor(f), { move, group } = list[cur];
   // fit the move's whole height range (jumps above, drops below the floor) into the panel
   const airs = frames.map(fr => move.anim(fr, total).air || 0);
-  const hi = (frames.some(fr => move.anim(fr, total).effort != null) ? 130 : 55) - Math.min(0, ...airs), lo = Math.max(0, ...airs); // room for the effort bar overhead
-  // …and its sideways travel (rolls, lunges), centring the panel on it
-  const xs = frames.map(fr => move.anim(fr, total).x || 0), x0 = Math.min(0, ...xs), x1 = Math.max(0, ...xs);
+  const carried = frames.filter(fr => !(fr > move.startup)).map(fr => move.anim(fr, total).carry).filter(Boolean); // a grabbed bag, until a throw lets go: its top, and both sides
+  const hi = Math.max((frames.some(fr => move.anim(fr, total).effort != null) ? 130 : 55) - Math.min(0, ...airs), ...carried.map(c => 84 - c[1])), lo = Math.max(0, ...airs); // room for the effort bar overhead
+  // …and its sideways travel (rolls, lunges, a carried bag), centring the panel on it
+  const xs = [...frames.map(fr => move.anim(fr, total).x || 0), ...carried.flatMap(c => [c[0] - 26, c[0] + 26 - 50])], x0 = Math.min(0, ...xs), x1 = Math.max(0, ...xs);
   const s = Math.min(1.2, (PH - 44) / (hi + lo), (PW - 24) / (x1 - x0 + 100)), floorY = 34 + hi * s, ox = PW / 2 - (x0 + x1) / 2 * s;
   frames.forEach((fr, i) => {
     const now = fi >= fr && (i === frames.length - 1 || fi < frames[i + 1]);

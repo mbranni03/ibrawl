@@ -62,6 +62,17 @@ const roll = d => f => {
   const e = Math.min(1, Math.max(0, (f - 4) / 18));
   return { ...p, rot: d * Math.PI * 2 * e * e * (3 - 2 * e), [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null }; // kicked up opposite the travel
 };
+// holding a grabbed bag: leaning back a touch, claws clamped on it
+const HOLD = { rot: -0.05, reach: 10, arm: [-2, -3], legs: [[-3, 0], [-2, 0], [1, 0], [2, 0]], carry: [58, -4, 0] };
+// a throw: keys carry the bag up to the release frame `at`; after it (viewer only, the game has let go) the bag flies on at
+// fly = [vx, vy, spin] per frame, falling. say = [command, result] shown before / after the release
+const throwAnim = ({ keys, at, n, fly: [vx, vy, spin], say: [cmd, done], extra }) => f => {
+  const p = tween(f, keys), h = tween(at, keys).carry, t = f - at;
+  return {
+    ...p, ...extra?.(f), carry: t < 0 ? p.carry : t < 18 ? [h[0] + vx * t, h[1] + vy * t + 0.5 * t * t, h[2] + spin * t] : null,
+    say: [t < 0 ? cmd : done, Math.max(0, Math.min(1, f / 4, (n - f) / 6))],
+  };
+};
 // hanging off the ledge: body just past the lip, claws hooked over the top, feet dangling
 const HANG = { x: -60, air: 40, sy: 1.08, arm: -20, reach: 3, legs: legsAll(0, 3) };
 
@@ -403,15 +414,84 @@ const MOVESET = {
     },
   },
 
-  // getting hit
+  // getting hit. The game turns a hit's knockback into kb units (base + growth × damage% / 100): hitstun lasts perKb frames per
+  // unit, and from tumble.threshold up it's a tumble instead, which ends in a knockdown if it hits the ground without a tech
   reactions: {
-    hitstun:     { anim: null }, // light hit, flinch in place
-    tumble:      { anim: null }, // launched hard, spinning
-    knockdown:   { anim: null }, // hit the ground in tumble without teching
-    tech:        { input: 'S just before hitting ground in tumble', anim: null },
-    getup:       { input: 'any (from knockdown)', anim: null },
-    ko:          { anim: null }, // crossed the blast zone
-    respawn:     { anim: null },
+    hitstun: { // light hit: snaps back with its eyes squeezed shut, shudders, shakes it off (the game stretches this over the hitstun)
+      input: 'hit (knockback under 80)', frames: 30, perKb: 0.4,
+      anim: (f, n = 30) => {
+        const t = f / n * 30, p = tween(t, [
+          [0, { x: -4, sx: 0.86, sy: 1.14, rot: -0.28, arm: -7, legs: [[-3, -2], [-2, 0], [2, 0], [3, -2]] }],
+          [5, { x: -6, sx: 0.92, sy: 1.08, rot: -0.22, arm: -5, legs: [[-2, -1], [-1, 0], [1, 0], [2, -1]] }],
+          [22, { x: -3, sx: 1.04, sy: 0.96, rot: -0.06, arm: -1 }],
+          [30, {}],
+        ]);
+        if (t < 10) p.x += f % 2 ? 1.5 : -1.5;
+        return { ...p, squint: t < 20 };
+      },
+    },
+    tumble: { // launched hard: spinning head over heels, limbs flailing. Can act again once the hitstun runs out
+      input: 'hit (knockback 80+)', frames: 40, threshold: 80,
+      anim: (f, n = 40) => {
+        const p = f / n * Math.PI * 2, s = Math.sin(2 * p);
+        return { rot: -p, sx: 0.94, sy: 1.06, arm: [-2 - 5 * s, -2 + 5 * s], legs: [[-3, -3 * s], [-1, 3 * s], [1, -3 * s], [3, 3 * s]], squint: true, air: -30 };
+      },
+    },
+    knockdown: { // tumbled into the ground: slams onto its back, bounces, then lies there seeing stars, legs kicking like a flipped crab
+      input: 'tumble into the ground', frames: 90, bounce: 14, // any input from bounce on gets up (← → rolls away); at frames it gets up anyway
+      anim: f => {
+        const kick = i => f >= 14 ? 2 + 2 * Math.sin((f - 14) / 3 + i * 1.7) : 0;
+        return {
+          ...tween(f, [
+            [0, { sx: 1.3, sy: 0.6, arm: 4 }],
+            [6, { y: -14, sx: 0.95, sy: 1.05, arm: -2 }],
+            [12, { sx: 1.2, sy: 0.75, arm: 3 }],
+            [18, { sx: 1.04, sy: 0.94, arm: 1 }],
+          ]),
+          rot: Math.PI, legs: [0, 1, 2, 3].map(i => [kick(i) / 2, kick(i)]), // upside down, so + dy kicks them up
+          squint: f < 14, dizzy: f >= 14 ? 0.01 + (f - 14) / 40 : 0, puff: f < 8 ? f / 8 : f >= 12 && f < 18 ? (f - 12) / 6 : null,
+        };
+      },
+    },
+    tech: { // shield / dodge pressed just before tumbling into the ground: slaps the floor and pops straight back onto its feet
+      input: 'I / dodge within window frames before landing in tumble · + ← → tech roll', frames: 22, window: 20, intangible: [0, 16],
+      lockout: 40, // after a press in tumble, more presses don't count for this many frames: mashing misses techs
+      anim: f => ({
+        ...tween(f, [
+          [0, { sx: 1.3, sy: 0.66, arm: 4 }],
+          [5, { y: -18, sx: 0.9, sy: 1.12, arm: -4, legs: TUCK }],
+          [11, { sx: 1.14, sy: 0.84, arm: 2 }],
+          [22, {}],
+        ]),
+        ring: f < 12 ? f / 12 : null, squint: f < 5,
+      }),
+    },
+    getup: { // any input from knockdown: rocks back, kicks over forward onto its feet (can't be hurt until it's standing)
+      input: 'any (from knockdown) · ← → roll instead', frames: 26, intangible: [0, 20],
+      anim: f => ({
+        ...tween(f, [
+          [0, { rot: Math.PI, sx: 1.04, sy: 0.94, arm: 1 }],
+          [5, { rot: Math.PI - 0.25, sx: 1.12, sy: 0.86, arm: 3 }],
+          [13, { rot: Math.PI * 1.55, y: -26, sx: 0.9, sy: 1.1, arm: -3, legs: TUCK }],
+          [18, { rot: Math.PI * 2, sx: 1.2, sy: 0.76, arm: 2 }],
+          [26, { rot: Math.PI * 2 }],
+        ]),
+        puff: f >= 18 ? (f - 18) / 8 : null,
+      }),
+    },
+    ko: { // crossed the blast zone: spins off shrinking (preview only), then all that's left is a burst of ink and orange at the edge
+      input: 'cross the blast zone', frames: 80, blastAt: 20, // the game shows frames blastAt … frames, then respawns
+      anim: f => f < 20
+        ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, arm: -5, squint: true }
+        : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6] }, // rays shoot back the way it came
+    },
+    respawn: { // next stock: lowered in on a hovering platform, stands there until any input (or wait frames), then drops, flickering
+      input: 'after a KO · any key drops', frames: 120, descend: 40, wait: 180, say: '> claude --resume',
+      anim: f => { // preview: descend, stand, drop to the floor
+        const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
+        return { ...MOVESET.movement.idle.anim(f % 120, 120), air: -170 + 110 * e + 60 * d * d, pad: +(f < 100), say: ['> claude --resume', f < 100 ? Math.min(1, f / 10) : 0] };
+      },
+    },
   },
 
   groundAttacks: {
@@ -513,7 +593,23 @@ const MOVESET = {
         [20, CROUCH],
       ]),
     },
-    getupAttack: { input: 'A (from knockdown)',       anim: null, startup: null, active: null, endlag: null, damage: null, kb: { base: null, growth: null, angle: null }, hitbox: null },
+    getupAttack: { // from flat on its back: rocks, kicks over and lands spread wide with both claws out, clearing both sides.
+      // Can't be hurt until the hit comes out; knockback goes away from Claw'd
+      input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
+      hitbox: { x: -75, y: -30, w: 150, h: 30 }, both: true, intangible: [0, 12],
+      anim: f => ({
+        ...tween(f, [
+          [0, { rot: Math.PI, sx: 1.04, sy: 0.94, arm: 1 }],
+          [6, { rot: Math.PI - 0.3, sx: 1.12, sy: 0.86, arm: 3 }],
+          [11, { rot: Math.PI * 1.7, y: -14, sx: 0.9, sy: 1.1, arm: -4, legs: TUCK }],
+          [12, { rot: Math.PI * 2, sx: 1.36, sy: 0.7, arm: 4, reach: 18, legs: [[-6, 0], [-3, 0], [3, 0], [6, 0]] }],
+          [16, { rot: Math.PI * 2, sx: 1.34, sy: 0.72, arm: 4, reach: 18, legs: [[-6, 0], [-3, 0], [3, 0], [6, 0]] }],
+          [22, { rot: Math.PI * 2, sx: 1.1, sy: 0.9, arm: 2, reach: 6 }],
+          [32, { rot: Math.PI * 2 }],
+        ]),
+        squint: f >= 11 && f < 16, puff: f >= 12 ? (f - 12) / 10 : null,
+      }),
+    },
   },
 
   // hold the button to charge; chargeFrames = max hold, chargeMult = damage multiplier at full charge
@@ -687,8 +783,12 @@ const MOVESET = {
       },
     },
     upSpecial: { // MCP tether: fling a plug on a cord up and ahead. If it catches the stage's lip, Claw'd reels itself straight onto the
-      // ledge; a miss pulls the cord back and leaves Claw'd falling helpless ("connection refused") until it lands or catches a ledge
-      input: 'up + B (V / L), ground or air · + ← → aims it lower and farther', startup: 7, active: 16, endlag: 10, damage: 5, kb: { base: 25, growth: 40, angle: 70 },
+      // ledge; a miss pulls the cord back and leaves Claw'd falling helpless ("connection refused") until it lands or catches a ledge.
+      // Plugging into an enemy connects to it: link.zaps zaps of link.zapDmg through the cord (one every link.every frames, the first
+      // on contact), then it's reeled in at link.reel px/s until link.near px from the claw and blasted away (damage / kb), and Claw'd
+      // pops up link.pop px/s, free, with its double jump back
+      input: 'up + B (V / L), ground or air · + ← → aims it lower and farther', startup: 7, active: 16, endlag: 10, damage: 5, kb: { base: 45, growth: 70, angle: 60 },
+      link: { zaps: 3, every: 12, zapDmg: 2, reel: 900, near: 34, pop: 520 },
       hitbox: null, landingLag: 16, pop: 300, gravity: 0.35, reach: 300, reel: 1100, aim: [72, 45], cone: 25, // pop = px/s up on use, then gravity is scaled while the cord is out · reach = cord px (all out at the end of active) · reel = px/s pulled in · aim = degrees above level: ↑ alone, ↑ + ← → · a lip within cone degrees of the aim and inside the cord's length catches
       anim: f => {
         const p = tween(f, [
@@ -722,13 +822,100 @@ const MOVESET = {
     },
   },
 
+  // grabs (G / U). A grab that connects holds the bag in Claw'd's claws until it breaks free (hold.breakFree frames, plus perDmg
+  // per % it has). Holding: light pummels, a direction throws. Pummel / throws have no hitbox: their damage goes to whatever's held,
+  // on the startup frame (throws let go then). carry = [dx, dy, rot] where the held bag's bottom-center goes, like hitboxes
   grabs: {
-    grab:        { input: 'Z',                        anim: null, startup: null, active: null, endlag: null, hitbox: null },
-    dashGrab:    { input: 'Z while running',          anim: null, startup: null, active: null, endlag: null, hitbox: null },
-    pummel:      { input: 'A (holding opponent)',     anim: null, damage: null },
-    forwardThrow:{ input: 'forward (holding)',        anim: null, damage: null, kb: { base: null, growth: null, angle: null } },
-    backThrow:   { input: 'back (holding)',           anim: null, damage: null, kb: { base: null, growth: null, angle: null } },
-    upThrow:     { input: 'up (holding)',             anim: null, damage: null, kb: { base: null, growth: null, angle: null } },
-    downThrow:   { input: 'down (holding)',           anim: null, damage: null, kb: { base: null, growth: null, angle: null } },
+    grab: { // both claws snap out in front and pinch; a whiff clacks them shut on nothing
+      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -44, w: 42, h: 40 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [4, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, reach: -2, arm: -4 }],
+          [6, { x: 6, sx: 1.12, sy: 0.92, rot: 0.14, reach: 18, arm: -3, legs: [[-4, 0], [-3, 0], [2, 0], [4, 0]] }],
+          [9, { x: 6, sx: 1.12, sy: 0.92, rot: 0.14, reach: 16, arm: [-3, 0], legs: [[-4, 0], [-3, 0], [2, 0], [4, 0]] }],
+          [16, { x: 4, sx: 1.05, sy: 0.95, rot: 0.08, reach: 4, arm: 1 }],
+          [31, {}],
+        ]),
+        squint: f >= 9 && f < 16,
+      }),
+    },
+    dashGrab: { // out of a run: lunges claws-first and slides on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -44, w: 60, h: 40 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, { y: -3, rot: 0.12, legs: [[0, -2], [0, 3], [0, -2], [0, 3]] }], // = run frame 0
+          [5, { x: -2, sx: 1.08, sy: 0.9, rot: -0.04, reach: -2, arm: -3 }],
+          [9, { x: 12, y: -2, sx: 1.22, sy: 0.84, rot: 0.18, reach: 22, arm: [-4, -2], legs: [[-10, 2], [-8, 2], [3, 2], [6, 1]] }],
+          [12, { x: 14, sx: 1.2, sy: 0.84, rot: 0.16, reach: 20, arm: [-4, 0], legs: [[-10, 1], [-8, 1], [3, 1], [6, 0]] }],
+          [24, { x: 8, sx: 1.06, sy: 0.94, rot: 0.06, reach: 4, arm: 1 }],
+          [40, {}],
+        ]),
+        speed: f >= 9 && f < 20 ? 1 - (f - 9) / 11 : 0, dust: f >= 9 && f < 21 ? (f - 9) / 12 : null, squint: f >= 12 && f < 22,
+      }),
+    },
+    hold: { // got it: leaning back a little with both claws clamped on, straining
+      input: 'grab connects', frames: 60, breakFree: 90, perDmg: 1.2,
+      anim: (f, n = 60) => {
+        const b = Math.sin(f / n * Math.PI * 4);
+        return { ...HOLD, rot: -0.05 + 0.02 * b, sx: 1.02 + 0.01 * b, sy: 0.98 - 0.01 * b, carry: [58, -4 + b, 0] };
+      },
+    },
+    pummel: { // Read(bag.txt): a hard squeeze
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      anim: f => ({
+        ...tween(f, [
+          [0, HOLD],
+          [4, { ...HOLD, rot: -0.1, sx: 0.96, sy: 1.04, reach: 6, arm: [-2, -6], carry: [56, -6, 0] }],
+          [5, { ...HOLD, rot: 0.06, sx: 1.08, sy: 0.93, reach: 14, arm: [-2, 0], carry: [60, -2, 0.06] }],
+          [16, HOLD],
+        ]),
+        squint: f >= 5 && f < 9, say: ['Read(bag.txt)', Math.max(0, Math.min(1, f / 3, (16 - f) / 4))],
+      }),
+    },
+    forwardThrow: { // git push: rears back and shoves it out ahead
+      input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['> git push', '→ origin/main'], keys: [
+        [0, HOLD],
+        [7, { x: -4, rot: -0.18, sx: 0.94, sy: 1.06, reach: 2, arm: [-2, -4], legs: legsAll(2, 0), carry: [46, -8, -0.15] }],
+        [10, { x: 6, rot: 0.2, sx: 1.2, sy: 0.86, reach: 24, arm: [-3, 1], legs: [[-8, 0], [-6, 0], [2, 0], [4, 0]], carry: [84, -14, 0.2] }],
+        [16, { x: 5, rot: 0.14, sx: 1.12, sy: 0.9, reach: 16, arm: [-2, 1] }],
+        [29, {}],
+      ], extra: f => ({ speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
+    },
+    backThrow: { // git revert: hoists it overhead and heaves it over backwards
+      input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['> git revert', '↶ reverted'], keys: [
+        [0, HOLD],
+        [6, { rot: -0.1, sx: 0.92, sy: 1.1, arm: -10, reach: 4, carry: [30, -58, -0.8] }],
+        [12, { rot: -0.35, sx: 0.96, sy: 1.06, arm: -12, carry: [-20, -64, -2.2] }],
+        [16, { rot: -0.45, sx: 1.1, sy: 0.9, arm: -6, carry: [-62, -20, -3] }],
+        [22, { rot: -0.3, sx: 1.08, sy: 0.92, arm: -2 }],
+        [37, {}],
+      ] }),
+    },
+    upThrow: { // ship it: sets it down and a terminal springs up under it, launching it straight up
+      input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['> ship it', 'deployed 🚀'], keys: [ // term dy is from body centre: bag bottom + 42
+        [0, HOLD],
+        [6, { sx: 1.1, sy: 0.9, reach: 6, arm: 2, carry: [58, 0, 0], term: [58, 42, 0, 0] }],
+        [9, { sx: 1.04, sy: 0.96, arm: -2, carry: [58, -8, 0], term: [58, 34, 0, 0.8] }],
+        [14, { sx: 0.92, sy: 1.1, arm: -10, carry: [58, -70, 0], term: [58, -28, 0, 0.8] }],
+        [20, { sx: 0.96, sy: 1.06, arm: -8, term: [58, 20, 0, 0.3] }],
+        [23, { arm: -4, term: [58, 30, 0, 0] }],
+        [35, {}],
+      ] }),
+    },
+    downThrow: { // git commit: lifts it overhead and stamps it into the floor, where it bounces up
+      input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['> git commit', '✓ committed'], keys: [
+        [0, HOLD],
+        [6, { y: -6, rot: -0.05, sx: 0.9, sy: 1.12, arm: -10, carry: [30, -60, 0] }],
+        [11, { y: -10, rot: 0.05, sx: 0.94, sy: 1.08, arm: -8, carry: [40, -70, 0.1] }],
+        [14, { rot: 0.15, sx: 1.3, sy: 0.7, arm: 4, reach: 14, carry: [60, 0, 0] }],
+        [22, { rot: 0.05, sx: 1.1, sy: 0.9, arm: 2, reach: 6 }],
+        [35, {}],
+      ], extra: f => ({ puff: f >= 14 ? (f - 14) / 10 : null }) }),
+    },
   },
 };
