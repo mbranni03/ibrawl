@@ -15,11 +15,11 @@
 //   tether = [length px, angle above level] an MCP cord + plug out of the front claw · plugged = its plug is in (sparks at the tip)
 //   flow = phase of data packets running up a plugged cord · oopsMsg can also be [headline, detail], oopsOk = success toast
 //   term = [dx, dy from body centre, tilt, size] a terminal swung in the claws (up smash) · swoosh = 0 … 1 its swing trail over the head
-//   compact = 0 … 1 chevrons bursting out both ways along the floor (down smash) · say = [text, alpha] a monospace caption over its head
+//   compact = 0 … 1 chevrons bursting out both ways along the floor (down smash) · say = [text, alpha, raise px] a monospace caption over its head
 //   aura = effort tier 0 … 3: glow, one halo per tier, rising sparks · burst = 0 … 1 progress of a tier-up ring
 //   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet (padMark = (x, y, r) =>
 //   draws the mark on its front instead of the Claude spark) · blastDraw = (x, y, t, ang) => draws the KO burst instead of Claw'd's
-//   blast = [0 … 1, angle] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was
+//   blast = [0 … 1, angle, color?, mark?] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was (drawBlast)
 //   body = () => draws another fighter in place of Claw'd's body, legs and eyes (every effect above still drawn around it, except
 //   the terminal shield and its shatter: a fighter with its own shield draws it)
 const CLAWD = '#d97757';
@@ -133,7 +133,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   if (pose.say) {
     ctx.save(); ctx.globalAlpha *= pose.say[1]; ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK;
     const c = pose.carry, over = c && Math.abs(c[0]) < 45 ? bottom + c[1] - 86 : Infinity; // above a bag carried overhead
-    ctx.fillText(pose.say[0], mx, Math.min(bottom - 78, over)); ctx.restore();
+    ctx.fillText(pose.say[0], mx, Math.min(bottom - 78 - (pose.say[2] || 0), over)); ctx.restore();
   }
   if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged, pose.flow); }
   if (pose.shatter != null && !pose.body) { // terminal shards burst up and out from where it was held, tumble and fade
@@ -244,15 +244,15 @@ function drawSack(x, y, rot = 0) {
 }
 
 // KO blast: a fan of thick ink / orange rays shooting out toward ang and a big Claude spark, all fading out as t goes 0 → 1
-function drawBlast(x, y, t, ang) {
+function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = the rays between the ink ones · mark = what bursts in the middle (x, y, r, spin)
   const e = 1 - (1 - Math.min(1, t * 3)) ** 2; // shoots out fast
   ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= Math.min(1, (1 - t) * 2.5);
   for (let k = 0; k < 11; k++) {
     const a = ang + (k - 5) * 0.13, l = (120 + 160 * (k * 0.618 % 1)) * e;
-    ctx.strokeStyle = k % 2 ? CLAWD : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
+    ctx.strokeStyle = k % 2 ? color : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
     line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 1.5, 1);
   }
-  drawSpark(x, y, SPARK_R * (1 + 2 * e), t * 3);
+  mark(x, y, SPARK_R * (1 + 2 * e), t * 3);
   ctx.restore();
 }
 

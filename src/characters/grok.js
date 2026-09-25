@@ -401,7 +401,7 @@ function drawBubble(x, y, k, wear, face) {
   ctx.save(); ctx.translate(x, y); ctx.lineCap = ctx.lineJoin = 'round'; ctx.globalAlpha *= 1 - 0.45 * wear;
   ctx.fillStyle = 'rgba(29,155,240,0.16)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.28); ctx.fill();
   ctx.strokeStyle = 'rgba(29,120,200,0.8)'; ctx.lineWidth = 2.2; ellipse(0, 0, r, r, 0.6);
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r - 6, -2.5, -1.7); ctx.stroke(); // shine
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, Math.max(0, r - 6), -2.5, -1.7); ctx.stroke(); // shine (none while it pops up tiny)
   ctx.strokeStyle = 'rgba(20,80,140,0.8)'; ctx.lineWidth = 1.3; // cracks spreading as it wears
   for (const [a, from] of [[-0.6, 0.15], [2.2, 0.35], [1.1, 0.55], [-2.4, 0.75]]) {
     const u = Math.min(1, Math.max(0, (wear - from) / 0.25)); if (!u) continue;

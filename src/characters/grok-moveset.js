@@ -631,7 +631,7 @@ const GROK_MOVESET = {
       // bigger the picture and the harder it hits: damage × chargeMult and projectile.r × (1 + grow) at 100%. Ground or air
       input: 'B (V / L), no direction · hold to charge, let go to throw · ground or air', state: 'imagine', hold: 'special', keepOnLand: true,
       startup: 12, active: 1, endlag: 18, damage: 4, kb: { base: 20, growth: 60, angle: 30 }, chargeFrames: 90, chargeMult: 3, chargeAt: 8, landingLag: 6,
-      projectile: { x: 40, y: -32, speed: 620, life: 0.8, r: 13, grow: 0.9, draw: (x, y, r, t, dir, pic) => drawImagined(x, y, r, t, dir, pic) },
+      projectile: { x: 40, y: -32, speed: 620, life: 0.8, r: 13, grow: 0.9, draw: (x, y, r, spin, sh) => drawImagined(x, y, r, sh.t, Math.sign(sh.vx) || 1, sh.pic || 0) },
       anim: (f, n, c = 0) => ({
         ...tween(f, [
           [0, {}],
@@ -677,7 +677,7 @@ const GROK_MOVESET = {
       // blinking. Down special again while a chip is in anyone: neuralZap. One chip at a time
       input: 'down + B (V / L), ground or air · again to zap', state: 'neuralink', zap: 'neuralZap', startup: 10, active: 1, endlag: 16,
       damage: 2, kb: { base: 0, growth: 0, angle: 0 }, landingLag: 6,
-      projectile: { x: 30, y: -36, speed: 700, life: 0.45, r: 7, draw: (x, y, r, t, dir) => drawChipShot(x, y, r, t, dir) },
+      projectile: { x: 30, y: -36, speed: 700, life: 0.45, r: 7, draw: (x, y, r, spin, sh) => drawChipShot(x, y, r, sh.t, Math.sign(sh.vx) || 1) },
       plant: { chip: true, secs: Infinity, draw: (x, y, rot, a) => drawChip(x, y, rot, a) },
       anim: f => ({
         ...tween(f, [
