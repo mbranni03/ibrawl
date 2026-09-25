@@ -47,8 +47,11 @@ const BLAST = { l: -220, r: W + 220, t: -360, b: H + 200 };
 // Smash-style: frames everyone in play (padded, more room above than below), zooms between zmin and zmax, and eases toward that
 // framing so it never jerks: out fast (keeps up with a launch), back in slowly. It can look out as far as the blast zone, so a fighter
 // flying off is on screen until the moment it's KO'd, but never past it (zmin), so nobody is KO'd in plain view. cam = the world point at screen centre + zoom
-const CAM = { ...BLAST, padX: 260, padUp: 260, padDown: 140, zmin: Math.max(W / (BLAST.r - BLAST.l), H / (BLAST.b - BLAST.t)), zmax: 1.35, pan: 3, zoomIn: 1.6, zoomOut: 6 };
-const cam = { x: W / 2, y: H / 2, z: 1 };
+const CAM = { ...BLAST, padX: 260, padUp: 260, padDown: 140, zmin: Math.max(W / (BLAST.r - BLAST.l), H / (BLAST.b - BLAST.t)), zmax: 1.35, pan: 3, zoomIn: 1.6, zoomOut: 6,
+  punch: 0.1, punchIn: 15, punchOut: 3 }; // big hits: up to 10% closer around where they landed, in fast, out slow
+// x y z = the framing, vx vy vz = what's shown (framing + punch) · kick = punch strength 0 … 1 (decaying), kz = it eased · hx hy = the hit
+const camHome = () => ({ x: W / 2, y: H / 2, z: 1, vx: W / 2, vy: H / 2, vz: 1, kick: 0, kz: 0, hx: 0, hy: 0, seen: null, exit: null });
+const cam = camHome();
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function stepCam(dt) {
   if (P.state === 'ko') return; // hold still while the KO blast plays, so it stays where it went out
@@ -64,10 +67,15 @@ function stepCam(dt) {
   const hw = W / 2 / cam.z, hh = H / 2 / cam.z;
   cam.x += (clamp((l + r) / 2, CAM.l + hw, CAM.r - hw) - cam.x) * k;
   cam.y += (clamp((t + b) / 2, CAM.t + hh, CAM.b - hh) - cam.y) * k;
+  cam.kz += (cam.kick - cam.kz) * (1 - Math.exp(-CAM.punchIn * dt)); cam.kick *= Math.exp(-CAM.punchOut * dt);
+  const f = 1 + CAM.punch * cam.kz, g = 1 - 1 / f; // zoom in by f, keeping the hit's spot on screen put
+  Object.assign(cam, { vz: cam.z * f, vx: cam.x + (cam.hx - cam.x) * g, vy: cam.y + (cam.hy - cam.y) * g });
   const [sx, sy] = onScreen();
   if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) { cam.seen = [sx, sy]; cam.exit = null; } else cam.exit = exitPoint(); // a KO blasts from where they left
 }
-const onScreen = () => [(P.x + P.w / 2 - cam.x) * cam.z + W / 2, (P.y + P.h / 2 - cam.y) * cam.z + H / 2];
+// a hit with knockback k (KB units) at x, y: from k 60 up, full punch by 130
+function camPunch(k, x, y) { const s = clamp((k - 60) / 70, 0, 1); if (s > cam.kick) Object.assign(cam, { kick: s, hx: x, hy: y }); }
+const onScreen = () => [(P.x + P.w / 2 - cam.vx) * cam.vz + W / 2, (P.y + P.h / 2 - cam.vy) * cam.vz + H / 2];
 // where P's path crossed the screen's edge on the way out: from the last point it was seen at toward where it is now
 function exitPoint() {
   if (cam.exit || !cam.seen) return cam.exit;
@@ -77,8 +85,8 @@ function exitPoint() {
 }
 // world → screen: z scaled around cam; depth < 1 moves less (parallax for the background)
 function view(depth = 1) {
-  const z = 1 + (cam.z - 1) * depth;
-  ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-(W / 2 + (cam.x - W / 2) * depth), -(H / 2 + (cam.y - H / 2) * depth));
+  const z = 1 + (cam.vz - 1) * depth;
+  ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-(W / 2 + (cam.vx - W / 2) * depth), -(H / 2 + (cam.vy - H / 2) * depth));
 }
 
 // ---------- player ----------
@@ -201,7 +209,7 @@ function setPaused(on) {
 function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
-  Object.assign(cam, { x: W / 2, y: H / 2, z: 1, seen: null, exit: null });
+  Object.assign(cam, camHome());
   stocks = STOCKS; fx.length = shots.length = bricks.length = rockets.length = booms.length = 0; sub = cart = wreck = nelly = thrown = null; makeTargets();
   for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); // Lego Man's stairs
   [P.w, P.h] = fighter.box; // out of the mech
@@ -498,7 +506,7 @@ function hitClawd(dmg, kb, dir) {
   const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return; } // countered: the hit does nothing
   hurt(dmg); hitstop = Math.round(3 + dmg / 4);
   const k = kb.base + kb.growth * P.dmg / 100, a = kb.angle * Math.PI / 180;
-  P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
+  P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); camPunch(k, P.x + P.w / 2, P.y + P.h / 2); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
   Object.assign(P, { ground: false, on: null, ledge: 0, fastFall: false, airDodged: false, state: k >= R.tumble.threshold ? 'tumble' : 'hitstun', f: 0 }); // a new hit restarts it; refreshes the air dodge
 }
 
@@ -1013,7 +1021,7 @@ function hitBag(b, dmg, kb, dir) {
   b.dmg += dmg; b.hitT = 0.3; b.pinT = 0; // a hit knocks it off a pin
   hitstop = Math.round(3 + dmg / 4);
   const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
-  b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a);
+  b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a); camPunch(s / KB, b.x + b.w / 2, b.y + b.h / 2);
 }
 
 function out(b) {
