@@ -106,6 +106,9 @@ const FIGHTERS = {
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
   lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
 };
+for (const F of Object.values(FIGHTERS)) if (F.draw !== drawClawd) { // as in the game: the others drawn inside Claw'd's effects (captions, speed lines…)
+  const art = F.draw; F.draw = (x, y, p, face) => drawClawd(x, y, { ...p, body: () => art(x, y, p, face) }, face);
+}
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait
 const IDS = Object.keys(FIGHTERS);
@@ -199,7 +202,7 @@ function drawFigure(fr) {
   F.draw(0, air, pose);
   const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
   const wy = pr?.wave ? pr.wave[0] * Math.sin(2 * Math.PI * st / pr.wave[1]) : 0; // a projectile that bobs as it flies
-  if (pr && st >= 0) (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
+  if (pr && st >= 0) move.shotArt ? move.shotArt(pr.x + pr.speed * st, air + pr.y, Math.min(1, st / 0.1), 1) : (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
   if (!$('boxes').checked || !F.hurt) return;
   const rad = pr?.r ?? SPARK_R;
   if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - rad, y: air + pr.y + wy - rad, w: 2 * rad, h: 2 * rad }, BOX, 'rgba(224,82,58,0.18)');
