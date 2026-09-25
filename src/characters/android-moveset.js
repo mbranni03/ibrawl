@@ -465,11 +465,11 @@ const ANDROID_MOVESET = {
     },
   },
 
-  // grabs (G / U), laid out like Claw'd's: a grab that connects holds the target (carry = [dx, dy, rot] of its bottom-centre) until it
+  // grabs (G / I), laid out like Claw'd's: a grab that connects holds the target (carry = [dx, dy, rot] of its bottom-centre) until it
   // breaks free; light pummels, a direction throws, letting go on the startup frame
   grabs: {
     grab: { // Circle to Search: the front hand loops a glowing scribble round whatever's just ahead, and it's caught
-      input: 'grab (G / U)', startup: 7, active: 4, endlag: 22, hitbox: { x: 16, y: -68, w: 60, h: 64 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 7, active: 4, endlag: 22, hitbox: { x: 16, y: -68, w: 60, h: 64 }, grab: true,
       anim: f => ({
         ...tween(f, [
           [0, {}],

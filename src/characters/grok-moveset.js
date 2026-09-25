@@ -255,13 +255,13 @@ const GROK_MOVESET = {
     },
   },
 
-  // grabs (G / U): no hands, so Grok grabs with a tractor beam out of its eyes and holds what it catches floating in it. Fields as
+  // grabs (G / I): no hands, so Grok grabs with a tractor beam out of its eyes and holds what it catches floating in it. Fields as
   // Claw'd's (carry = where the held one's bottom-centre goes); beam / beamTo draw the beam (beamed() aims it at whatever's carried).
   // hold.ratio: every pummel adds a reply against the held one's likes; once replies outnumber them they're RATIO'D (a stamp slams on)
   // and the throw after hits mult × harder (damage and knockback), the stamp riding along on them for a moment
   grabs: {
     grab: { // eyes light up and a beam shoots out ahead; a whiff lets it fizzle back
-      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -58, w: 72, h: 46 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -58, w: 72, h: 46 }, grab: true,
       anim: f => {
         const ext = f < 3 ? 0 : f < 6 ? (f - 3) / 3 : f < 9 ? 1 : Math.max(0, 1 - (f - 9) / 8);
         return {

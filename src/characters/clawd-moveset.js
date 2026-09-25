@@ -353,7 +353,7 @@ const MOVESET = {
 
   defense: {
     shield: { // hold: crouch and hold a little terminal over its head like a roof (in the game it shrinks as the shield wears down)
-      input: 'hold I', frames: 60,
+      input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { sx: 1.14, sy: 0.72, arm: -14, legs: [[-2, 0], [-1, 0], [1, 0], [2, 0]], shield: 1 };
         const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
@@ -384,7 +384,7 @@ const MOVESET = {
     },
     // dodges: intangible = [first, last) frames nothing can hurt Claw'd; a roll's x is real movement in the game (root motion)
     spotDodge: {
-      input: 'dodge (Shift / Z), or down while shielding', frames: 26, intangible: [3, 18],
+      input: 'dodge + ↓ (Shift / Z), or ↓ while shielding', frames: 26, intangible: [3, 18],
       anim: f => tween(f, [ // quick squash, then shrink back "into the page" with eyes shut, and pop out again
         [0, {}],
         [3, { sx: 1.15, sy: 0.8, arm: 3 }],
@@ -454,7 +454,7 @@ const MOVESET = {
       },
     },
     tech: { // shield / dodge pressed just before tumbling into the ground: slaps the floor and pops straight back onto its feet
-      input: 'I / dodge within window frames before landing in tumble · + ← → tech roll', frames: 22, window: 20, intangible: [0, 16],
+      input: 'dodge within window frames before landing in tumble · + ← → tech roll', frames: 22, window: 20, intangible: [0, 16],
       lockout: 40, // after a press in tumble, more presses don't count for this many frames: mashing misses techs
       anim: f => ({
         ...tween(f, [
@@ -822,12 +822,12 @@ const MOVESET = {
     },
   },
 
-  // grabs (G / U). A grab that connects holds the bag in Claw'd's claws until it breaks free (hold.breakFree frames, plus perDmg
+  // grabs (G / I). A grab that connects holds the bag in Claw'd's claws until it breaks free (hold.breakFree frames, plus perDmg
   // per % it has). Holding: light pummels, a direction throws. Pummel / throws have no hitbox: their damage goes to whatever's held,
   // on the startup frame (throws let go then). carry = [dx, dy, rot] where the held bag's bottom-center goes, like hitboxes
   grabs: {
     grab: { // both claws snap out in front and pinch; a whiff clacks them shut on nothing
-      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -44, w: 42, h: 40 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -44, w: 42, h: 40 }, grab: true,
       anim: f => ({
         ...tween(f, [
           [0, {}],

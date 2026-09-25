@@ -329,7 +329,7 @@ const WUMPUS_MOVESET = {
   },
   grabs: { // like Claw'd's (carry = where the held one's bottom-centre goes; throws let go on their startup frame)
     grab: { // Friend Request: paws out and the front ear flops over it in a hug; a whiff hugs thin air
-      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 18, y: -50, w: 42, h: 46 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 18, y: -50, w: 42, h: 46 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
         [4, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, ears: [0.2, -0.3], arms: 0.4 }],
@@ -416,7 +416,7 @@ const WUMPUS_MOVESET = {
   },
   defense: {
     shield: { // hold: hunker down behind a big red Do Not Disturb disc (his status flips to DND). The game shrinks, cracks and greys it as it wears
-      input: 'hold I', frames: 60,
+      input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { x: -3, sx: 1.1, sy: 0.84, rot: 0.06, ears: 0.1, arms: 1.4, legs: [[-2, 0], [0, 0], [0, 0], [2, 0]], dnd: 1 };
         const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
@@ -446,7 +446,7 @@ const WUMPUS_MOVESET = {
       },
     },
     spotDodge: {
-      input: 'dodge (Shift / Z)', frames: 26, intangible: [3, 18],
+      input: 'dodge + ↓ (Shift / Z), or ↓ while shielding', frames: 26, intangible: [3, 18],
       anim: f => ({
         ...tween(f, [
           [0, {}],

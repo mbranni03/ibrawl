@@ -185,7 +185,7 @@ const KB = 10; // knockback units → px/s
 
 const keys = {}; let jumpQ = false, downQ = false, dropQ = false, ffQ = false, dashQ = false, attackQ = false, heavyQ = false, specialQ = false, dodgeQ = false, grabQ = 0, techQ = 0, techLock = 0, sideQ = false, lastTap = { a: null, t: 0 }, lastDir = 0, pressT = {}, attackT = -1e9, tiltQ = false;
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', Space: 'jump',
-                 ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyI: 'shield', KeyG: 'grab', KeyU: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge: Z / Shift; shield: I
+                 ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyG: 'grab', KeyI: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge (held on the ground: shield, like Smash): Z / Shift
 // ---------- pause menu ----------
 const MENU = ['resume', 'controls', 'restart', 'quit'], HOME_MENU = ['play', 'characters', 'controls'];
 // controls screen: two columns of [heading, [[keys, what they do], …]]; descriptions wrap at the ' · ' breaks
@@ -193,12 +193,12 @@ const CONTROLS = [
   [['move', [['← → / A D', 'walk · double-tap to run'], ['Space', 'jump · tap for a short hop · again in the air'],
              ['↓ / S', 'crouch (+ ← → crawl) · tap: drop through a platform · hold in the air: fall through them · double-tap in the air: fast fall'],
              ['on a ledge', '↑ / toward: climb · ↓ / away: let go · Space: jump · C / X: attack · dodge: roll']]],
-   ['defend', [['I', 'hold: shield · + ← →: roll · + ↓: spot dodge'], ['Shift / Z', 'dodge · + ← →: roll · in the air: dodge any way, once per jump'],
-               ['tumbling', 'I / dodge just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
+   ['defend', [['Shift / Z', 'hold: shield · + ← →: roll · + ↓: spot dodge · in the air: dodge any way, once per jump'],
+               ['tumbling', 'Shift / Z just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
   [['attack', [['C / J', 'light: jab combo · + ← →: forward tilt · + ↑ ↓: tilts · running: dash attack · in the air: aerials'],
                ['X / K', 'heavy, hold to charge: forward smash · + ↑: terminal uppercut · + ↓: /compact · in the air: same aerials as light'],
                ['V / L', 'special · hold: think, up to ultrathink · + ← →: spark · + ↑: MCP tether · + ↓: subagent']]],
-   ['grab', [['G / U', 'grab · running: dash grab'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
+   ['grab', [['G / I', 'grab · running: dash grab · or shield + C / J'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
    ['menu', [['Esc', 'pause']]]],
 ];
 let paused = true, sel = 0, showControls = false, over = false, home = true, picking = false, vsT = null, menu = HOME_MENU; // boots to the home screen · picking = character select (after play) · vsT = when the vs screen started (after picking)
@@ -261,7 +261,7 @@ function bookletStep() {
   k.i = (k.i + n + (keys.down && !k.d ? 1 : 0) - (keys.up && !k.u ? 1 : 0)) % n; k.u = !!keys.up; k.d = !!keys.down;
   if (!P.ground) P.vy = Math.min(P.vy, B.fall); // pages slow the fall
   if (P.f >= B.open && (specialQ || attackQ)) { specialQ = attackQ = 0; const b = MOVES[B.builds[k.i]]; if (P.studs >= b.cost) { P.studs -= b.cost; setState(B.builds[k.i]); } else { warn('not enough studs'); setState(P.ground ? 'idle' : 'air'); } }
-  else if (dodgeQ || jumpQ || keys.shield) { dodgeQ = jumpQ = 0; setState(P.ground ? 'idle' : 'air'); }
+  else if (dodgeQ || jumpQ || keys.dodge) { dodgeQ = jumpQ = 0; setState(P.ground ? 'idle' : 'air'); }
 }
 // the booklet's builds, on their release frame: fire the rocket, or switch on the gold brick / the mech suit (the wrecking ball is just a hit)
 function legoBuild(m) {
@@ -303,7 +303,7 @@ addEventListener('keydown', e => {
     if (a === 'special') specialQ = BUFFER;
     if (a === 'dodge') dodgeQ = BUFFER;
     if (a === 'grab') grabQ = BUFFER;
-    if ((a === 'dodge' || a === 'shield') && P.state === 'tumble' && !techLock) { techQ = R.tech.window; techLock = R.tech.lockout; } // teches a tumble that hits the ground within window frames
+    if (a === 'dodge' && P.state === 'tumble' && !techLock) { techQ = R.tech.window; techLock = R.tech.lockout; } // teches a tumble that hits the ground within window frames
     if (a === 'left' || a === 'right') { // dash = a quick tap, then the same direction again right after (see keyup)
       lastDir = a === 'left' ? -1 : 1; sideQ = true; // fresh ← / → press (rolls out of shield)
       if (lastTap.a === a && e.timeStamp - lastTap.t < 200) dashQ = true;
@@ -603,13 +603,13 @@ function stepPlayer(dt) {
     else if (s === 'shield' && !(attackQ || heavyQ || specialQ || jumpQ || grabQ)) { // holding up the terminal; attacks / jump come straight out of it below
       if (downQ || (dodgeQ && !dir)) { dodgeQ = 0; setState('spotDodge'); }
       else if ((sideQ || dodgeQ) && dir) { dodgeQ = 0; setState(dir === P.face ? 'rollForward' : 'rollBack'); }
-      else if (!keys.shield) setState('shieldDrop');
+      else if (!keys.dodge) setState('shieldDrop');
     }
     else if (s === 'shieldDrop' && P.f < 7) {} // lowering it
-    else if (grabQ && has('grabs') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide)
-      grabQ = 0; const dash = s === 'dash' || s === 'run'; if (dir && !dash) P.face = dir; setState(dash ? 'dashGrab' : 'grab');
+    else if ((grabQ || (s === 'shield' && attackQ)) && has('grabs') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // running = dash grab (keeps its slide) · shield + light = grab too (Smash)
+      grabQ = attackQ = 0; const dash = s === 'dash' || s === 'run'; if (dir && !dash) P.face = dir; setState(dash ? 'dashGrab' : 'grab');
     }
-    else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
+    else if (dodgeQ && (dir || keys.down || !fighter.set.defense?.shield) && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, + ↓ spot dodge, alone = shield (below)
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
     else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // a smash it doesn't have yet: its side smash instead
@@ -624,7 +624,7 @@ function stepPlayer(dt) {
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && fighter.set.defense?.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if ((keys.dodge || dodgeQ) && fighter.set.defense?.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { dodgeQ = 0; setState('shield'); } // dodge held: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop

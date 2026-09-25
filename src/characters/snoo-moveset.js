@@ -376,7 +376,7 @@ const SNOO_MOVESET = {
 
   grabs: {
     grab: { // both stretchy arms shoot out in front and clamp; a whiff snaps them back empty
-      input: 'grab (G / U)', startup: 7, active: 3, endlag: 22, hitbox: { x: 16, y: -44, w: 48, h: 40 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 7, active: 3, endlag: 22, hitbox: { x: 16, y: -44, w: 48, h: 40 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
         [5, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, reach: [-4, -2], arm: [-2, -2], ant: 0.2 }],
@@ -550,7 +550,7 @@ const SNOO_MOVESET = {
 
   defense: {
     shield: { // hold: crouches behind a big green mod shield, eyes squeezed shut (in the game it shrinks and cracks as it wears down)
-      input: 'hold I', frames: 60,
+      input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { sx: 1.05, sy: 0.9, blink: 1, swing: [0.4, 1.3], reach: [0, 6], ant: -0.4, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]], shield: 1 };
         const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);

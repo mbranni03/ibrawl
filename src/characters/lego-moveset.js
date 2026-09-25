@@ -624,7 +624,7 @@ const LEGO_MOVESET = {
   // the held target's bottom-centre sits, from his feet
   grabs: {
     grab: { // the front C-clip snaps out and clicks shut on them; a whiff clicks on nothing
-      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 14, y: -52, w: 38, h: 44 }, grab: true,
+      input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 14, y: -52, w: 38, h: 44 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
         [4, { x: -2, rot: -0.06, swing: [0.2, 0.4] }],
