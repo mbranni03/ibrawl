@@ -1,6 +1,6 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. His defense has no shield yet (so he can't shield); reactions are Claw'd's.
+// Fields are as in clawd-moveset.js. His defense has no shield yet (so he can't shield).
 let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
@@ -66,19 +66,20 @@ const WUMPUS_MOVESET = {
           [19, {}],
         ]),
         speed: f >= 3 && f < 6 ? 0.4 : 0,
+        arms: [ease(f, [[0, 0.15], [3, 0.7], [11, 0.4], [19, 0.15]]), 0.15], // the other arm swings out for balance
       }),
     },
     jab2: { // ping ping: the back paw follows it up, a little higher
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
       hitbox: { x: 16, y: -38, w: 30, h: 18 },
-      anim: f => tween(f, [
+      anim: f => ({ arms: [0.15, ease(f, [[0, 0.15], [3, 0.7], [12, 0.4], [21, 0.15]])], ...tween(f, [
         [0, {}],
         [2, { x: -1, sx: 0.98, sy: 1.03, rot: -0.04, reach: [-3, 0], ears: 0.1, legs: legsAll(1, 0) }],
         [3, { x: 5, y: -1, sx: 1.04, sy: 1.02, rot: 0.1, reach: [22, 0], arm: [-3, 0], ears: -0.12, legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
         [6, { x: 5, y: -1, sx: 1.03, sy: 1.02, rot: 0.09, reach: [20, 0], arm: [-3, 0], ears: -0.1, legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
         [12, { x: 2, rot: 0.03, reach: [4, 0], legs: [[-2, 0], [0, 0], [0, 0], [1, 0]] }],
         [21, {}],
-      ]),
+      ]) }),
     },
     jab3: { // @everyone: rear back and throw the whole big head forward, ears flying
       input: 'light (after jab2)', step: 220, startup: 6, active: 3, endlag: 24, damage: 5, kb: { base: 40, growth: 80, angle: 40 },
@@ -93,6 +94,7 @@ const WUMPUS_MOVESET = {
           [33, {}],
         ]),
         speed: f >= 6 && f < 13 ? 1 - (f - 6) / 7 : 0,
+        arms: ease(f, [[0, 0.15], [5, 0.5], [6, 1.4], [9, 1.4], [17, 0.6], [33, 0.15]]), // flung back behind the headbutt
         dust: f >= 6 && f < 18 ? (f - 6) / 12 : null,
         say: sayW('@everyone', f, 6, 30),
       }),
@@ -110,6 +112,7 @@ const WUMPUS_MOVESET = {
           [37, {}],
         ]),
         speed: f >= 7 && f < 22 ? 1 - (f - 7) / 15 : 0,
+        arms: ease(f, [[0, 0.9], [4, 1.3], [7, 1.6], [17, 1.6], [26, 0.6], [37, 0.15]]), // spread wide for the belly flop
         dust: f >= 7 && f < 19 ? (f - 7) / 12 : null,
         say: sayW('sliding into DMs', f, 7, 34),
       }),
@@ -127,20 +130,21 @@ const WUMPUS_MOVESET = {
           [28, {}],
         ]),
         speed: f >= 7 && f < 11 ? 0.5 : 0,
+        arms: [ease(f, [[0, 0.15], [6, 0.3], [7, 1], [10, 1], [15, 0.6], [28, 0.15]]), ease(f, [[0, 0.15], [6, 0.8], [7, 0.3], [28, 0.15]])], // swinging round with the ear
         say: sayW('/slap', f, 7, 26),
       }),
     },
     upTilt: { // raise hand: dip, then spring up tall with both ears shot straight up overhead
       input: 'up + light', startup: 6, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -32, y: -98, w: 64, h: 38 },
-      anim: f => tween(f, [
+      anim: f => ({ arms: ease(f, [[0, 0.15], [5, 0.1], [6, 1.7], [10, 1.7], [16, 0.8], [26, 0.15]]), ...tween(f, [
         [0, {}],
         [5, { sx: 1.12, sy: 0.86, ears: 0.5, arm: 3 }],
         [6, { y: -3, sx: 0.92, sy: 1.12, ears: 3.2, arm: -8, legs: legsAll(0, 3) }],
         [10, { y: -3, sx: 0.93, sy: 1.11, ears: 3.4, arm: -8, legs: legsAll(0, 3) }],
         [16, { sx: 0.98, sy: 1.04, ears: 1.4, arm: -2 }],
         [26, {}],
-      ]),
+      ]) }),
     },
     downTilt: { // *boop*: from the crouch, a quick low snoot poke along the floor
       input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
@@ -155,6 +159,7 @@ const WUMPUS_MOVESET = {
           [20, CROUCH],
         ]),
         say: sayW('*boop*', f, 5, 18),
+        arms: ease(f, [[0, 0.05], [4, 0.1], [5, 0.5], [8, 0.5], [14, 0.2], [20, 0.05]]),
       }),
     },
     getupAttack: { // reconnecting…: from flat on its back, kick over and spin up with both ears flung out, clearing both sides.
@@ -173,6 +178,7 @@ const WUMPUS_MOVESET = {
         ]),
         puff: f >= 12 ? (f - 12) / 10 : null,
         say: sayW('reconnecting…', f, 0, 12),
+        arms: ease(f, [[0, 0.3], [11, 0.8], [12, 1.6], [16, 1.6], [22, 0.7], [32, 0.15]]),
       }),
     },
   },
@@ -521,7 +527,76 @@ const WUMPUS_MOVESET = {
       ]),
     },
   },
-  aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose
+  reactions: { // getting hit: Claw'd's timings (hitstun per kb, tumble threshold, tech window…), Wumpus's poses
+    hitstun: { ...MOVESET.reactions.hitstun, // light hit: whiplash, eyes squeezed shut > <, ears and arms flung out, shudders, shakes it off
+      anim: (f, n = 30) => {
+        const t = f / n * 30, p = tween(t, [
+          [0, { x: -4, sx: 0.88, sy: 1.12, rot: -0.28, ears: 1.6, arms: 1.5, legs: [[-3, -2], [0, 0], [0, 0], [3, -2]] }],
+          [5, { x: -6, sx: 0.92, sy: 1.08, rot: -0.22, ears: 1.2, arms: 1.2, legs: [[-2, -1], [0, 0], [0, 0], [2, -1]] }],
+          [22, { x: -3, sx: 1.03, sy: 0.97, rot: -0.06, ears: 0.3, arms: 0.4 }],
+          [30, { arms: 0.15 }],
+        ]);
+        if (t < 10) p.x += f % 2 ? 1.5 : -1.5;
+        return { ...p, squint: t < 20 };
+      },
+    },
+    tumble: { ...MOVESET.reactions.tumble, // launched hard: head over heels, ears and arms flailing
+      anim: (f, n = 40) => {
+        const p = f / n * Math.PI * 2, s = Math.sin(2 * p);
+        return { rot: -p, sx: 0.94, sy: 1.06, ears: [1.2 + 0.6 * s, 1.2 - 0.6 * s], arms: [1.3 - 0.4 * s, 1.3 + 0.4 * s], legs: [[-3, -3 * s], [0, 0], [0, 0], [3, 3 * s]], squint: true, air: -30 };
+      },
+    },
+    knockdown: { ...MOVESET.reactions.knockdown, // tumbled into the ground: slams onto its back, bounces, lies there seeing stars, stubby feet kicking
+      anim: f => {
+        const kick = i => f >= 14 ? 2 + 2 * Math.sin((f - 14) / 3 + i * 1.7) : 0;
+        return {
+          ...tween(f, [
+            [0, { sx: 1.24, sy: 0.66, ears: 1.6, arms: 1.4 }],
+            [6, { y: -14, sx: 0.95, sy: 1.05, ears: 1, arms: 1 }],
+            [12, { sx: 1.16, sy: 0.8, ears: 1.5, arms: 1.3 }],
+            [18, { sx: 1.04, sy: 0.94, ears: 1.3, arms: 1.1 }],
+          ]),
+          rot: Math.PI, legs: [0, 1, 2, 3].map(i => [kick(i) / 2, kick(i)]), // upside down, so + dy kicks them up
+          squint: f < 14, dizzy: f >= 14 ? 0.01 + (f - 14) / 40 : 0, puff: f < 8 ? f / 8 : f >= 12 && f < 18 ? (f - 12) / 6 : null,
+        };
+      },
+    },
+    tech: { ...MOVESET.reactions.tech, // slaps the floor and pops straight back up, ears first
+      anim: f => ({
+        ...tween(f, [
+          [0, { sx: 1.26, sy: 0.7, ears: 0.4, arms: 0.4 }],
+          [5, { y: -18, sx: 0.9, sy: 1.12, ears: 2.4, arms: 1.6, legs: TUCK }],
+          [11, { sx: 1.12, sy: 0.86, ears: 0.8, arms: 0.6 }],
+          [22, { arms: 0.15 }],
+        ]),
+        ring: f < 12 ? f / 12 : null, squint: f < 5,
+      }),
+    },
+    getup: { ...MOVESET.reactions.getup, // rocks back, kicks over forward onto its feet
+      anim: f => ({
+        ...tween(f, [
+          [0, { rot: Math.PI, sx: 1.04, sy: 0.94, ears: 1.3, arms: 1.1 }],
+          [5, { rot: Math.PI - 0.25, sx: 1.1, sy: 0.88, ears: 1.5, arms: 1.3 }],
+          [13, { rot: Math.PI * 1.55, y: -26, sx: 0.9, sy: 1.1, ears: 0.8, arms: 1, legs: TUCK }],
+          [18, { rot: Math.PI * 2, sx: 1.16, sy: 0.8, ears: 0.4, arms: 0.4 }],
+          [26, { rot: Math.PI * 2, arms: 0.15 }],
+        ]),
+        puff: f >= 18 ? (f - 18) / 8 : null,
+      }),
+    },
+    ko: { ...MOVESET.reactions.ko, // spins off shrinking (preview only), then a blurple burst at the edge
+      anim: f => f < 20
+        ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, ears: 1.6, arms: 1.5, squint: true }
+        : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, WUMPUS, false] },
+    },
+    respawn: { ...MOVESET.reactions.respawn, say: 'A wild Wumpus appeared.', // Discord's join message, over the respawn platform
+      anim: f => { // preview: descend, stand, drop to the floor
+        const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
+        return { ...WUMPUS_MOVESET.movement.idle.anim(f % 120, 120), air: -170 + 110 * e + 60 * d * d, pad: +(f < 100), say: ['A wild Wumpus appeared.', f < 100 ? Math.min(1, f / 10) : 0] };
+      },
+    },
+  },
+  aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose (arms 1, as the jumps and falls leave them)
     neutralAir: { // loading spinner: fling both ears out and spin a full turn, hitting all around
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -50, y: -80, w: 100, h: 80 }, landingLag: 8,
@@ -529,7 +604,7 @@ const WUMPUS_MOVESET = {
         const p = tween(f, [[0, AIRBORNE], [3, { sx: 0.94, sy: 1.06, rot: -0.25, arm: -6, ears: 0.6, legs: TUCK }],
           [4, { sx: 1.06, sy: 0.96, arm: -6, ears: 1.6, legs: TUCK }], [13, { sx: 1.06, sy: 0.96, arm: -6, ears: 1.5, legs: TUCK }], [26, AIRBORNE]]);
         const e = 1 - (1 - Math.min(1, Math.max(0, (f - 4) / 9))) ** 2; // spin eases out
-        return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40 };
+        return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40, arms: ease(f, [[0, 1], [3, 0.6], [4, 1.6], [13, 1.5], [26, 1]]) };
       },
     },
     forwardAir: { // @here: rear the big head back, then nod it down hard in front
@@ -545,6 +620,7 @@ const WUMPUS_MOVESET = {
           [27, AIRBORNE],
         ]),
         speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
+        arms: ease(f, [[0, 1], [6, 1.5], [7, 0.6], [11, 0.6], [18, 0.9], [27, 1]]),
         say: sayW('@here', f, 7, 24),
       }),
     },
@@ -561,6 +637,7 @@ const WUMPUS_MOVESET = {
           [24, AIRBORNE],
         ]),
         speed: f >= 6 && f < 10 ? -0.5 : 0, air: -40,
+        arms: ease(f, [[0, 1], [5, 0.5], [6, 1.4], [10, 1.4], [16, 1], [24, 1]]),
         say: sayW('/kick', f, 6, 22),
       }),
     },
@@ -576,7 +653,7 @@ const WUMPUS_MOVESET = {
           [17, { sx: 0.98, sy: 1.04, arm: -4, ears: 1, legs: TUCK }],
           [24, AIRBORNE],
         ]),
-        air: -40,
+        air: -40, arms: ease(f, [[0, 1], [4, 0.4], [5, 1.7], [10, 1.7], [17, 1.2], [24, 1]]),
       }),
     },
     downAir: { // stomp: ears flung up, both feet driven straight down. Spikes
@@ -592,6 +669,7 @@ const WUMPUS_MOVESET = {
           [32, AIRBORNE],
         ]),
         fallLines: f >= 8 && f < 16 ? 1 - (f - 8) / 8 : 0, air: -40,
+        arms: ease(f, [[0, 1], [7, 1.2], [8, 1.7], [14, 1.7], [22, 1.2], [32, 1]]),
       }),
     },
   },

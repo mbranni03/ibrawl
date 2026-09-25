@@ -9,12 +9,14 @@
 //   rings = 0 … 1 green voice rings (and shouted words) rising off its head (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
 //   horn = [x, y (centre), size, blast 0 … 1 or null] an air horn, blasting sound (neutral special) · nelly = [x, y (bottom), t] Nelly the snail in its paws (side special)
 //   waves = 0 … 1 sound rings bursting off its head (the down special's counter) · muted = 0 … 1 a struck-through mic over its head (down throw)
-//   worn with the body: invisible = 0 … 1 gone see-through with Discord's grey invisible status dot (dodges) · shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
+//   blast = [0 … 1, angle, colour, spark] KO'd: drawn instead of Wumpus (see drawBlast)
+//   worn with the body: squint = eyes squeezed shut > < (hurt) · invisible = 0 … 1 gone see-through with Discord's grey invisible status dot (dodges) · shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
 //   legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
 const BOOST = '#ff73fa', SPEAK = '#23a55a', NITRO = '#8d5cf6', PIN = '#ed4245', PEPE = '#4a8f3c';
 
 function drawWumpus(cx, bottom, pose = {}, face = 1) {
+  if (pose.blast) return drawBlast(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 34, ...pose.blast); // KO'd: only the burst is left (clawd.js)
   ctx.save();
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
   ctx.translate(0, -34); ctx.rotate(pose.rot || 0); ctx.translate(0, 34); // origin back at the feet
@@ -49,7 +51,8 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.fillStyle = WUMPUS_INK;
   for (const nx of [0, 8]) { ctx.beginPath(); ctx.roundRect(nx - 2, -46, 4, 2.4, 1.2); ctx.fill(); }
   ctx.lineWidth = 2;
-  for (const ex of [-12, 19]) { ctx.beginPath(); ctx.arc(ex, -53, 3.2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+  if (pose.squint) for (const [ex, d] of [[-12, 1], [19, -1]]) { ctx.beginPath(); ctx.moveTo(ex - 3 * d, -57); ctx.lineTo(ex + 2.5 * d, -53.5); ctx.lineTo(ex - 3 * d, -50); ctx.stroke(); } // squeezed shut > <
+  else for (const ex of [-12, 19]) { ctx.beginPath(); ctx.arc(ex, -53, 3.2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
   if (pose.invisible) { // the status dot at the corner, like on an avatar: grey, hollow
     ctx.globalAlpha = a0 * pose.invisible; ctx.fillStyle = PAPER; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(22, -34, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#80848e'; ctx.beginPath(); ctx.arc(22, -34, 4.6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(22, -34, 2, 0, Math.PI * 2); ctx.fill();

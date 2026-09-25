@@ -54,7 +54,7 @@ let hitstop = 0;
 let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
-let L, D, AD; const JABS = ['jab1', 'jab2', 'jab3']; // L = ledge moves, D = dodges (+ shield), AD = air dodge: the fighter in play's (moveTables)
+let L, D, AD, R; const JABS = ['jab1', 'jab2', 'jab3']; // L = ledge moves, D = dodges (+ shield), AD = air dodge, R = reactions: the fighter in play's (moveTables)
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -63,7 +63,7 @@ const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpeci
 let ATK, AIR, MOVES, OWN_B = false;
 function moveTables(set) {
   const g = k => set[k] || MOVESET[k];
-  OWN_B = !!set.specials && set.specials !== MOVESET.specials; GR = g('grabs'); L = g('ledge'); D = g('defense'); AD = D.airDodge;
+  OWN_B = !!set.specials && set.specials !== MOVESET.specials; GR = g('grabs'); L = g('ledge'); D = g('defense'); AD = D.airDodge; R = g('reactions');
   const B = OWN_B ? set.specials : { sideSpecial: SIDE_B, downSpecial: DOWN_B };
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), ...B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), ...B };
@@ -78,7 +78,7 @@ function special(dir) { // B, picked by direction
   if (OWN_B) { if (dir && !keys.up && !keys.down) P.face = dir; return setState(keys.up ? 'upSpecial' : keys.down ? 'downSpecial' : dir ? 'sideSpecial' : 'neutralSpecial'); }
   if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); }
 }
-const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
+const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
 const DODGES = ['spotDodge', 'rollForward', 'rollBack'], SB = MOVESET.defense.shieldBreak;
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
