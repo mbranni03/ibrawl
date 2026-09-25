@@ -6,14 +6,16 @@
 // active frame), sfx.hit (a hit lands) and sfx.play (anything else). Browsers keep audio asleep until the first key / click, which
 // wakes it. The menus' sound item switches it off (kept in localStorage). No Web Audio (tools/cpu-check.js): every call does nothing
 const sfx = (() => {
-  let ac, bus, noise, on = true;
+  let ac, bus, mus, noise, on = true;
   try { on = localStorage.getItem('sound') !== 'off'; } catch {}
   const last = {}; // when each sound last started: the same one again within 30 ms is skipped (a blast hitting three at once)
   function wake() {
     if (!ac) {
       const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
-      ac = new A(); bus = ac.createGain(); bus.gain.value = 0.7; bus.connect(ac.createDynamicsCompressor()).connect(ac.destination);
+      ac = new A(); bus = ac.createGain(); bus.gain.value = 0.7; mus = ac.createGain(); mus.gain.value = 0;
+      const comp = ac.createDynamicsCompressor(); bus.connect(comp).connect(ac.destination); mus.connect(comp); // (a hit's sound ducks the music a little)
       noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      setInterval(tick, 50);
     }
     if (ac.state === 'suspended') ac.resume();
   }
@@ -255,6 +257,56 @@ const sfx = (() => {
   };
   const brand = () => BRAND[ROSTER.find(id => FIGHTER[id] === fighter)] || {}; // the fighter in play's
 
+  // ---------- music: an original loop, 144 BPM in C (Am F C G, like the go / win jingles), scheduled a little ahead on the audio clock.
+  // Menus: mallets, a pad, a soft beat. A fight: the full groove (four on the floor, octave bass, offbeat stabs, a square-wave lead with
+  // a sparkle over it every other time round), from the top with a crash. Paused: the same, turned down. Won / lost: quiet, so the
+  // fanfare plays alone. Its volume (0 … 1, 0 = off) is a menu setting, kept in localStorage
+  let level = 0.6, mood = null, step = 0, nextT = 0, loops = 0, crash = false;
+  try { const v = localStorage.getItem('music'); if (v != null && +v >= 0 && +v <= 1) level = +v; } catch {}
+  const hz = m => 440 * 2 ** ((m - 69) / 12), STEP = 60 / 144 / 4; // a 16th
+  const CHORDS = [ // root (the bass's upper octave), stab, mallets (8ths): Am F C G
+    [45, [57, 60, 64], [57, 60, 64, 69, 72, 69, 64, 60]], [41, [57, 60, 65], [53, 57, 60, 65, 69, 65, 60, 57]],
+    [48, [55, 60, 64], [60, 64, 67, 72, 76, 72, 67, 64]], [43, [55, 59, 62], [55, 59, 62, 67, 71, 67, 62, 59]]];
+  const MELODY = { // 16th of the loop: [note, 16ths] · C E A . G E . . | F . E D C . D E | C E G . A G . . | D . B D G . F E
+    0: [72, 2], 2: [76, 2], 4: [81, 4], 8: [79, 2], 10: [76, 6], 16: [77, 4], 20: [76, 2], 22: [74, 2], 24: [72, 4], 28: [74, 2], 30: [76, 2],
+    32: [72, 2], 34: [76, 2], 36: [79, 4], 40: [81, 2], 42: [79, 6], 48: [74, 4], 52: [71, 2], 54: [74, 2], 56: [79, 4], 60: [77, 2], 62: [76, 2] };
+  const kick = g => [['sine', [150, 46], 0, 0.38, g, { slide: 0.13 }], ['hp', 3000, 0, 0.012, g / 4]];
+  const snare = g => [['bp', 2300, 0, 0.17, 0.6 * g, { q: 0.8 }], ['hp', 6000, 0, 0.07, 0.25 * g], ['triangle', [210, 150], 0, 0.1, 0.35 * g, { slide: 0.08 }]];
+  function notes(i, fight) { // the voices on 16th i (0 … 63) of the loop
+    const [root, stab, arp] = CHORDS[i >> 4], p = i & 15, v = [];
+    if (!fight) {
+      if (!(p & 1)) v.push(['sine', hz(arp[p >> 1]), 0, 0.42, p & 2 ? 0.1 : 0.15], ['sine', hz(arp[p >> 1]) * 4, 0, 0.07, 0.03], ['hp', 9500, 0, 0.035, p & 2 ? 0.05 : 0.03]);
+      if (p === 0) v.push(...kick(0.25), ['sawtooth', hz(root - 12), 0, 1.6, 0.12, { lp: 500, a: 0.02 }], ...stab.map(m => ['sawtooth', hz(m), 0, 1.6, 0.03, { lp: 1300, a: 0.25, hold: 0.7 }]));
+      if (p === 8) v.push(...kick(0.2));
+      return v;
+    }
+    if (!(p & 3)) v.push(...kick(0.45));
+    if (i >= 60) v.push(...snare(0.5 + 0.13 * (i - 60))); else if (p === 4 || p === 12) v.push(...snare(0.9)); // a fill into the top
+    if ((p & 3) === 2) v.push(['hp', 7500, 0, 0.14, 0.17], ...stab.map(m => ['sawtooth', hz(m), 0, 0.17, 0.12, { lp: 1600 }])); else if (p & 1) v.push(['hp', 9500, 0, 0.035, 0.07]);
+    if (!(p & 1)) { const f = hz(p & 2 ? root : root - 12); v.push(['sawtooth', f, 0, 0.19, 0.38, { lp: 700 }], ['sine', f, 0, 0.19, 0.22]); }
+    const n = MELODY[i];
+    if (n) { v.push(['square', hz(n[0]), 0, n[1] * STEP, 0.07, { lp: 3200, hold: 0.8, vib: [5.5, hz(n[0]) * 0.006] }]); if (loops & 1) v.push(['sine', hz(n[0] + 12), 0, 0.45, 0.06]); }
+    return v;
+  }
+  function tick() { // every 50 ms: the next 0.2 s of 16ths
+    const want = level * 0.2 * (mood === 'menu' ? 2 : mood === 'pause' ? 0.35 : mood ? 1 : 0), now = ac.currentTime; // (fight: ~7 dB under the sounds at 60 %; the menus' quieter mallets up to match)
+    mus.gain.setTargetAtTime(want, now, 0.15);
+    if (!want || document.hidden) { nextT = 0; return; }
+    if (nextT < now) nextT = now + 0.05; // (behind, or just starting: from here)
+    try {
+      for (; nextT < now + 0.2; nextT += STEP) {
+        if (crash) { crash = false; voice(mus, 'hp', 4500, nextT - now, 1.8, 0.18, { q: 0.6 }); voice(mus, 'bp', 9000, nextT - now, 1, 0.09); }
+        for (const [kind, f, t, ...r] of notes(step, mood !== 'menu')) voice(mus, kind, f, nextT - now + t, ...r);
+        step = (step + 1) & 63; if (!step) loops++;
+      }
+    } catch (e) { console.warn('music', e); level = 0; }
+  }
+  function music(m) { // the game's state, every frame: 'menu', 'fight', 'pause' or null (over)
+    if (m === mood) return;
+    if (m === 'fight' ? mood !== 'pause' : m === 'menu') { step = loops = 0; crash = m === 'fight'; } // a fight starts: from the top
+    mood = m;
+  }
+
   // play one, panned toward x (world px across the screen; none = the middle). A sound that goes wrong stays quiet rather than
   // throwing into the game's frame (that would stop it)
   function play(name, k = 1, x) {
@@ -278,5 +330,8 @@ const sfx = (() => {
     hit: dmg => { if (!ac) return; const h = brand().hit || {}, x = P.x + P.w / 2; play('hit', dmg, x); play(h[P.state] ?? h._, 1, x); },
     toggle() { on = !on; try { localStorage.setItem('sound', on ? 'on' : 'off'); } catch {} },
     get on() { return on; },
+    music,
+    musicStep(d, wrap) { level = Math.round(Math.max(0, wrap && level >= 1 ? 0 : Math.min(1, level + d * 0.2)) * 5) / 5; try { localStorage.setItem('music', level); } catch {} }, // ± 20 %; wrap: 100 % → off
+    get musicLevel() { return level; },
   };
 })();
