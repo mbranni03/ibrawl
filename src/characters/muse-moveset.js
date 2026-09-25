@@ -2,8 +2,15 @@
 // arms and little feet; muse.js draws likes and hearts where Snoo hands out votes. Its smashes are Meta's: a llama kick (Meta's
 // Llama) to the side, an Instagram story bursting open overhead (on Snoo's body motion), and a Beat Saber slash both ways in a
 // Quest headset. Its specials: a stream of Muse sparks from its hands (held, like fire breath), a long stretchy Facebook poke, birthday balloons up
-// (its recovery), and a Meta AI prompt that drops whatever it imagined. No grabs or shield yet (off in the game), and so no shield
-// break; the dodges are Snoo's too.
+// (its recovery), and a Meta AI prompt that drops whatever it imagined. Its grabs are Snoo's (stretchy arms out, held at arm's
+// length), handing out likes as it pummels and on the up throw, a heart on the down throw, "Shared!" on the forward throw and
+// "Unfriended" on the back throw. No shield yet (off in the game), and so no shield break; the dodges are Snoo's too.
+// Snoo's grabs on Muse's wider body: its back arm, reaching forward, stretches further to get round the body to the foe too, a
+// little higher than the front one so both show
+const MUSE_GRABS = Object.fromEntries(Object.entries(SNOO_MOVESET.grabs).map(([k, m]) => [k, { ...m, anim: (f, n) => {
+  const p = m.anim(f, n), arm = Array.isArray(p.arm) ? p.arm : [p.arm || 0, p.arm || 0];
+  return Array.isArray(p.reach) && p.reach[0] > 0 ? { ...p, reach: [p.reach[0] + 30, p.reach[1]], arm: [arm[0] - 5, arm[1]] } : p;
+} }]));
 const MUSE_MOVESET = {
   movement: SNOO_MOVESET.movement, groundAttacks: SNOO_MOVESET.groundAttacks, aerials: SNOO_MOVESET.aerials, ledge: SNOO_MOVESET.ledge,
   // hold the button to charge (chargeFrames, chargeMult, chargeAt as Snoo's)
@@ -123,6 +130,21 @@ const MUSE_MOVESET = {
         imagine: f < 50 ? [f < 3 ? f / 3 : f < 22 ? 1 : Math.max(0, 1 - (f - 22) / 6), f < 20 ? 150 : Math.max(0, 150 * (1 - ((f - 20) / 6) ** 2)),
           f < 8 ? 0 : Math.min(1, (f - 8) / 10), f < 26 ? 0 : (f - 26) / 24, pick ?? 0] : null,
       }),
+    },
+  },
+  grabs: { // Snoo's grab, dash grab, hold and throws (their votes come out as likes and hearts), with Meta's labels on top
+    ...MUSE_GRABS,
+    pummel: { // nods and bonks it, and a like pops up
+      ...MUSE_GRABS.pummel,
+      anim: f => ({ ...MUSE_GRABS.pummel.anim(f), vote: f >= 5 ? [44, -84, (f - 5) / 11, 1] : null }),
+    },
+    forwardThrow: { // sets it down, winds up and swats it away: shared
+      ...MUSE_GRABS.forwardThrow,
+      anim: f => ({ ...MUSE_GRABS.forwardThrow.anim(f), tag: f >= 12 && f < 32 ? ['Shared!', 64, -82, (f - 12) / 20, META] : null }),
+    },
+    backThrow: { // hoists it up over its head and heaves it over backwards: unfriended
+      ...MUSE_GRABS.backThrow,
+      anim: f => ({ ...MUSE_GRABS.backThrow.anim(f), tag: f >= 16 && f < 36 ? ['Unfriended', -66, -76, (f - 16) / 20, '#65676b'] : null }),
     },
   },
   defense: Object.fromEntries(Object.entries(SNOO_MOVESET.defense).filter(([k]) => !k.startsWith('shield'))),

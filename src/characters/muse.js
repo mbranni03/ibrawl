@@ -11,6 +11,7 @@
 //   cubes = [in 0 … 1, cut] a red and a blue Beat Saber cube sliding in either side; cut = 0 … 1 once sliced, halves flying (or null)
 //   headset = 0 … 1 size of the Quest headset strapped over its face window (it grins under it)
 // and its specials:
+//   tag = [text, x, y, t 0 … 1, colour] a label popping up at x, y (px from bottom-centre, like hitboxes) and drifting up (throws)
 //   stream = [phase (frames), spent 0 … 1, on 0 … 1] electric-blue sparks shooting from between its hands, shorter as it's spent
 //   poke = true: a pointing finger on the end of the front arm · balloons = [size 0 … 1, pop 0 … 1 or null, sway] birthday
 //   balloons tied to its raised hands · imagine = [prompt 0 … 1, drop height px, size 0 … 1, landed 0 … 1, pick] a Meta AI prompt
@@ -92,6 +93,7 @@ function drawMuse(cx, bottom, pose = {}, face = 1) {
   drawArm(1); // the front arm, over the body
   if (pose.stream?.[2] > 0.02) museStream(...pose.stream); // over the hands
   ctx.restore();
+  if (pose.tag) museTag(cx + ((pose.x || 0) + pose.tag[1]) * face, bottom + (pose.y || 0) + pose.tag[2], pose.tag[0], pose.tag[3], pose.tag[4]);
   if (pose.vote) museVote(cx + (pose.x || 0) * face, bottom + (pose.y || 0), face, ...pose.vote);
   if (pose.llama) museLlama(cx + 66 * face, bottom, face, ...pose.llama); // where it stands, whatever Muse does
   if (pose.cubes) museCubes(cx, bottom, face, ...pose.cubes);
@@ -349,3 +351,13 @@ const IMAGINED = [
     path([[-22, -36], [14, -36], [24, -30], [12, -26], [8, -14], [16, 0], [-16, 0], [-8, -14], [-12, -26], [-22, -28]]); ctx.fill(); ctx.stroke();
   },
 ];
+
+// a label (a throw's "Shared!", "Unfriended") popping up at x, y in a white pill rimmed in col, drifting up and fading. Never mirrored
+function museTag(x, y, text, t, col) {
+  const k = t < 0.15 ? 1.25 * t / 0.15 : 1.25 - 0.25 * Math.min(1, (t - 0.15) / 0.15);
+  ctx.save(); ctx.translate(x, y - 14 * t); ctx.scale(k, k); ctx.globalAlpha *= Math.min(1, 3 * (1 - t));
+  ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; const w = ctx.measureText(text).width + 18;
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-w / 2, -10, w, 20, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 0, 0.5);
+  ctx.restore();
+}
