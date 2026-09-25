@@ -103,7 +103,7 @@ const FIGHTERS = {
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
   duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
-  lego: { name: 'Lego Man', moves: { ...basic, ...LEGO_MOVESET }, draw: drawLego, fx: drawClawdFx, hurt: (p = {}) => ({ x: (p.x || 0) - 22 * (p.sx ?? 1), y: (p.y || 0) - 72 * (p.sy ?? 1), w: 44 * (p.sx ?? 1), h: 72 * (p.sy ?? 1) }) },
+  lego: { name: 'Lego Man', moves: { ...basic, ...LEGO_MOVESET, defense: { ...basic.defense, ...LEGO_MOVESET.defense } }, draw: drawLego, fx: drawClawdFx, hurt: (p = {}) => ({ x: (p.x || 0) - 22 * (p.sx ?? 1), y: (p.y || 0) - 72 * (p.sy ?? 1), w: 44 * (p.sx ?? 1), h: 72 * (p.sy ?? 1) }) },
 };
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait
@@ -177,6 +177,7 @@ function select(i) {
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
 const panelFrames = () => Array.from({ length: Math.min(12, total) }, (_, i) => Math.floor(i * total / Math.min(12, total)));
 
+const halfBox = () => F.hurt ? F.hurt().w / 2 : 0;
 function drawRect(b, stroke, fill) {
   ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.fillStyle = fill;
   ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -234,7 +235,7 @@ function renderBoard() {
     ctx.strokeStyle = now ? BOX : INK; ctx.lineWidth = now ? 2.4 : 1.2;
     poly([[6, 6], [PW - 6, 6], [PW - 6, PH - 6], [6, PH - 6]], 0.8);
     ctx.save(); ctx.beginPath(); ctx.rect(7, 7, PW - 14, PH - 14); ctx.clip();
-    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(group === 'ledge' ? ox : 22, floorY, PW - 22, floorY, 0.6, 1);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(group === 'ledge' ? ox - halfBox() * s : 22, floorY, PW - 22, floorY, 0.6, 1);
     ctx.translate(ox, floorY); ctx.scale(s, s); drawFigure(fr); ctx.restore();
     ctx.font = '600 18px Caveat, cursive'; ctx.fillStyle = INK; ctx.textAlign = 'left';
     ctx.fillText(`f${fr + 1}`, 14, 26);
@@ -256,8 +257,8 @@ function render(t) {
   ctx.setTransform(dpr * SCALE, 0, 0, dpr * SCALE, 0, 0);
   ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = INK;
 
-  // little floor; for ledge moves it stops at the lip Claw'd hangs from
-  const { move, group } = list[cur], lip = group === 'ledge' ? VW / 2 : null;
+  // little floor; for ledge moves it stops at the lip Claw'd hangs from (x = 0 stands him half his box in from it, as in the game)
+  const { move, group } = list[cur], lip = group === 'ledge' ? VW / 2 - halfBox() : null;
   hatch([[lip ?? 100, GROUND], [380, GROUND], [365, GROUND + 20], [lip ?? 115, GROUND + 20]], 8, 0.3);
   ctx.lineWidth = 2; line(lip ?? 92, GROUND, 388, GROUND, 1.2);
 

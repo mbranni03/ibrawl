@@ -54,7 +54,7 @@ let hitstop = 0;
 let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
-const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
+const L = { ...MOVESET.ledge }, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 const GR = { ...MOVESET.grabs }, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws (the fighter in play's: a copy, swapped in on the vs screen)
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -63,8 +63,8 @@ const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
 const US = MOVESET.specials.upSpecial; // MCP tether: its own state, runs off P.teth
 const MOVES = { ...ATK, ...AIR, ledgeAttack: L.ledgeAttack, neutralSpecial: NEUTRAL_B, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
 const think = () => { setState('neutralSpecial'); P.f = thinkFrom(P.think); }; // resume from the last checkpoint reached
-const R = MOVESET.reactions, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
-const D = MOVESET.defense, DODGES = ['spotDodge', 'rollForward', 'rollBack'], AD = D.airDodge, SB = D.shieldBreak;
+const R = { ...MOVESET.reactions }, RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
+const D = { ...MOVESET.defense }, DODGES = ['spotDodge', 'rollForward', 'rollBack']; // ledge / defense / reactions: the fighter in play's (copies, swapped in on the vs screen)
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
@@ -79,7 +79,7 @@ const bricks = []; // Lego Man's loose bricks: boxes that tumble out and lie on 
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
 // every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
 // doesn't have yet (attacks, specials, grabs, defense, ledge) is simply off for it · jumps = air jumps · flap = air jump speed ·
-// glide = max fall speed holding jump. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
+// glide = max fall speed holding jump · pad = draws its own respawn platform (pose.pad) · controls = its own descriptions for rows of the controls screen, by keys. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
 const FIGHTER = {
   clawd: { name: "Claw'd", box: [60, 50], art: drawClawd, set: MOVESET },
   grok: { name: 'Grok Bot', box: [52, 56], art: drawGrok, set: GROK_MOVESET },
@@ -87,7 +87,10 @@ const FIGHTER = {
   android: { name: 'Android', box: [50, 64], art: drawAndroid, set: { movement: MOVESET.movement } },
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: { movement: MOVESET.movement } },
-  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET },
+  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true, controls: { // his rows on the controls screen, where they differ
+    'I': 'no shield yet · tumbling: tech with I / dodge',
+    'X / K': 'heavy, hold for more bricks: brick hammer · + ↑: tower · + ↓: loose bricks · in the air: same aerials as light',
+    'V / L': 'special · booklet: ↑ ↓ pick a build, special: buy it with studs · + ← →: head boomerang · + ↑: staircase · + ↓: fall-apart counter' } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
   random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
@@ -135,6 +138,7 @@ function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
   stocks = STOCKS; fx.length = shots.length = bricks.length = rockets.length = booms.length = 0; thrown = null; for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); sub = null; makeTargets();
+  [P.w, P.h] = fighter.box; // out of the mech
   Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, toastT: null,
     studs: fighter.set.specials?.booklet?.studs.start ?? 0, gold: 0, mech: 0 }); // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left
 }
@@ -144,6 +148,7 @@ const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTE
 function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box;
   for (const o of [ATK, MOVES]) Object.assign(o, MOVESET.groundAttacks, fighter.set.groundAttacks, MOVESET.smashAttacks, fighter.set.smashAttacks); // its own moves under the same state names
   for (const o of [AIR, MOVES]) Object.assign(o, MOVESET.aerials, fighter.set.aerials);
+  for (const [o, g] of [[L, 'ledge'], [D, 'defense'], [R, 'reactions']]) Object.assign(o, MOVESET[g], fighter.set[g]); MOVES.ledgeAttack = L.ledgeAttack;
   Object.assign(GR, MOVESET.grabs, fighter.set.grabs); for (const k of ['grab', 'dashGrab']) ATK[k] = MOVES[k] = GR[k]; for (const k of ['pummel', ...THROWS]) MOVES[k] = GR[k];
   if (fighter.set.specials !== MOVESET.specials) for (const [k, m] of Object.entries(fighter.set.specials || {})) { // Lego Man's: own state names
     MOVES[k] = m; if (m.startup == null) continue; // the booklet runs itself (bookletStep)
@@ -184,8 +189,11 @@ function bookletStep() {
 function legoBuild(m) {
   if (m.launch) { const L = m.launch; rockets.push({ x: P.x + P.w / 2 + P.face * L.x, y: P.y + P.h + L.y, v: L.speed[0], dir: P.face, t: 0, L }); }
   if (m.power) P.gold = m.power.time;
-  if (m.suit) P.mech = m.suit.time;
+  if (m.suit) { P.mech = m.suit.time; mechFit(true); }
 }
+// in the mech suit his box is MECH_K times his own, grown round his feet; back to his own size when it pops off in a shower of bricks
+function mechFit(on) { const [w, h] = fighter.box, k = on ? MECH_K : 1; P.x += (P.w - w * k) / 2; P.y += P.h - h * k; P.w = w * k; P.h = h * k; }
+function popMech() { P.mech = 0; mechFit(false); booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); }
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -272,7 +280,7 @@ function land(surface, wasGround) {
       puff();
     }
     else if (P.state === 'hitstun') {} // flinches through the landing
-    else if (P.state in AIR || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? AD : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
+    else if (P.state in AIR || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? D.airDodge : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
     else if (P.state === 'neutralSpecial' || P.state === 'booklet') {} // keeps thinking / reading through the landing
     else if (P.vy > 300) { setState('land'); puff(); } else setState('idle');
   }
@@ -286,6 +294,7 @@ function grabLedge() {
   for (const side of [-1, 1]) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, gap = side < 0 ? lx - (P.x + P.w) : P.x - lx;
     if (gap >= 0 && gap < 24 && P.y > stage.y - 40 && P.y < stage.y + 16) {
+      if (P.mech > 0) popMech(); // too big to hang on: he climbs out and the suit falls apart
       Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
       return setState('ledgeGrab');
     }
@@ -358,9 +367,9 @@ function linkStep(T, ax, ay, dt) {
   Object.assign(P, { vy: -K.pop, jumps: Math.max(P.jumps, 1), airDodged: false }); setState('air');
 }
 
-// the shield ran out: the terminal shatters, Claw'd pops up and is left dizzy for SB.frames (each key press shakes off 3 frames)
+// the shield ran out: the terminal shatters, Claw'd pops up and is left dizzy for D.shieldBreak.frames (each key press shakes off 3 frames)
 function breakShield() {
-  P.shield = 0; P.vy = -SB.pop; P.ground = false; P.on = null; hitstop = 10; setState('shieldBreak');
+  P.shield = 0; P.vy = -D.shieldBreak.pop; P.ground = false; P.on = null; hitstop = 10; setState('shieldBreak');
   P.oopsMsg = Math.floor(Math.random() * OOPS.length); // which error toast pops up over its head
 }
 
@@ -402,6 +411,7 @@ function ko() {
 }
 function respawn() {
   if (--stocks <= 0) return gameOver();
+  [P.w, P.h] = fighter.box; // out of the mech
   Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, toastT: null, stairs: false, gold: 0, mech: 0 });
   P.state = 'respawn'; P.f = 0;
 }
@@ -456,7 +466,7 @@ function stepPlayer(dt) {
   else if (P.ground) {
     if (s in ATK) {}
     else if (s === 'booklet') bookletStep();
-    else if (s === 'shieldBreak') { if (P.f >= SB.frames) { P.shield = Math.max(P.shield, SHIELD_MIN); setState('idle'); } } // dizzy: no control
+    else if (s === 'shieldBreak') { if (P.f >= D.shieldBreak.frames) { P.shield = Math.max(P.shield, SHIELD_MIN); setState('idle'); } } // dizzy: no control
     else if (s === 'landLag') { if (P.f >= P.lag) setState('idle'); }
     else if (s === 'hitstun') { if (!stunned) setState('idle'); }
     else if (s === 'hold' || s === 'pummel') holdStep(dir);
@@ -495,7 +505,7 @@ function stepPlayer(dt) {
       if (dir && atk !== 'dashAttack') P.face = dir;
       attackQ = 0; P.nextJab = false; setState(atk);
     }
-    else if (keys.shield && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
+    else if (keys.shield && fighter.set.defense?.shield && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) setState('shield'); // held I: raise it (also right after a roll, landing…)
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
@@ -538,10 +548,10 @@ function stepPlayer(dt) {
     else if (specialQ && free && has('specials')) special(dir);
     else if (dodgeQ && free && has('defense') && !P.airDodged) { // air dodge: aim with the arrows (diagonals too), no direction = stall
       const dx = dir, dy = keys.up ? -1 : keys.down ? 1 : 0, n = Math.hypot(dx, dy) || 1;
-      dodgeQ = 0; P.airDodged = true; P.fastFall = false; P.fromTumble = s === 'tumble'; P.dodgeV = [dx / n * AD.speed, dy / n * AD.speed]; setState('airDodge');
+      dodgeQ = 0; P.airDodged = true; P.fastFall = false; P.fromTumble = s === 'tumble'; P.dodgeV = [dx / n * D.airDodge.speed, dy / n * D.airDodge.speed]; setState('airDodge');
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
     }
-    else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
+    else if (s === 'airDodge') { if (P.f >= D.airDodge.frames) setState('air'); }
     else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
     if (ffQ && P.vy > -150 && !stunned && !['airDodge', 'shieldBreak', 'upSpecial', 'booklet'].includes(P.state) && !AIR[P.state]?.thrust) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
@@ -571,8 +581,8 @@ function stepPlayer(dt) {
   P.glide = fighter.glide && keys.jump && P.vy > 0 && !P.fastFall && ['air', 'djump'].includes(P.state); // holding jump on the way down
   if (P.glide) P.vy = Math.min(P.vy, fighter.glide);
   if (P.fastFall) P.vy = Math.max(P.vy, 1100);
-  if (P.state === 'airDodge' && P.f <= AD.burst) { // the dodge burst ignores gravity and steering, then eases off
-    const k = P.f === AD.burst ? 0.4 : 1;
+  if (P.state === 'airDodge' && P.f <= D.airDodge.burst) { // the dodge burst ignores gravity and steering, then eases off
+    const k = P.f === D.airDodge.burst ? 0.4 : 1;
     P.vx = P.dodgeV[0] * k; P.vy = P.dodgeV[1] * k;
   }
 
@@ -581,7 +591,7 @@ function stepPlayer(dt) {
   P.inv = Math.max(0, P.inv - dt);
   P.gold = Math.max(0, (P.gold || 0) - dt);
   if (P.warn && (P.warn.t += dt) > WARN_T) P.warn = null;
-  if (P.mech > 0 && (P.mech -= dt) <= 0) { P.mech = 0; booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); } // the suit pops off in a shower of bricks
+  if (P.mech > 0 && (P.mech -= dt) <= 0) popMech();
   P.hitT = Math.max(0, P.hitT - dt);
   P.regrab = Math.max(0, P.regrab - dt);
   P.shield = Math.max(0, Math.min(1, (P.shield ?? 1) + (P.state === 'shield' ? -SHIELD_DRAIN : SHIELD_REGEN)));
@@ -779,8 +789,8 @@ function clawdPose() {
       const p = D.shield.anim(P.state === 'shieldDrop' ? Math.min(50 + f, 59) : f < 4 ? f : 4 + (f - 4) % 46);
       p.shield *= 0.75 + 0.25 * P.shield; p.wear = 1 - P.shield; return p;
     }
-    case 'shieldBreak': return { ...SB.anim(Math.min(f, SB.frames - 1)), oopsMsg: P.oopsMsg };
-    case 'airDodge': { const p = D[P.dodgeAnim].anim(Math.min(f, AD.frames - 1)); p.rot = (p.rot || 0) + P.dodgeTilt * Math.min(1, f / 3, Math.max(0, (AD.frames - f) / 10)); return p; }
+    case 'shieldBreak': return { ...D.shieldBreak.anim(Math.min(f, D.shieldBreak.frames - 1)), oopsMsg: P.oopsMsg };
+    case 'airDodge': { const p = D[P.dodgeAnim].anim(Math.min(f, D.airDodge.frames - 1)); p.rot = (p.rot || 0) + P.dodgeTilt * Math.min(1, f / 3, Math.max(0, (D.airDodge.frames - f) / 10)); return p; }
     case 'spotDodge': case 'rollForward': case 'rollBack': return D[P.state].anim(Math.min(f, D[P.state].frames - 1));
     case 'ledgeDrop': return L.ledgeDrop.anim(Math.min(f, 16));
     case 'upSpecial': { // the cord: out along its aim, or taut to the lip it's plugged into
@@ -873,8 +883,9 @@ function render(t) {
   if (paused) drawPause(t);
 }
 
-// the fighter in play; anyone but Claw'd is drawn inside his effects (speed lines, dizzy stars, respawn pad…), stretched to its height
-const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawClawd ? p : { ...p, sy: (p.sy ?? 1) * fighter.box[1] / 50, body: () => fighter.art(cx, b, p, face) }, face);
+// the fighter in play; anyone but Claw'd is drawn inside his effects (speed lines, dizzy stars, respawn pad unless it has its own…),
+// stretched to its height
+const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawClawd ? p : { ...p, pad: fighter.pad ? 0 : p.pad, sy: (p.sy ?? 1) * fighter.box[1] / 50, body: () => fighter.art(cx, b, p, face) }, face);
 
 // the up special's toasts ("connection refused" on a miss, "mcp connected" plugging into the bag): stay up TOAST frames whatever
 // Claw'd does next (landing, getting up…). P.toastMsg = OOPS index or [headline, detail], P.toastOk = success style
@@ -1155,7 +1166,8 @@ function drawControls(fg) {
     for (const [head, rows] of col) {
       ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'left'; ctx.font = '700 30px Caveat, cursive';
       ctx.fillText(head, x, y); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.35; line(x, y + 8, x + 480, y + 8, 1, 1); y += 38;
-      for (const [k, d] of rows) {
+      for (const [k, d0] of rows) {
+        const d = fighter.controls?.[k] ?? d0;
         ctx.globalAlpha = 1; ctx.fillStyle = CLAWD; ctx.textAlign = 'right'; ctx.font = '700 24px Caveat, cursive'; ctx.fillText(k, x + 118, y);
         ctx.globalAlpha = 0.8; ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.font = '600 23px Caveat, cursive';
         for (const l of wrap(d, 350)) { ctx.fillText(l, x + 132, y); y += 26; }

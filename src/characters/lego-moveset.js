@@ -1,5 +1,6 @@
 // Lego Man's moveset (drawn by lego.js). He fights like a minifig moves: stiff limbs swung whole on their pins (swing / kick),
-// no elbows, no knees. Movement is Claw'd's (clawd-moveset.js, loaded first) except the crouch; moves not built yet are off.
+// no elbows, no knees, and no squash. Only the turnaround skid is Claw'd's (clawd-moveset.js, loaded first) stiffened; the rest is
+// his own. His shield isn't built yet, so it's off.
 // the down smash's brick k (of this throw, c = 0 … 1 charge): its launch speed [forward, up] in px/s
 const scatterVel = (k, c) => [140 + k * (55 + 35 * c), -220 - 60 * (k % 3)];
 // his crouch: plastic doesn't squash, so he sits down on the floor like a real minifig, legs straight out in front, leaning in
@@ -13,9 +14,133 @@ const legoThrow = ({ keys, at, fly: [vx, vy, spin], extra }) => f => {
   const p = tween(f, keys), h = tween(at, keys).carry, t = f - at;
   return { ...p, carry: t < 0 ? p.carry : t < 18 ? [h[0] + vx * t, h[1] + vy * t + 0.5 * t * t, h[2] + spin * t] : null, ...extra?.(f) };
 };
+// flat on his back, feet ahead, arms flung out over his head (he lies on his side face: rot turns the front-on figure)
+const LIE = { rot: -Math.PI / 2, y: 22, swing: 2.9 };
+// hanging off the ledge by both clips, facing the wall (x, air: from standing at the lip, as the game places him)
+const LHANG = { x: -42, air: 62, swing: [3.3, 2.75] };
+// tucked for a roll: legs out in front, arms reaching after them
+const PIKE = { y: -4, kick: [-1.4, 1.4], swing: [-0.6, 1.2] };
+// plastic doesn't squash: Claw'd's skid with the stretch taken out (a narrowing sx still turns him round)
+const stiff = m => ({ ...m, anim: (f, n) => { const p = m.anim(f, n), sx = p.sx ?? 1; return { ...p, sx: Math.sign(sx) * Math.min(1, Math.abs(sx)), sy: 1 }; } });
+// a toy's step at phase p (front-on, so no scissoring): one leg swings out on its hip pin (a) while the other stays planted,
+// the opposite arm swings out (b), then the other side; leaning in, and hopping up hop px on each step (the run)
+const legoStride = (p, a, b, lean, hop) => {
+  const s = Math.sin(p), l = Math.max(0, s), r = Math.max(0, -s);
+  return { y: -hop * Math.abs(s), rot: lean, kick: [a * l, a * r], swing: [b * r, b * l] };
+};
+const LEGO_RUN = (f, n) => legoStride(f / n * Math.PI * 2, 0.6, 0.9, 0.12, 2.5);
+// a whole jump: arms swung back, flung up to spring, spread out at the peak, reaching down, arms out to catch the landing.
+// Only `air` differs by height (the game picks frames 7 … 55 from the vertical speed)
+const LAND = { rot: 0.05, swing: 1, kick: 0.12 };
+const legoHop = (height, n) => f => {
+  const up = 5, down = n - 7, u = (f - up) / (down - up);
+  return {
+    ...tween(f, [
+      [0, {}],
+      [4, { rot: 0.08, swing: [0.5, -0.3] }],
+      [up + 2, { rot: -0.04, swing: 2.7 }],
+      [(up + down) / 2, { swing: 1.6, kick: 0.25 }],
+      [down - 1, { swing: 0.8, kick: 0.05 }],
+      [down + 2, LAND],
+      [n, {}],
+    ]),
+    air: f > up && f < down ? -height * 4 * u * (1 - u) : 0,
+    puff: f >= up && f < up + 10 ? (f - up) / 10 : f >= down ? (f - down) / 7 : null,
+  };
+};
+// a roll toward d (1 forward, -1 back): tuck, one full turn head over heels, open out still facing the same way
+const legoRoll = d => f => {
+  const p = tween(f, [[0, {}], [3, { rot: 0.1 * d, swing: [0.5, -0.3] }], [6, { ...PIKE, x: 12 * d }], [22, { ...PIKE, x: 112 * d }], [25, { x: 120 * d, swing: 0.8 }], [30, { x: 120 * d }]]);
+  const e = Math.min(1, Math.max(0, (f - 4) / 18));
+  return { ...p, rot: d * Math.PI * 2 * e * e * (3 - 2 * e), [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null };
+};
+// a sideways air dodge toward d: superman through the air that way, arms out ahead of him, eyes shut
+const legoAirDodge = d => f => ({
+  ...tween(f, [
+    [0, AIRBORNE],
+    [2, { rot: -0.1 * d, swing: [0.5, 0.5], legs: TUCK }],
+    [4, { x: 30 * d, rot: 0.9 * d, swing: 3 }],
+    [14, { x: 130 * d, rot: 0.8 * d, swing: 3 }],
+    [18, { x: 140 * d, rot: 0.1 * d, swing: 1.2 }],
+    [28, { ...AIRBORNE, x: 144 * d }],
+  ]),
+  blink: f >= 3 && f < 18 ? 1 : 0, speed: f >= 3 && f < 16 ? d * (1 - (f - 3) / 13) : 0, air: -40,
+});
 const LEGO_MOVESET = {
   movement: {
     ...MOVESET.movement,
+    skid: stiff(MOVESET.movement.skid),
+    walk: { ...MOVESET.movement.walk, anim: (f, n) => legoStride(f / n * Math.PI * 2, 0.35, 0.45, 0.03, 0.8) },
+    dash: { // lean in, burst into a long stride, hold it, then ease into the run's first frame (the game hands off at 16)
+      ...MOVESET.movement.dash,
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [3, { rot: -0.05, swing: [0.5, -0.3] }],
+          [6, { x: 8, ...legoStride(Math.PI / 2, 0.65, 1, 0.16, 0), speed: 1 }],
+          [11, { x: 7, ...legoStride(Math.PI / 2, 0.6, 0.9, 0.15, 0), speed: 1 }],
+          [16, { ...LEGO_RUN(0, 24), speed: 0.5 }],
+          [20, {}],
+        ]),
+        dust: f >= 5 && f < 17 ? (f - 5) / 12 : null,
+      }),
+    },
+    run: { ...MOVESET.movement.run, anim: (f, n) => ({ ...LEGO_RUN(f, n), speed: 0.5, dust: f % (n / 2) <= 9 ? f % (n / 2) / 9 : null }) },
+    idle: {
+      input: 'none', frames: 120,
+      anim: (f, n) => { // two slow breaths per loop in the arms, one blink near the end
+        const b = (1 - Math.cos(f / n * Math.PI * 4)) / 2;
+        return { swing: 0.06 * b, arm: 0.8 * b - 0.4, blink: f >= 100 && f < 106 ? 1 : 0 };
+      },
+    },
+    jumpSquat: { // arms swung back, then flung up as he springs
+      input: 'jump (grounded)', frames: 14,
+      anim: f => ({
+        ...tween(f, [[0, {}], [4, { rot: 0.08, swing: [0.5, -0.3] }], [6, { rot: 0.1, swing: [0.6, -0.4] }], [9, { rot: -0.04, swing: 2.7, air: -6 }], [14, {}]]),
+        puff: f >= 6 ? (f - 6) / 8 : null,
+      }),
+    },
+    fullHop: { input: 'hold jump', frames: 64, anim: legoHop(110, 64) },
+    shortHop: { input: 'tap jump', frames: 40, anim: legoHop(45, 40) },
+    doubleJump: {
+      input: 'jump (airborne)', frames: 36,
+      anim: f => tween(f, [ // kick off the air and flip forward once, stiff as a board, legs piked
+        [0, { air: -50, swing: 1.2 }],
+        [3, { air: -52, rot: 0.1, swing: [0.5, -0.3] }],
+        [6, { air: -70, rot: 0.3, swing: 2.8 }],
+        [20, { air: -110, rot: Math.PI * 2, swing: 2.8, kick: [-0.8, 0.8] }],
+        [28, { air: -100, rot: Math.PI * 2, swing: 1.6 }],
+        [36, { air: -50, rot: Math.PI * 2, swing: 1.2 }],
+      ]),
+    },
+    fall: {
+      input: 'none', frames: 40,
+      anim: (f, n) => { // drifting down, arms up and waving, legs paddling
+        const p = f / n * Math.PI * 2, s = Math.sin(p * 2);
+        return { air: -80 + 3 * Math.sin(p), swing: [2.3 + 0.25 * s, 2.3 - 0.25 * s], kick: [0.1 + 0.1 * s, 0.1 - 0.1 * s] };
+      },
+    },
+    fastFall: {
+      input: 'double-tap down (airborne, falling)', frames: 24,
+      anim: (f, n) => ({ air: -70, swing: 3.05, fallLines: 0.75 + 0.25 * Math.sin(f / n * Math.PI * 4) }), // arms straight up, dropping like a brick
+    },
+    land: {
+      input: 'none', frames: 18,
+      anim: f => ({ // touch down reaching, arms flung out to catch it, settle
+        ...tween(f, [[0, { air: -20, swing: 0.8 }], [3, LAND], [8, { rot: 0.02, swing: 0.4 }], [18, {}]]),
+        puff: f >= 3 ? (f - 3) / 15 : null,
+      }),
+    },
+    platformDrop: {
+      input: 'down (on platform)', frames: 40,
+      anim: f => tween(f, [ // a little hop of a lean, then slip down through the platform with arms up
+        [0, {}],
+        [4, { rot: 0.06, swing: [0.4, -0.3] }],
+        [8, { air: 6, swing: 2.6 }],
+        [30, { air: 55, swing: 2.9 }],
+        [40, { air: 55, swing: 2.9 }],
+      ]),
+    },
     crouch: {
       input: 'down (grounded)', frames: 60,
       anim: f => { // plonk down, hold with a small breath in the arms, stand back up
@@ -141,16 +266,171 @@ const LEGO_MOVESET = {
       hitbox: { x: -40, y: -26, w: 80, h: 26 }, both: true, intangible: [0, 12],
       anim: f => ({
         ...tween(f, [
-          [0, { rot: Math.PI, sx: 1.04, sy: 0.94 }],
-          [6, { rot: Math.PI - 0.3, sx: 1.08, sy: 0.9, swing: 0.4 }],
-          [11, { rot: Math.PI * 1.7, y: -14, swing: 1.5, kick: 0.4 }],
-          [12, { rot: Math.PI * 2, y: 13, swing: 1.4, kick: 1.5 }],
-          [16, { rot: Math.PI * 2, y: 13, swing: 1.4, kick: 1.5 }],
-          [22, { rot: Math.PI * 2, y: 5, swing: 0.5, kick: 0.6 }],
-          [32, { rot: Math.PI * 2 }],
+          [0, LIE],
+          [6, { ...LIE, rot: LIE.rot - 0.3, swing: 2.4, kick: [-1, 1] }],
+          [11, { rot: -0.25, y: -14, swing: 1.5, kick: 0.4 }],
+          [12, { y: 13, swing: 1.4, kick: 1.5 }],
+          [16, { y: 13, swing: 1.4, kick: 1.5 }],
+          [22, { y: 5, swing: 0.5, kick: 0.6 }],
+          [32, {}],
         ]),
         puff: f >= 12 ? (f - 12) / 10 : null,
       }),
+    },
+  },
+
+  // x / air are measured from standing right at the lip, facing the stage (the game places him by them while he's on it)
+  ledge: {
+    ledgeGrab: {
+      input: 'fall near ledge', frames: 10,
+      anim: f => tween(f, [[0, { x: -42, air: 50, swing: [3.1, 2.9] }], [4, { ...LHANG, air: 67, rot: 0.05 }], [10, LHANG]]), // clips click on, he drops a touch and settles
+    },
+    ledgeHang: {
+      input: 'none', frames: 60,
+      anim: (f, n) => { // dangling: a slow sway, legs swinging after it
+        const s = Math.sin(f / n * Math.PI * 2);
+        return { ...LHANG, rot: 0.04 * s, kick: [-0.1 * s, 0.1 * s], blink: f >= 40 && f < 46 ? 1 : 0 };
+      },
+    },
+    ledgeGetup: {
+      input: 'toward stage / up', frames: 24,
+      anim: f => ({ // dip, haul up over the lip legs first, step onto the stage
+        ...tween(f, [
+          [0, LHANG],
+          [5, { ...LHANG, air: 68 }],
+          [11, { x: -30, air: -6, rot: 0.3, swing: [0.6, 1.4], kick: [-1.2, 1.2] }],
+          [16, { x: -10, air: -4, rot: 0.1, swing: 0.5, kick: [-0.4, 0.4] }],
+          [19, LAND],
+          [24, {}],
+        ]),
+        puff: f >= 19 ? (f - 19) / 5 : null,
+      }),
+    },
+    ledgeJump: {
+      input: 'jump', frames: 40, launchAt: 6,
+      anim: f => tween(f, [ // pull down, spring straight up off the ledge arms first, drift over the stage
+        [0, LHANG],
+        [4, { ...LHANG, air: 68 }],
+        [6, { x: -40, air: 56, swing: 3.1 }],
+        [20, { x: -26, air: -90, swing: 1.6, kick: 0.25 }],
+        [34, { x: -20, air: -40, swing: 0.8 }],
+        [40, { x: -20, air: -30, swing: 0.8 }],
+      ]),
+    },
+    ledgeRoll: {
+      input: 'dodge (Shift / Z)', frames: 36, intangible: [0, 36],
+      anim: f => { // haul up, tuck and roll a full turn onto the stage, open out standing well inland
+        const p = tween(f, [[0, LHANG], [5, { ...LHANG, air: 68 }], [10, { ...PIKE, x: -30, y: 0, air: -8 }], [25, { ...PIKE, x: 72, y: 0, air: -4 }], [28, { x: 84, swing: 0.8 }], [36, { x: 90 }]]);
+        const e = Math.min(1, Math.max(0, (f - 9) / 17));
+        return { ...p, rot: Math.PI * 2 * e * e * (3 - 2 * e), puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+      },
+    },
+    ledgeAttack: { // haul up over the lip and swing the front leg out level along the stage
+      ...MOVESET.ledge.ledgeAttack, hitbox: { x: 10, y: -42, w: 38, h: 30 },
+      anim: f => ({
+        ...tween(f, [
+          [0, LHANG],
+          [4, { ...LHANG, air: 68 }],
+          [9, { x: -30, air: -6, rot: 0.3, swing: [0.6, 1.4], kick: [-1.2, 1.2] }],
+          [13, { x: -10, air: -2, rot: -0.05, swing: [0.3, 0.4], kick: [0, 0.4] }],
+          [15, { x: -4, rot: -0.08, swing: [0.3, 0.3], kick: [0, 0.5] }],
+          [16, { x: 4, rot: -0.22, swing: [1.1, 0.6], kick: [0, 1.45] }],
+          [20, { x: 4, rot: -0.22, swing: [1.1, 0.6], kick: [0, 1.45] }],
+          [28, { x: 2, rot: -0.08, swing: [0.4, 0.2], kick: [0, 0.4] }],
+          [36, {}],
+        ]),
+        speed: f >= 16 && f < 20 ? 0.6 : 0, puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+      }),
+    },
+    ledgeDrop: {
+      input: 'away / down', frames: 24,
+      anim: f => tween(f, [[0, LHANG], [4, { x: -44, air: 70, swing: [3, 2.6] }], [16, { x: -46, air: 120, swing: 2.4, kick: 0.1 }], [24, { x: -46, air: 120, swing: 2.4, kick: 0.1 }]]), // let go, arms still up
+    },
+  },
+
+  // no shield yet (it stays off for him); frame data is Claw'd's
+  defense: {
+    spotDodge: {
+      ...MOVESET.defense.spotDodge,
+      anim: f => { // turns side-on, as thin as a minifig is deep, arms in and eyes shut, then turns back
+        const p = tween(f, [[0, {}], [3, { swing: -0.1 }], [6, { swing: -0.15, blink: 1 }], [16, { swing: -0.15, blink: 1 }], [21, { swing: 0.2 }], [26, {}]]);
+        const t = f < 11 ? Math.min(1, Math.max(0, (f - 2) / 5)) : Math.min(1, Math.max(0, (21 - f) / 5));
+        return { ...p, sx: 1 - 0.65 * t * t * (3 - 2 * t) };
+      },
+    },
+    rollForward: { ...MOVESET.defense.rollForward, anim: legoRoll(1) },
+    rollBack: { ...MOVESET.defense.rollBack, anim: legoRoll(-1) },
+    airDodgeForward: { ...MOVESET.defense.airDodgeForward, anim: legoAirDodge(1) },
+    airDodgeBack: { ...MOVESET.defense.airDodgeBack, anim: legoAirDodge(-1) },
+    airDodge: {
+      ...MOVESET.defense.airDodge,
+      anim: f => ({ // pops loose into his parts for a moment, then clicks back together
+        ...tween(f, [[0, AIRBORNE], [2, { swing: 0.5, legs: TUCK }], [5, { swing: 0.8, apart: 0.35, legs: TUCK }], [16, { swing: 0.8, apart: 0.35, legs: TUCK }], [22, { swing: 0.3, legs: TUCK }], [28, AIRBORNE]]),
+        blink: f >= 3 && f < 18 ? 1 : 0, air: -40,
+      }),
+    },
+  },
+
+  // timings are Claw'd's (clawd-moveset.js); only the poses are his
+  reactions: {
+    hitstun: {
+      ...MOVESET.reactions.hitstun,
+      anim: (f, n = 30) => { // snaps back, arms flung out, his head jolting up off its stud; shudders, clicks back
+        const t = f / n * 30, p = tween(t, [
+          [0, { x: -4, rot: -0.3, swing: 1.1, kick: 0.25, headLift: 5, blink: 1 }],
+          [5, { x: -6, rot: -0.24, swing: 0.9, kick: 0.2, headLift: 3, blink: 1 }],
+          [22, { x: -3, rot: -0.06, swing: 0.2 }],
+          [30, {}],
+        ]);
+        if (t < 10) p.x += f % 2 ? 1.5 : -1.5;
+        return p;
+      },
+    },
+    tumble: {
+      ...MOVESET.reactions.tumble,
+      anim: (f, n = 40) => { // spinning head over heels, stiff limbs windmilling, head rattling on its stud
+        const p = f / n * Math.PI * 2, s = Math.sin(2 * p);
+        return { rot: -p, swing: [1.6 + 0.9 * s, 1.6 - 0.9 * s], kick: [0.3 - 0.4 * s, 0.3 + 0.4 * s], headLift: 3 + 2 * s, blink: 1, air: -30 };
+      },
+    },
+    knockdown: {
+      ...MOVESET.reactions.knockdown,
+      anim: f => { // slams down flat on his back (head popping off its stud and clicking back), bounces, lies there legs kicking
+        const k = i => f >= 14 ? 0.3 + 0.3 * Math.sin((f - 14) / 3 + i * 1.7) : 0;
+        return {
+          ...tween(f, [[0, { ...LIE, headLift: 6 }], [6, { ...LIE, y: LIE.y - 12, headLift: 2 }], [12, LIE], [18, LIE]]),
+          kick: [-k(0), k(1)], // lying, legs forward = up in the air
+          blink: f < 14 ? 1 : 0, dizzy: f >= 14 ? 0.01 + (f - 14) / 40 : 0, puff: f < 8 ? f / 8 : f >= 12 && f < 18 ? (f - 12) / 6 : null,
+        };
+      },
+    },
+    tech: {
+      ...MOVESET.reactions.tech,
+      anim: f => ({ // slaps the floor and springs straight back onto his feet
+        ...tween(f, [[0, { rot: -0.8, y: 8, swing: 1.2 }], [5, { y: -18, rot: -0.1, swing: 2.6 }], [11, LAND], [22, {}]]),
+        ring: f < 12 ? f / 12 : null, blink: f < 5 ? 1 : 0,
+      }),
+    },
+    getup: {
+      ...MOVESET.reactions.getup,
+      anim: f => ({ // rocks back, legs up, then swings them down and sits up onto his feet in one go
+        ...tween(f, [[0, LIE], [5, { ...LIE, rot: LIE.rot - 0.25, kick: [-0.9, 0.9] }], [13, { rot: -0.5, y: -20, swing: 1.8, kick: [-0.4, 0.4] }], [18, LAND], [26, {}]]),
+        puff: f >= 18 ? (f - 18) / 8 : null,
+      }),
+    },
+    ko: {
+      ...MOVESET.reactions.ko,
+      anim: f => { // flies off coming apart, then his own blast: coloured rays and bricks
+        if (f < 20) return { x: 7 * f, air: -5 * f, rot: -f / 4, apart: f / 20, blink: 1 };
+        const p = MOVESET.reactions.ko.anim(f); return { ...p, blast: [...p.blast, ...LEGO_BLAST] };
+      },
+    },
+    respawn: {
+      ...MOVESET.reactions.respawn, say: 'click!',
+      anim: f => { // lowered in standing on a baseplate, then dropped
+        const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
+        return { ...LEGO_MOVESET.movement.idle.anim(f % 120, 120), air: -170 + 110 * e + 60 * d * d, pad: +(f < 100), say: ['click!', f < 100 ? Math.min(1, f / 10) : 0] };
+      },
     },
   },
 

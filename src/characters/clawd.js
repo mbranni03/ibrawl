@@ -242,15 +242,16 @@ function drawSack(x, y, rot = 0) {
 }
 
 // KO blast: a fan of thick ink / orange rays shooting out toward ang and a big Claude spark, all fading out as t goes 0 → 1
-function drawBlast(x, y, t, ang) {
+// (another fighter's blast passes its own ray colours, and core(x, y, e, t) to draw instead of the spark)
+function drawBlast(x, y, t, ang, cols = [INK, CLAWD], core = (x, y, e, t) => drawSpark(x, y, SPARK_R * (1 + 2 * e), t * 3)) {
   const e = 1 - (1 - Math.min(1, t * 3)) ** 2; // shoots out fast
   ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= Math.min(1, (1 - t) * 2.5);
   for (let k = 0; k < 11; k++) {
     const a = ang + (k - 5) * 0.13, l = (120 + 160 * (k * 0.618 % 1)) * e;
-    ctx.strokeStyle = k % 2 ? CLAWD : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
+    ctx.strokeStyle = cols[k % cols.length]; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
     line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 1.5, 1);
   }
-  drawSpark(x, y, SPARK_R * (1 + 2 * e), t * 3);
+  core(x, y, e, t);
   ctx.restore();
 }
 

@@ -121,6 +121,8 @@ function drawLegoBoom(x, y, t, R = 60) {
   }
   ctx.restore();
 }
+// his KO blast's look (drawBlast's cols, core): red / yellow / blue rays, and bricks flying out of the middle
+const LEGO_BLAST = [[LEGO_RED[1], LEGO_YEL[1], LEGO_BLUE[1]], (x, y, e, t) => drawLegoBoom(x, y, t, 60 + 60 * e)];
 // one of the down smash's loose bricks lying in wait: { x, y, w, h, rot, col } (a box in the world)
 function drawLooseBrick(k) {
   ctx.save(); ctx.translate(k.x + k.w / 2, k.y + k.h / 2); ctx.rotate(k.rot); ctx.lineCap = ctx.lineJoin = 'round';
@@ -129,8 +131,10 @@ function drawLooseBrick(k) {
 }
 
 function drawLego(cx, bottom, pose = {}, face = 1) {
+  if (pose.blast) return drawBlast(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 2.5 * CV, ...pose.blast); // KO'd: only the blast (as Claw'd's is placed)
   ctx.save(); ctx.lineCap = ctx.lineJoin = 'round';
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
+  if (pose.pad) { ctx.save(); ctx.globalAlpha *= pose.pad; legoBrick(-50, 2, 100, 8, LEGO_GRN); ctx.restore(); } // respawning: a green baseplate over the platform he rides in on
   if (pose.gold) { // powered up: a soft gold glow behind him
     const g = ctx.createRadialGradient(0, -40, 6, 0, -40, 58); g.addColorStop(0, 'rgba(255,215,80,0.55)'); g.addColorStop(1, 'rgba(255,215,80,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -40, 58, 0, 6.283); ctx.fill();
