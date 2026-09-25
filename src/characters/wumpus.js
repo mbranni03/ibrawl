@@ -10,10 +10,11 @@
 //   horn = [x, y (centre), size, blast 0 … 1 or null] an air horn, blasting sound (neutral special) · nelly = [x, y (bottom), t] Nelly the snail in its paws (side special)
 //   waves = 0 … 1 sound rings bursting off its head (the down special's counter) · muted = 0 … 1 a struck-through mic over its head (down throw)
 //   blast = [0 … 1, angle, colour, spark] KO'd: drawn instead of Wumpus (see drawBlast)
+//   dnd = 0 … 1 a big red Do Not Disturb disc held up as a shield (shrinks, cracks and greys with wear 0 … 1) · dndBurst = 0 … 1 it shattering
 //   worn with the body: squint = eyes squeezed shut > < (hurt) · invisible = 0 … 1 gone see-through with Discord's grey invisible status dot (dodges) · shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
 //   legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
-const BOOST = '#ff73fa', SPEAK = '#23a55a', NITRO = '#8d5cf6', PIN = '#ed4245', PEPE = '#4a8f3c';
+const DND = '#f23f43', BOOST = '#ff73fa', SPEAK = '#23a55a', NITRO = '#8d5cf6', PIN = '#ed4245', PEPE = '#4a8f3c';
 
 function drawWumpus(cx, bottom, pose = {}, face = 1) {
   if (pose.blast) return drawBlast(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 34, ...pose.blast); // KO'd: only the burst is left (clawd.js)
@@ -53,6 +54,10 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.lineWidth = 2;
   if (pose.squint) for (const [ex, d] of [[-12, 1], [19, -1]]) { ctx.beginPath(); ctx.moveTo(ex - 3 * d, -57); ctx.lineTo(ex + 2.5 * d, -53.5); ctx.lineTo(ex - 3 * d, -50); ctx.stroke(); } // squeezed shut > <
   else for (const ex of [-12, 19]) { ctx.beginPath(); ctx.arc(ex, -53, 3.2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+  if (pose.dnd) { // status: Do Not Disturb, a red dot with a white bar
+    ctx.globalAlpha = a0 * pose.dnd; ctx.fillStyle = PAPER; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(22, -34, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = DND; ctx.beginPath(); ctx.arc(22, -34, 4.6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = PAPER; ctx.fillRect(19.5, -35, 5, 2); ctx.globalAlpha = a0;
+  }
   if (pose.invisible) { // the status dot at the corner, like on an avatar: grey, hollow
     ctx.globalAlpha = a0 * pose.invisible; ctx.fillStyle = PAPER; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(22, -34, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#80848e'; ctx.beginPath(); ctx.arc(22, -34, 4.6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(22, -34, 2, 0, Math.PI * 2); ctx.fill();
@@ -66,7 +71,7 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   }
   ctx.restore();
 
-  if (!pose.emoji && pose.rings == null && !pose.pin && !pose.horn && !pose.nelly && !pose.waves && !pose.trail && !pose.muted) return;
+  if (!pose.emoji && pose.rings == null && !pose.pin && !pose.horn && !pose.nelly && !pose.waves && !pose.trail && !pose.muted && !pose.dnd && pose.dndBurst == null) return;
   ctx.save(); ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face, 1);
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
   if (pose.emoji) {
@@ -92,6 +97,21 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   }
   if (pose.pin) drawPin(...pose.pin);
   if (pose.horn) drawHorn(...pose.horn);
+  if (pose.dnd > 0.05) { // the DND disc, held up in front like a riot shield: shrinks, cracks and greys out as it wears
+    const w = pose.wear || 0, r = 30 * pose.dnd * (0.75 + 0.25 * (1 - w)), g = Math.round(0x80 * w * 0.7);
+    ctx.save(); ctx.translate(22, -40); ctx.globalAlpha *= 0.92;
+    ctx.fillStyle = `rgb(${242 - g}, ${63 + g}, ${67 + g})`; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(-r * 0.55, -r * 0.14, r * 1.1, r * 0.28, r * 0.12); ctx.fill(); // the bar
+    ctx.lineWidth = 1.6; for (let k = 0; k < Math.floor(w * 5); k++) { const a = k * 2.1 + 0.4; ctx.beginPath(); ctx.moveTo(0.15 * r * Math.cos(a), 0.15 * r * Math.sin(a)); // cracks spreading from the middle
+      ctx.lineTo(0.55 * r * Math.cos(a + 0.25), 0.55 * r * Math.sin(a + 0.25)); ctx.lineTo(0.95 * r * Math.cos(a - 0.1), 0.95 * r * Math.sin(a - 0.1)); ctx.stroke(); }
+    ctx.restore();
+  }
+  if (pose.dndBurst != null) { // the disc bursting into red shards that fly out, spin and fade
+    const t = pose.dndBurst; ctx.save(); ctx.globalAlpha *= 1 - t; ctx.fillStyle = DND; ctx.lineWidth = 1.4;
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.3, d = 10 + 70 * t; ctx.save(); ctx.translate(22 + Math.cos(a) * d, -40 + Math.sin(a) * d + 60 * t * t); ctx.rotate(a + t * 6);
+      path([[-6, -4], [7, -2], [-1, 6]]); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+  }
   if (pose.muted) { // Discord's muted mic: capsule on a stand, red slash through it
     ctx.save(); ctx.globalAlpha *= pose.muted; ctx.translate(0, -108); ctx.lineWidth = 2;
     rbox(0, -4, 9, 15, 4.5, '#e3e5e8', 2); ctx.beginPath(); ctx.arc(0, -2, 8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.moveTo(0, 6); ctx.lineTo(0, 10); ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.stroke();

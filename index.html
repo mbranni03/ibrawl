@@ -54,7 +54,7 @@ let hitstop = 0;
 let p1 = null, fighter, M = MOVESET.movement; // P1's pick (null = not yet), the fighter in play (FIGHTER, set on the vs screen), its movement
 const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
-let L, D, AD, R; const JABS = ['jab1', 'jab2', 'jab3']; // L = ledge moves, D = dodges (+ shield), AD = air dodge, R = reactions: the fighter in play's (moveTables)
+let L, D, AD, R, SB; const JABS = ['jab1', 'jab2', 'jab3']; // L = ledge moves, D = dodges (+ shield), AD = air dodge, SB = shield break, R = reactions: the fighter in play's (moveTables)
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
 let GR = MOVESET.grabs; const THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
@@ -63,7 +63,7 @@ const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpeci
 let ATK, AIR, MOVES, OWN_B = false;
 function moveTables(set) {
   const g = k => set[k] || MOVESET[k];
-  OWN_B = !!set.specials && set.specials !== MOVESET.specials; GR = g('grabs'); L = g('ledge'); D = g('defense'); AD = D.airDodge; R = g('reactions');
+  OWN_B = !!set.specials && set.specials !== MOVESET.specials; GR = g('grabs'); L = g('ledge'); D = g('defense'); AD = D.airDodge; SB = D.shieldBreak || MOVESET.defense.shieldBreak; R = g('reactions');
   const B = OWN_B ? set.specials : { sideSpecial: SIDE_B, downSpecial: DOWN_B };
   ATK = { ...g('groundAttacks'), ...g('smashAttacks'), ...B, grab: GR.grab, dashGrab: GR.dashGrab };
   AIR = { ...g('aerials'), ...B };
@@ -79,7 +79,7 @@ function special(dir) { // B, picked by direction
   if (keys.up) tetherUp(dir); else { if (dir) P.face = dir; keys.down ? setState('downSpecial') : dir ? setState('sideSpecial') : think(); }
 }
 const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
-const DODGES = ['spotDodge', 'rollForward', 'rollBack'], SB = MOVESET.defense.shieldBreak;
+const DODGES = ['spotDodge', 'rollForward', 'rollBack'];
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
@@ -329,7 +329,7 @@ function linkStep(T, ax, ay, dt) {
 // the shield ran out: the terminal shatters, Claw'd pops up and is left dizzy for SB.frames (each key press shakes off 3 frames)
 function breakShield() {
   P.shield = 0; P.vy = -SB.pop; P.ground = false; P.on = null; hitstop = 10; setState('shieldBreak');
-  P.oopsMsg = Math.floor(Math.random() * OOPS.length); // which error toast pops up over its head
+  const msgs = SB.oops || OOPS; P.oopsMsg = msgs[Math.floor(Math.random() * msgs.length)]; // which error toast pops up over its head ([headline, detail])
 }
 
 // holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart
@@ -694,7 +694,7 @@ function clawdPose() {
     case 'ledgeRoll': return L.ledgeRoll.anim(Math.min(f, 35));
     case 'shield': case 'shieldDrop': { // the terminal shrinks a little, cracks and fades as the shield wears down
       const p = D.shield.anim(P.state === 'shieldDrop' ? Math.min(50 + f, 59) : f < 4 ? f : 4 + (f - 4) % 46);
-      p.shield *= 0.75 + 0.25 * P.shield; p.wear = 1 - P.shield; return p;
+      if (p.shield) p.shield *= 0.75 + 0.25 * P.shield; p.wear = 1 - P.shield; return p; // (a fighter with its own shield prop sizes it from wear)
     }
     case 'shieldBreak': return { ...SB.anim(Math.min(f, SB.frames - 1)), oopsMsg: P.oopsMsg };
     case 'airDodge': { const p = D[P.dodgeAnim].anim(Math.min(f, AD.frames - 1)); p.rot = (p.rot || 0) + P.dodgeTilt * Math.min(1, f / 3, Math.max(0, (AD.frames - f) / 10)); return p; }

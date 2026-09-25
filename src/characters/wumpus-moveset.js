@@ -1,6 +1,6 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. His defense has no shield yet (so he can't shield).
+// Fields are as in clawd-moveset.js.
 let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
@@ -414,7 +414,37 @@ const WUMPUS_MOVESET = {
       ] }),
     },
   },
-  defense: { // no shield (yet): dodge / rolls / air dodges only
+  defense: {
+    shield: { // hold: hunker down behind a big red Do Not Disturb disc (his status flips to DND). The game shrinks, cracks and greys it as it wears
+      input: 'hold I', frames: 60,
+      anim: f => {
+        const brace = { x: -3, sx: 1.1, sy: 0.84, rot: 0.06, ears: 0.1, arms: 1.4, legs: [[-2, 0], [0, 0], [0, 0], [2, 0]], dnd: 1 };
+        const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing behind it
+        return { ...p, squint: f >= 3 && f < 52, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // the preview wears it out over the hold
+      },
+    },
+    shieldBreak: { ...MOVESET.defense.shieldBreak, // the disc shatters, it pops up and lands dizzy with one of these over its head
+      oops: [['Message failed to send', 'you are being rate limited'], ['RTC connecting…', 'no route'], ['Discord is having issues', 'try again later']],
+      anim: f => {
+        const p = tween(f, [
+          [0, { sx: 0.9, sy: 1.12, ears: 2.2, arms: 1.5, legs: legsAll(0, 2) }],
+          [14, { sx: 0.96, sy: 1.05, ears: 1.4, arms: 1.2, legs: TUCK }],
+          [28, { sx: 0.94, sy: 1.08, ears: 1, arms: 1, legs: REACH }],
+          [32, { sx: 1.14, sy: 0.84, ears: 0.2, arms: 0.4 }],
+          [40, { sx: 1.04, sy: 0.94, ears: 0.05, arms: 0.3 }],
+          [140, { sx: 1.04, sy: 0.94, ears: 0.05, arms: 0.3 }],
+          [150, { arms: 0.15 }],
+        ]);
+        const dizzy = f >= 32 && f < 144;
+        return {
+          ...p, air: f < 28 ? -60 * Math.sin(Math.PI * f / 28) : 0, // preview-only pop; the game launches it for real
+          rot: dizzy ? 0.1 * Math.sin((f - 32) / 9) : 0, dizzy: dizzy ? 0.01 + (f - 32) / 40 : 0, squint: f < 32,
+          dndBurst: f < 30 ? f / 30 : null, puff: f >= 28 && f < 34 ? (f - 28) / 6 : null,
+          oops: Math.min(1, Math.max(0, Math.min((f - 32) / 6, (110 - f) / 10))), oopsMsg: ['Message failed to send', 'you are being rate limited'], // the game picks one of oops
+        };
+      },
+    },
     spotDodge: {
       input: 'dodge (Shift / Z)', frames: 26, intangible: [3, 18],
       anim: f => ({
