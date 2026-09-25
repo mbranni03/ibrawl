@@ -28,6 +28,7 @@
 <script src="src/characters/duo.js"></script>
 <script src="src/characters/snoo.js"></script>
 <script src="src/characters/lego.js"></script>
+<script src="src/characters/muse.js"></script>
 <script src="src/characters/clawd-moveset.js"></script>
 <script src="src/characters/grok-moveset.js"></script>
 <script src="src/characters/duo-moveset.js"></script>
@@ -35,6 +36,7 @@
 <script src="src/characters/lego-moveset.js"></script>
 <script src="src/characters/android-moveset.js"></script>
 <script src="src/characters/snoo-moveset.js"></script>
+<script src="src/characters/muse-moveset.js"></script>
 <script src="src/cpu.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
@@ -170,10 +172,11 @@ const FIGHTER = {
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: SNOO_MOVESET },
   lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true },
+  muse: { name: 'Muse', box: [50, 70], art: drawMuse, set: MUSE_MOVESET },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
   random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
-const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo', 'lego']; // select screen order (LOGOS follows it)
+const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo', 'lego', 'muse']; // select screen order (LOGOS follows it)
 ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(x, y, { ...idleAt(t, k), ...p }, f)); // each a little out of step
 fighter = FIGHTER.clawd;
 // in play: P1 and the CPUs picked on the select screen (fighters, below), or the training bag if none. The CPUs fight back (src/cpu.js
@@ -268,7 +271,7 @@ function special(dir) {
   if (m.streak && (P.buff > 0 || P.streak < 1)) return P.buff > 0 ? undefined : warn('streak not full', drawStreakIcon); // Duo's streak mode: needs a full meter
   if (m.builds && P.studs < Math.min(...m.builds.map(b => MOVES[b].cost))) return warn('not enough studs'); // can't afford any build: the booklet stays shut
   if (dir) P.face = dir; P.held = true; P.chg = 0; // held: a charge / a roll (B) keeps going while B is held (see chargeKey)
-  P.roll = m.projectile?.pick ? Math.floor(Math.random() * m.projectile.pick.length) : null; // a random outcome: I'm Feeling Lucky's app
+  const pick = m.projectile?.pick || m.pick; P.roll = pick ? Math.floor(Math.random() * pick.length) : null; // a random outcome: I'm Feeling Lucky's app, what Muse imagines
   if (m.dash && !P.ground) P.vy = Math.min(P.vy, -m.dash.pop); // an air roll pops up a little
   if (k === 'neutralSpecial' && (m.hearts || (m.startup == null && !m.state))) return think(); // Claw'd's held think / Duo's heart zap
   if (m.step) { // the first step's stud; the new staircase replaces the old
@@ -644,6 +647,11 @@ function stepPlayer(dt) {
     P.held = P.held && keys[cm.chargeKey || cm.hold || 'heavy']; // the button held: chargeKey / hold (Grok's), heavy for smashes
     if (P.held && P.f > cm.chargeAt && P.chg < cm.chargeFrames) { P.f = cm.chargeAt; P.chg++; }
     if (cm.odds != null && P.roll == null && !P.held && P.f > cm.chargeAt) P.roll = Math.random() < cm.odds + (cm.oddsCharged - cm.odds) * P.chg / cm.chargeFrames; // let go: a gamble (Duo's pop quiz) comes up right or wrong, better odds the longer it charged
+  }
+  if (cm?.loop) { // a held stream (Muse's spark breath): frames loop[0] … loop[1] play over while hold is held, up to chargeFrames of it
+    P.held = P.held && keys[cm.hold]; // in all (P.chg, which also shrinks it: sizeOf); each pass can hit again
+    if (P.f >= cm.startup) P.chg++;
+    if (P.held && P.f >= cm.loop[1] && P.chg < cm.chargeFrames) { P.f = cm.loop[0]; P.struck.clear(); }
   }
   if (P.ground && s in ATK) { // locked in until the recovery can be cancelled
     const m = ATK[s], i = JABS.indexOf(s), done = m.startup + m.active;
@@ -1396,7 +1404,7 @@ function drawTitle(t) {
   ctx.restore();
   const gy = H / 2 + 85;
   ctx.strokeStyle = INK; ctx.lineWidth = 2; line(W / 2 - 420, gy, W / 2 + 420, gy, 1.2, 1);
-  [[-360, drawWumpus, 1], [-240, drawGrok, 1], [-120, drawLego, 1], [0, drawClawd, 1], [120, drawSnoo, -1], [240, drawAndroid, -1], [360, drawDuo, -1]].forEach(([x, draw, face], i) => {
+  [[-385, drawWumpus, 1], [-275, drawGrok, 1], [-165, drawLego, 1], [-55, drawClawd, 1], [55, drawMuse, -1], [165, drawSnoo, -1], [275, drawAndroid, -1], [385, drawDuo, -1]].forEach(([x, draw, face], i) => {
     ctx.save(); ctx.translate(W / 2 + x, gy); ctx.scale(1.4, 1.4); draw(0, 0, idleAt(t, i), face); ctx.restore();
   });
 }
@@ -1497,6 +1505,7 @@ const LOGOS = [
     ctx.scale(28 / 177.6, 28 / 177.6); ctx.translate(-1.223, -1.204);
     for (const [c, p] of LOGO_LEGO) { ctx.fillStyle = c; ctx.fill(p, 'evenodd'); }
   },
+  () => { ctx.translate(14, 14); metaLoop(28, 15, 4); }, // Meta's ∞
 ];
 // character select, Smash style: the roster along the top (click / Enter picks your fighter, then CPU dummies), a READY TO FIGHT band,
 // and the player slots along the bottom: P1 (the first pick) and up to three CPUs (the picks after it; click a slot to clear it).
