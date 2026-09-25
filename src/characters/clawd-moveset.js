@@ -65,12 +65,12 @@ const roll = d => f => {
 // holding a grabbed bag: leaning back a touch, claws clamped on it
 const HOLD = { rot: -0.05, reach: 10, arm: [-2, -3], legs: [[-3, 0], [-2, 0], [1, 0], [2, 0]], carry: [58, -4, 0] };
 // a throw: keys carry the bag up to the release frame `at`; after it (viewer only, the game has let go) the bag flies on at
-// fly = [vx, vy, spin] per frame, falling. say = [command, result] shown before / after the release
-const throwAnim = ({ keys, at, n, fly: [vx, vy, spin], say: [cmd, done], extra }) => f => {
+// fly = [vx, vy, spin] per frame, falling. say = [command, result] shown before / after the release (optional)
+const throwAnim = ({ keys, at, n, fly: [vx, vy, spin], say: [cmd, done] = [], extra }) => f => {
   const p = tween(f, keys), h = tween(at, keys).carry, t = f - at;
   return {
     ...p, ...extra?.(f), carry: t < 0 ? p.carry : t < 18 ? [h[0] + vx * t, h[1] + vy * t + 0.5 * t * t, h[2] + spin * t] : null,
-    say: [t < 0 ? cmd : done, Math.max(0, Math.min(1, f / 4, (n - f) / 6))],
+    ...(cmd ? { say: [t < 0 ? cmd : done, Math.max(0, Math.min(1, f / 4, (n - f) / 6))] } : {}),
   };
 };
 // hanging off the ledge: body just past the lip, claws hooked over the top, feet dangling

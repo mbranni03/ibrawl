@@ -527,7 +527,7 @@ const LEGO_MOVESET = {
   // B. neutral: open the instruction booklet and pick what to build from its list (like Hero's command menu) · side: head
   // boomerang · up: staircase · down: fall-apart counter. The builds and the counter's follow-up are their own states, listed here too
   specials: {
-    booklet: { // pull the booklet out and flip it open, then read it (bobbing, pages fluttering) until he builds or puts it away.
+    neutralSpecial: { state: 'booklet', // pull the booklet out and flip it open, then read it (bobbing, pages fluttering) until he builds or puts it away.
       // The game draws the list over his head: ↑ ↓ move the pick, special / light builds it (if he has the studs: each build has a
       // cost), shield / dodge / jump closes it. Stands still on the ground; in the air the pages slow his fall to `fall` px/s. The
       // last pick is remembered. studs: he earns one per % of damage his hits do, up to max, starting each game with start
@@ -551,10 +551,10 @@ const LEGO_MOVESET = {
       },
     },
     rocket: { // clicks a brick rocket together on his shoulder, then fires it straight ahead: it speeds up and bursts on whatever it
-      // hits (or the stage, or at the end of its range), hitting everything within blast.r. launch: x, y = where it leaves him ·
+      // hits (or the stage, or at the end of its range), hitting everything within blast.r. fire: x, y = where it leaves him ·
       // speed = [start, top] px/s · accel px/s² · life s
       input: 'booklet → rocket', label: 'Rocket', cost: 25, startup: 16, active: 1, endlag: 20, landingLag: 10, build: true,
-      launch: { x: 30, y: -50, speed: [300, 1100], accel: 2400, life: 1.2, blast: { r: 60, damage: 16, kb: { base: 40, growth: 100, angle: 45 } } },
+      fire: { x: 30, y: -50, speed: [300, 1100], accel: 2400, life: 1.2, blast: { r: 60, damage: 16, kb: { base: 40, growth: 100, angle: 45 } } },
       anim: f => ({
         ...tween(f, [[0, { swing: [0.25, 1.15] }], [12, { swing: [0.3, 1.35], rot: -0.03 }], [16, { x: -4, swing: [0.3, 1.2], rot: -0.12 }], [36, {}]]),
         rocket: f < 16 ? Math.min(1, f / 12) : null,
@@ -575,7 +575,7 @@ const LEGO_MOVESET = {
       suit: { time: 8, mult: 1.3, speed: 0.75 },
       anim: f => ({ ...tween(f, [[0, {}], [24, { swing: 0.3 }], [36, {}]]), mech: true, apart: Math.max(0, 1 - f / 24) }),
     },
-    headToss: { // head boomerang: grab his head, pull it off its neck stud and fling it ahead, spinning. It slows, turns, and flies
+    sideSpecial: { state: 'headToss', // head boomerang: grab his head, pull it off its neck stud and fling it ahead, spinning. It slows, turns, and flies
       // back to wherever he is by then (hitting on the way out and again on the way back), then clicks back on. He fights on
       // headless meanwhile, but can't throw it again until it's back. toss: x, y = where it leaves his hand · speed, decel px/s(²)
       // on the way out · home = [start, top] speed flying back · life = seconds before it gives up and snaps straight back
@@ -586,7 +586,7 @@ const LEGO_MOVESET = {
         headLift: f < 6 ? 0 : f < 10 ? 7 * (f - 6) / 4 : 0, headless: f >= 10, // (the game shows him headless while it's out)
       }),
     },
-    stairs: { // build a small staircase and climb it: every `step.every` frames a brick clicks in under his feet, a step up and a
+    upSpecial: { state: 'stairs', // build a small staircase and climb it: every `step.every` frames a brick clicks in under his feet, a step up and a
       // step ahead of the last (thrust up, drive forward, in px/s). He ends standing on the top step; the stairs stay `step.life`
       // seconds as real platforms. Once until he's back on the stage or a normal platform. The bricks clicking in hit what's below.
       // A stud a step, paid as each one starts: out of studs, the stairs stop at the last step built (none: he can't start)
@@ -602,16 +602,16 @@ const LEGO_MOVESET = {
         };
       },
     },
-    counter: { // brace, arms up: anything that hits him in the window (the active frames) knocks him apart instead (see reassemble)
-      input: 'down + special', startup: 4, active: 24, endlag: 16, landingLag: 10, counter: true,
+    downSpecial: { state: 'counter', // brace, arms up: anything that hits him in the window (the active frames) knocks him apart instead (see reassemble)
+      input: 'down + special', startup: 4, active: 24, endlag: 16, landingLag: 10, counter: 'reassemble',
       anim: f => ({
         ...tween(f, [[0, {}], [4, { swing: 0.75, kick: 0.25, rot: -0.03 }], [28, { swing: 0.7, kick: 0.25, rot: -0.03 }], [44, {}]]),
         x: f >= 4 && f < 28 ? (f % 4 < 2 ? 0.5 : -0.5) : 0, blink: f >= 4 && f < 28 && f % 12 < 2 ? 1 : 0,
       }),
     },
-    reassemble: { // countered: he flies apart (can't be hurt), the pieces zip over to `warp` px past the attacker, and snap back
+    reassemble: { // countered: he flies apart (can't be hurt), the pieces zip over to `reform` px past the attacker, and snap back
       // together facing them, the parts slamming in all around him
-      input: 'a hit during the counter', startup: 18, active: 3, endlag: 16, landingLag: 8, warp: [9, 90], intangible: [0, 21],
+      input: 'a hit during the counter', startup: 18, active: 3, endlag: 16, landingLag: 8, reform: [9, 90], intangible: [0, 21],
       damage: 10, kb: { base: 45, growth: 90, angle: 40 }, hitbox: { x: -44, y: -78, w: 88, h: 80 }, both: true,
       anim: f => ({
         ...tween(f, [[0, { swing: 0.7 }], [18, { swing: 1.3, kick: 0.3 }], [22, { swing: 1.3, kick: 0.3 }], [37, {}]]),

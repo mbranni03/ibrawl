@@ -127,7 +127,7 @@ function drawLegoBoom(x, y, t, R = 60) {
 // the brick shield's hut, bottom up (so wear takes bricks off the top): two columns either side of him, a lintel over his head
 const LEGO_WALL = [...Array.from({ length: 12 }, (_, i) => [i % 2 ? 32 : -46, -10 * (i >> 1) - 10, 14, 10]), [-50, -68, 100, 8]];
 // his KO blast's look (drawBlast's cols, core): red / yellow / blue rays, and bricks flying out of the middle
-const LEGO_BLAST = [[LEGO_RED[1], LEGO_YEL[1], LEGO_BLUE[1]], (x, y, e, t) => drawLegoBoom(x, y, t, 60 + 60 * e)];
+const LEGO_BLAST = [[LEGO_RED[1], LEGO_YEL[1], LEGO_BLUE[1]], (x, y, r, spin, e, t) => drawLegoBoom(x, y, t, 60 + 60 * e)];
 // one of the down smash's loose bricks lying in wait: { x, y, w, h, rot, col } (a box in the world)
 function drawLooseBrick(k) {
   ctx.save(); ctx.translate(k.x + k.w / 2, k.y + k.h / 2); ctx.rotate(k.rot); ctx.lineCap = ctx.lineJoin = 'round';
