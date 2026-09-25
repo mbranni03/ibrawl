@@ -38,6 +38,7 @@
 <script src="src/characters/snoo-moveset.js"></script>
 <script src="src/characters/muse-moveset.js"></script>
 <script src="src/cpu.js"></script>
+<script src="src/sfx.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -231,13 +232,13 @@ function bindKey(a, s, code) { binds.forEach(set => { for (const b of ACTIONS) i
 const KEY_NAMES = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ShiftLeft: 'Shift', ShiftRight: 'R Shift', ControlLeft: 'Ctrl', ControlRight: 'R Ctrl', AltLeft: 'Alt', AltRight: 'R Alt', MetaLeft: 'Cmd', MetaRight: 'R Cmd' };
 const keyName = c => c ? KEY_NAMES[c] ?? c.replace(/^(Key|Digit)/, '') : '—';
 // ---------- pause menu ----------
-const MENU = ['resume', 'controls', 'restart', 'quit'], HOME_MENU = ['play', 'characters', 'controls'];
+const MENU = ['resume', 'controls', 'sound', 'restart', 'quit'], HOME_MENU = ['play', 'characters', 'controls', 'sound'];
 let paused = true, sel = 0, showControls = false, keyEdit = null, over = false, home = true, picking = false, vsT = null, menu = HOME_MENU; // boots to the home screen · picking = character select (after play) · vsT = when the vs screen started (after picking)
 function setPaused(on) {
   paused = on; sel = 0; showControls = false; keyEdit = null; over = false; home = false; picking = false; vsT = null; menu = MENU;
   for (const k in keys) keys[k] = false; jumpQ = downQ = dropQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = grabQ = techQ = techLock = false;
 }
-function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
+function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; sfx.play(won ? 'win' : 'lose'); }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
   Object.assign(cam, camHome());
@@ -250,10 +251,10 @@ function restart() {
   bags = rolled.length ? [] : [{ id: 'bag', w: FIGHTER.bag.box[0], h: FIGHTER.bag.box[1], home: SPAWN_X[0] }]; bags.forEach(spawnTarget);
   use(human);
 }
-function fight() { restart(); setPaused(false); } // leaves the vs screen
+function fight() { restart(); setPaused(false); sfx.play('go'); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
 const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
-function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; loadMoves(fighter.set); [P.w, P.h] = fighter.box; }
+function versus() { sfx.play('vs'); picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; loadMoves(fighter.set); [P.w, P.h] = fighter.box; }
 // B pressed: the special for the held direction. Claw'd's tether and think and Android's warp are wired in by hand; anything else is its
 // own move, usable on the ground and in the air. oncePerAir moves (and rolls, dash) can't be used again until it lands; a held charge
 // (charge) is ground only; a ride waits until the last one is gone; a zap (Grok's Neuralink) goes off instead while its chip is planted.
@@ -306,16 +307,17 @@ function legoBuild(m) {
 }
 // in the mech suit his box is MECH_K times his own, grown round his feet; back to his own size when it pops off in a shower of bricks
 function mechFit(on) { const [w, h] = fighter.box, k = on ? MECH_K : 1; P.x += (P.w - w * k) / 2; P.y += P.h - h * k; P.w = w * k; P.h = h * k; }
-function popMech() { P.mech = 0; mechFit(false); booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); }
+function popMech() { P.mech = 0; mechFit(false); booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); sfx.play('boom'); }
 function choose(i) {
   if (menu[i] === 'controls') { showControls = true; keyEdit = { r: 0, c: 0, wait: false }; } // keyEdit = the slot picked, wait = for its new key
+  else if (menu[i] === 'sound') sfx.toggle();
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
   else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; lvls = []; sides = []; focus = 0; onBand = false; } // character select first, from scratch
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
-  if (e.code === 'Escape') { e.preventDefault(); if (keyEdit?.wait) keyEdit.wait = false; else if (showControls) showControls = false; else if (vsT != null) { vsT = null; picking = true; } else if (picking) picking = false; else if (!over && !home) setPaused(!paused); return; }
+  if (e.code === 'Escape') { e.preventDefault(); sfx.play('back'); if (keyEdit?.wait) keyEdit.wait = false; else if (showControls) showControls = false; else if (vsT != null) { vsT = null; picking = true; } else if (picking) picking = false; else if (!over && !home) setPaused(!paused); return; }
   if (paused) {
     const a = MENU_NAV[e.code] ?? KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
     if (keyEdit?.wait) { bindKey(ACTIONS[keyEdit.r], keyEdit.c, e.code); keyEdit.wait = false; } // the key pressed for the slot waiting on one
@@ -331,7 +333,7 @@ addEventListener('keydown', e => {
     else if (a === 'down') sel = (sel + 1) % menu.length;
     else if (ok) choose(sel);
     else return;
-    e.preventDefault(); return;
+    sfx.play(ok ? 'select' : 'tick'); e.preventDefault(); return;
   }
   const a = KEYMAP[e.code]; if (!a) return;
   e.preventDefault();
@@ -375,6 +377,7 @@ cv.addEventListener('mousemove', e => {
   cv.style.cursor = i >= 0 || p || k ? 'pointer' : '';
 });
 cv.addEventListener('click', e => {
+  if (paused) sfx.play('select');
   if (paused && showControls) { // a click on a slot waits for its key, off them goes back
     const k = slotAt(...at(e));
     if (k?.r === ACTIONS.length) { keyEdit.r = k.r; setBinds(DEFAULT_BINDS, true); }
@@ -392,7 +395,7 @@ cv.addEventListener('click', e => {
 });
 
 const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-const setState = s => { if (P.state !== s) { P.state = s; P.f = 0; } };
+const setState = s => { if (P.state !== s) { P.state = s; P.f = 0; sfx.enter(s); } };
 const dust = (dx, dir) => fx.push({ x: P.x + P.w / 2 + dx, y: P.y + P.h, dir, t: 0 });
 const puff = () => { dust(-26, -1); dust(26, 1); };
 
@@ -483,7 +486,7 @@ function tetherStep(dt) {
   }
   if (T.link != null) return linkStep(T, ax, ay, dt);
   if (P.f < US.startup) return;
-  if (T.miss) { if ((T.len = Math.max(0, T.len - US.reach / US.endlag)) === 0) { setState('specialFall'); Object.assign(P, { toastT: 0, toastMsg: 2, toastOk: false }); } return; } // pull it back, then helpless (+ the "connection refused" toast)
+  if (T.miss) { if ((T.len = Math.max(0, T.len - US.reach / US.endlag)) === 0) { setState('specialFall'); Object.assign(P, { toastT: 0, toastMsg: 2, toastOk: false }); sfx.play('refused'); } return; } // pull it back, then helpless (+ the "connection refused" toast)
   T.len = Math.min(US.reach, T.len + US.reach / US.active);
   const tx = ax + P.face * Math.cos(T.ang) * T.len, ty = ay - Math.sin(T.ang) * T.len, wall = overlaps({ x: tx - 1, y: ty - 1, w: 2, h: 2 }, stage);
   for (const side of [-1, 1]) { // a lip off to this side, within the cord and close enough to the aim, pulls the plug in (hitting the wall under it: any lip in reach)
@@ -494,7 +497,7 @@ function tetherStep(dt) {
   if (b) { // plugged into a target: connected (see linkStep)
     if (!hitBag(b, US.link.zapDmg, NO_KB, P.face)) { T.miss = true; return; } // shielded / countered: it doesn't take
     T.link = 0; T.bag = b; T.at = [Math.min(b.w - 4, Math.max(4, tx - b.x)), Math.min(b.h - 8, Math.max(8, ty - b.y))]; b.pinned = P;
-    Object.assign(P, { toastT: 0, toastMsg: LINKED, toastOk: true }); return;
+    Object.assign(P, { toastT: 0, toastMsg: LINKED, toastOk: true }); sfx.play('linked'); return;
   }
   if (T.len >= US.reach || wall) T.miss = true; // nothing to plug into
 }
@@ -520,7 +523,7 @@ function breakShield() {
 // holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart. A fighter hangs
 // there flinching (hitstun that's over as soon as it's let go), off whatever it was doing
 function grabBag(b) {
-  Object.assign(b, { grabbed: P, vx: 0, vy: 0, pings: 0 }); if (b.c) Object.assign(b, { state: 'hitstun', f: 0, stun: 1, ledge: 0, fastFall: false });
+  sfx.enter('grabbed'); Object.assign(b, { grabbed: P, vx: 0, vy: 0, pings: 0 }); if (b.c) Object.assign(b, { state: 'hitstun', f: 0, stun: 1, ledge: 0, fastFall: false });
   P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
   P.ratio = GR.hold.ratio ? { replies: 0, likes: GR.hold.ratio.likes, ratiod: false, at: 0 } : null; // Grok's ratio meter (grabs.hold.ratio)
 }
@@ -557,7 +560,7 @@ function throwStep() { // lets go on the startup frame
 // if it runs out, sliding back a little. false = it didn't connect
 function hitClawd(dmg, kb, dir) {
   const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return false; } // countered: the hit does nothing
-  if (P.state === 'shield' && P.shield > 0) { P.shield -= SHIELD_HIT * dmg / 12; P.vx = dir * (150 + 20 * dmg); hitstop = Math.round(2 + dmg / 6); if (P.shield <= 0) breakShield(); return false; }
+  if (P.state === 'shield' && P.shield > 0) { sfx.play('block'); P.shield -= SHIELD_HIT * dmg / 12; P.vx = dir * (150 + 20 * dmg); hitstop = Math.round(2 + dmg / 6); if (P.shield <= 0) breakShield(); return false; }
   hurt(dmg); hitstop = Math.round(3 + dmg / 4);
   const k = (kb.base + kb.growth * P.dmg / 100) * (P.buff > 0 ? DOWN_B.streak.heavy : 1), a = kb.angle * Math.PI / 180; // buff Duo's heavy
   P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); camPunch(k, P.x + P.w / 2, P.y + P.h / 2); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
@@ -567,6 +570,7 @@ function hitClawd(dmg, kb, dir) {
 
 // crossed the blast zone: freeze, and leave a blast at the screen edge where it went out, pointing back in (the respawn follows)
 function ko() {
+  sfx.play('ko');
   const [ex, ey] = (cur === human ? exitPoint() : onScreen()) || [W / 2, 0], x = clamp(ex, 30, W - 30), y = clamp(ey, 30, H - 30); // right where it left the screen, nudged in to show (a CPU: where it is)
   P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; thrown = null; for (const b of everyone()) { if (b.grabbed === P) b.grabbed = false; if (b.pinned === P) b.pinned = false; } P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
 }
@@ -575,7 +579,7 @@ function respawn() {
   if (--stocks <= 0) { if (cur === human) return gameOver(); cur.out = true; fighters = fighters.filter(c => !c.out); return; }
   [P.w, P.h] = fighter.box; // out of the mech
   Object.assign(P, { x: (cur === human ? W / 2 : clamp(SPAWN_X[foes.indexOf(cur)], stage.x + 120, stage.x + stage.w - 120)) - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, slowT: 0, sticker: null, stairs: false, gold: 0, mech: 0, streak: 0, buff: 0, lit: null }); // (a lost stock loses Duo's streak)
-  P.state = 'respawn'; P.f = 0;
+  P.state = 'respawn'; P.f = 0; sfx.enter('respawn');
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
 function respawnStep(dir) {
@@ -718,7 +722,7 @@ function stepPlayer(dt) {
     else if (jumpQ && s !== 'squat') { jumpQ = 0; setState('squat'); }
     else if (dropQ && P.on !== stage) { P.drop = 0.2; P.ground = false; P.y += 2; P.jumps = AIR_JUMPS(); setState('drop'); } // tapped ↓: through the platform
     else if (s === 'squat') { // jump decided at the end of the squat: still holding = full hop, tapped = short hop
-      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = AIR_JUMPS(); setState('air'); puff(); }
+      if (P.f >= 4) { P.vy = keys.jump ? -JUMP : -HOP; P.ground = false; P.jumps = AIR_JUMPS(); setState('air'); puff(); sfx.enter('jump'); }
     }
     else if (s === 'skid') { // braking slide; pressing the other way at any point turns it into a turnaround
       if (dir === -P.face) P.turn = true;
@@ -762,12 +766,12 @@ function stepPlayer(dt) {
       P.dodgeAnim = !dx ? 'airDodge' : dx === P.face ? 'airDodgeForward' : 'airDodgeBack'; P.dodgeTilt = dx ? dy * 0.35 * dx * P.face : 0; // diagonals tip toward where it's going
     }
     else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
-    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !FLY[s] && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
+    else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !FLY[s] && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; sfx.enter('djump'); } // restarts: a flyer flaps again
     if (ffQ && P.vy > -150 && !stunned && !FLY[P.state] && !AIR[P.state]?.thrust && !['airDodge', 'shieldBreak', 'upSpecial', 'booklet'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
   downQ = dropQ = ffQ = dashQ = sideQ = false; techQ = Math.max(0, techQ - 1); techLock = Math.max(0, techLock - 1);
-  if (P.state === 'neutralSpecial' && !(P.state in AIR)) P.think = Math.max(P.think, NEUTRAL_B.anim(P.f).aura || 0); // checkpoint locked in
+  if (P.state === 'neutralSpecial' && !(P.state in AIR)) { const a = NEUTRAL_B.anim(P.f).aura || 0; if (a > P.think) { P.think = a; sfx.play('think', a); } } // checkpoint locked in (a chime for each)
   jumpQ = Math.max(0, jumpQ - 1); attackQ = Math.max(0, attackQ - 1); heavyQ = Math.max(0, heavyQ - 1); specialQ = Math.max(0, specialQ - 1); dodgeQ = Math.max(0, dodgeQ - 1); grabQ = Math.max(0, grabQ - 1);
 
   // horizontal: ground speed comes from the state, air speed from the stick
@@ -826,6 +830,7 @@ function stepPlayer(dt) {
 
   // attack hitboxes vs the targets: one hit on each per attack, knockback grows with its damage (and a smash's charge)
   const m = MOVES[P.state], cx = P.x + P.w / 2;
+  if (m?.startup > 0 && P.f === m.startup) sfx.out(P.state); // it comes out: its sound
   if (m?.bricks && P.f <= m.startup) P.nb = bricksOf(m);
   if (m?.bricks && P.f === m.startup) P.studs -= P.nb; // pays for the bricks as it comes out
   if (m?.hitbox && !(m.hearts && !P.roll) && !(m.bricks && !P.nb)) { // out of hearts: the zap fizzles · no bricks built: nothing to hit with
@@ -860,7 +865,7 @@ function stepPlayer(dt) {
   }
   if (m?.build && P.f === m.startup) legoBuild(m);
   if (m?.step && P.f > m.startup && (P.f - m.startup) % m.step.every === 0) { // a step clicks in under his feet; then the next one's stud, or stop here
-    const S = m.step, k = (P.f - m.startup) / S.every; plats.push({ x: cx + P.face * 6 - S.w / 2, y: P.y + P.h, w: S.w, h: S.h, lego: 'step', by: P, col: k % 4, t: 0, life: S.life });
+    const S = m.step, k = (P.f - m.startup) / S.every; plats.push({ x: cx + P.face * 6 - S.w / 2, y: P.y + P.h, w: S.w, h: S.h, lego: 'step', by: P, col: k % 4, t: 0, life: S.life }); sfx.play('brick');
     if (k < Math.floor(m.active / S.every)) { if (P.studs >= 1) P.studs--; else { P.vx = P.vy = 0; setState('air'); } }
   }
   if (m?.toss && P.f === m.startup) { const T = m.toss; thrown = { x: cx + P.face * T.x, y: P.y + P.h + T.y, vx: P.face * T.speed, dir: P.face, back: false, sp: T.home[0], t: 0, rot: 0, face: P.face, hit: new Set(), T }; }
@@ -926,6 +931,7 @@ function bail(m) { // the ship flies on without its rider
   P.vx *= 0.3; P.vy = Math.max(P.vy * 0.3, -250); setState('specialFall');
 }
 function blowWreck(x, y, m) { // the blast: hits every target in reach once
+  sfx.play('boom');
   wreck = { x, y, vx: 0, vy: 0, t: 0, m, boom: 0 };
   for (const b of targets) if (Math.hypot(b.x + b.w / 2 - x, b.y + b.h / 2 - y) < m.wreck.r + b.w / 2) hitBag(b, m.wreck.damage, m.wreck.kb, Math.sign(b.x + b.w / 2 - x) || 1);
   fx.push({ x, y: y + 20, dir: -1, t: 0 }, { x, y: y + 20, dir: 1, t: 0 });
@@ -1000,7 +1006,7 @@ function stepWorld(dt) {
     const r = rockets[i], L = r.L; r.t += dt; r.v = Math.min(L.speed[1], r.v + L.accel * dt); r.x += r.dir * r.v * dt;
     const box = { x: r.x - 16, y: r.y - 6, w: 32, h: 12 };
     if (!(targets.some(b => overlaps(box, b)) || overlaps(box, stage) || r.t > L.life || out(box))) continue;
-    const B = L.blast; rockets.splice(i, 1); booms.push({ x: r.x, y: r.y, t: 0, r: B.r });
+    const B = L.blast; rockets.splice(i, 1); booms.push({ x: r.x, y: r.y, t: 0, r: B.r }); sfx.play('boom');
     for (const b of targets) { // everything the blast reaches (the nearest point of its box within r), thrown away from the middle
       const nx = Math.max(b.x, Math.min(r.x, b.x + b.w)), ny = Math.max(b.y, Math.min(r.y, b.y + b.h));
       if (Math.hypot(nx - r.x, ny - r.y) <= B.r) hitBag(b, B.damage, B.kb, Math.sign(b.x + b.w / 2 - r.x) || r.dir);
@@ -1105,6 +1111,7 @@ function hitBag(b, dmg, kb, dir) {
     const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
     b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a); camPunch(s / KB, b.x + b.w / 2, b.y + b.h / 2);
   }
+  sfx.hit(dmg); // it connected
   const ST = NEUTRAL_B.studs; if (ST) P.studs = Math.min(ST.max, P.studs + Math.round(dmg)); // Lego Man earns a stud per %
   return true;
 }
@@ -1426,11 +1433,11 @@ function drawPause(t) {
     ctx.font = '600 40px Caveat, cursive';
     menu.forEach((m, i) => {
       ctx.globalAlpha = i === sel ? 1 : 0.5;
-      ctx.fillText((i === sel ? '›  ' : '') + m + (i === sel ? '  ‹' : ''), W / 2, menuY() + i * 52);
+      ctx.fillText((i === sel ? '›  ' : '') + (m === 'sound' ? `sound ${sfx.on ? 'on' : 'off'}` : m) + (i === sel ? '  ‹' : ''), W / 2, menuY() + i * 52);
     });
   }
   ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive'; // key hints (none on the home screen)
-  if (showControls || !home) ctx.fillText(showControls ? keyEdit?.wait ? `press a key for ${ACTION_NAMES[ACTIONS[keyEdit.r]]} · Esc cancel` : '↑ ↓ ← → choose · Enter / click  change · Esc back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 250);
+  if (showControls || !home) ctx.fillText(showControls ? keyEdit?.wait ? `press a key for ${ACTION_NAMES[ACTIONS[keyEdit.r]]} · Esc cancel` : '↑ ↓ ← → choose · Enter / click  change · Esc back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 290);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
 }
 
