@@ -746,6 +746,7 @@ function stepPlayer(dt) {
     if (P.f >= m.startup && P.f < m.startup + m.active) for (const b of targets) {
       if (b.hit === key || !overlaps(box, b)) continue;
       b.hit = key; P.landed = true;
+      if (m.flight) { crashFlight(m); break; } // a rocket-style ship blows up on whoever it flies into
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
       const h = sweet && overlaps(sweet, b) ? m.sweet : hf;
       const miss = P.roll === false && m.missKb; // a gamble that came up wrong hits softer

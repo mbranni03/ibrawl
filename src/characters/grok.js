@@ -212,7 +212,7 @@ function drawImagined(x, y, r, t, dir = 1, pic = 0) {
 
 // Starship with Grok inside: a steel tube stood on its engines, nose cone on top, flaps and fins, and a porthole Grok looks out of
 // (pose.empty: dark glass). Drawn from the floor under its middle, facing right; k = size (pops in from the floor), flame 0 … 1
-const SHIP_H = 102;
+const SHIP_H = 114;
 function drawStarship(k, flame, pose = {}) {
   if (k <= 0) return;
   ctx.save(); ctx.scale(k, k); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
@@ -225,7 +225,7 @@ function drawStarship(k, flame, pose = {}) {
   ctx.fillStyle = '#6d6a66'; for (const ex of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(ex - 3, -5); ctx.lineTo(ex + 3, -5); ctx.lineTo(ex + 4, 0); ctx.lineTo(ex - 4, 0); ctx.closePath(); ctx.fill(); } // engines
   const fins = [[[-15, -24], [-25, -5], [-15, -5]], [[15, -24], [25, -5], [15, -5]], [[-15, -86], [-22, -82], [-22, -72], [-15, -70]], [[15, -86], [22, -82], [22, -72], [15, -70]]];
   for (const f of fins) { ctx.fillStyle = '#b9bcbf'; path(f); ctx.fill(); ctx.lineWidth = 1.8; poly(f, 0.4); }
-  const hull = () => { ctx.beginPath(); ctx.moveTo(-15, -5); ctx.lineTo(-15, -82); ctx.quadraticCurveTo(-15, -100, 0, -SHIP_H); ctx.quadraticCurveTo(15, -100, 15, -82); ctx.lineTo(15, -5); ctx.closePath(); };
+  const hull = () => { ctx.beginPath(); ctx.moveTo(-15, -5); ctx.lineTo(-15, -82); ctx.quadraticCurveTo(-13, -98, 0, -SHIP_H); ctx.quadraticCurveTo(13, -98, 15, -82); ctx.lineTo(15, -5); ctx.closePath(); };
   ctx.save(); ctx.translate(j(0.8), j(0.8)); ctx.fillStyle = '#d3d6d8'; hull(); ctx.fill(); ctx.restore();
   ctx.lineWidth = 2.4; ctx.save(); ctx.translate(j(0.4), j(0.4)); hull(); ctx.stroke(); ctx.restore();
   ctx.lineWidth = 1; ctx.globalAlpha = 0.4; line(-15, -30, 15, -30, 0.4, 1); line(-15, -44, 15, -44, 0.4, 1); line(6, -8, 6, -42, 0.4, 1); ctx.globalAlpha = 1; // panel seams

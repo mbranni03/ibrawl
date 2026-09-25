@@ -646,13 +646,13 @@ const GROK_MOVESET = {
     },
     upSpecial: { // Starship, like Diddy Kong's Rocketbarrel Boost: Grok climbs into a Starship and the engine builds while B is held
       // (flame roaring bigger). It can't move while charging (in the air it barely sinks); ← → swing the aim, a dotted line off the nose
-      // showing it. Let go to launch that way: faster the longer the charge. In flight ← → turns it (the body is the hitbox) and B again bails out. At the end of the flight, or
+      // showing it. Let go to launch that way: faster the longer the charge. In flight ← → turns it and B again bails out; flying into anyone blows it up (the wreck blast), Grok falling helpless. At the end of the flight, or
       // bailing, Grok falls helpless and the empty ship flies on and blows up on whatever it hits (wreck); flying into the stage blows it
       // up there. Held overheat frames past a full charge, it blows up under Grok instead: selfDamage to Grok, helpless.
       // flight: speed = [tap, full] px/s · turn = radians / frame steering in flight · tilt = the most it can lean then · fall = max px/s
       // sinking while charging in the air · aimTurn = radians / frame swinging the aim while charging, aimMax = how far · wreck: r = blast reach px, life = seconds before it blows on its own, coast = seconds it keeps flying straight, then gravity scale · mid = px up to the ship's middle
       input: 'up + B (V / L), ground or air · hold to charge, let go to launch · ← → steer · B to bail', state: 'rocket',
-      startup: 0, active: 40, endlag: 0, damage: 5, kb: { base: 30, growth: 50, angle: 70 }, hitbox: { x: -32, y: -100, w: 64, h: 100 },
+      startup: 0, active: 40, endlag: 0, damage: 5, kb: { base: 30, growth: 50, angle: 70 }, hitbox: { x: -32, y: -112, w: 64, h: 112 },
       chargeFrames: 50, overheat: 70, selfDamage: 8, landingLag: 14,
       flight: { speed: [420, 820], turn: 0.06, tilt: 1.35, fall: 40, aimTurn: 0.07, aimMax: 1.05 },
       wreck: { damage: 9, kb: { base: 40, growth: 70, angle: 60 }, r: 46, life: 1.5, coast: 0.35, gravity: 0.6, mid: 51, draw: (x, y, ang, boom) => drawWreck(x, y, ang, boom) },
