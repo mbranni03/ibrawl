@@ -50,7 +50,7 @@ const DUO_MOVESET = {
     },
   },
   groundAttacks: {
-    jab1: { ...DUO_GA.jab1, // ¡hola!: a quick slap with the front wing
+    jab1: { ...DUO_GA.jab1, name: '¡Hola!', // ¡hola!: a quick slap with the front wing
       hitbox: { x: 28, y: -46, w: 34, h: 24 },
       anim: f => ({
         ...tween(f, [
@@ -64,7 +64,7 @@ const DUO_MOVESET = {
         speed: f >= 3 && f < 6 ? 0.4 : 0, say: duoSay('¡hola!', f, 3, 19),
       }),
     },
-    jab2: { ...DUO_GA.jab2, // bonjour!: the front wing scoops out and up, body stretching tall with it
+    jab2: { ...DUO_GA.jab2, name: 'Bonjour!', // bonjour!: the front wing scoops out and up, body stretching tall with it
       hitbox: { x: 20, y: -68, w: 38, h: 38 },
       anim: f => ({
         ...tween(f, [
@@ -78,7 +78,7 @@ const DUO_MOVESET = {
         say: duoSay('bonjour!', f, 3, 21),
       }),
     },
-    jab3: { ...DUO_GA.jab3, // ✓ correct!: hunch forward, then lunge in belly first with both wings flung up in a V, celebrating
+    jab3: { ...DUO_GA.jab3, name: '¡Correcto!', // ✓ correct!: hunch forward, then lunge in belly first with both wings flung up in a V, celebrating
       hitbox: { x: 16, y: -54, w: 50, h: 44 },
       anim: f => ({
         ...tween(f, [
@@ -93,7 +93,7 @@ const DUO_MOVESET = {
         dust: f >= 5 && f < 17 ? (f - 5) / 12 : null, say: duoSay('✓ correct!', f, 5, 32),
       }),
     },
-    dashAttack: { ...DUO_GA.dashAttack, // streak slide: dive onto its belly and toboggan along, wings swept back
+    dashAttack: { ...DUO_GA.dashAttack, name: 'Streak Slide', // streak slide: dive onto its belly and toboggan along, wings swept back
       hitbox: { x: 10, y: -38, w: 60, h: 38 },
       anim: f => ({
         ...tween(f, [
@@ -109,7 +109,7 @@ const DUO_MOVESET = {
         dust: f >= 6 && f < 18 ? (f - 6) / 12 : null, say: duoSay('🔥 streak!', f, 6, 34),
       }),
     },
-    forwardTilt: { ...DUO_GA.forwardTilt, // lesson time.: step in and jab the front wing out straight, like a pointed finger
+    forwardTilt: { ...DUO_GA.forwardTilt, name: 'Lesson Time', // lesson time.: step in and jab the front wing out straight, like a pointed finger
       hitbox: { x: 30, y: -50, w: 44, h: 24 },
       anim: f => ({
         ...tween(f, [
@@ -123,7 +123,7 @@ const DUO_MOVESET = {
         speed: f >= 6 && f < 10 ? 0.5 : 0, say: duoSay('lesson time.', f, 6, 27),
       }),
     },
-    upTilt: { ...DUO_GA.upTilt, // +10 XP: crouch, then spring up with both wings flung out in a V over the head
+    upTilt: { ...DUO_GA.upTilt, name: '+10 XP', // +10 XP: crouch, then spring up with both wings flung out in a V over the head
       hitbox: { x: -28, y: -92, w: 56, h: 40 },
       anim: f => ({
         ...tween(f, [
@@ -137,7 +137,7 @@ const DUO_MOVESET = {
         say: f >= 5 && f < 25 ? ['+10 XP', Math.min(1, (25 - f) / 8)] : null,
       }),
     },
-    downTilt: { ...DUO_GA.downTilt, // tsk tsk: from the crouch, a low talon kick along the floor
+    downTilt: { ...DUO_GA.downTilt, name: 'Tsk Tsk', // tsk tsk: from the crouch, a low talon kick along the floor
       hitbox: { x: 18, y: -18, w: 40, h: 18 },
       anim: f => ({
         ...tween(f, [
@@ -151,7 +151,7 @@ const DUO_MOVESET = {
         say: duoSay('tsk tsk', f, 5, 20),
       }),
     },
-    getupAttack: { ...DUO_GA.getupAttack, // from flat on its back: rocks, flips over and lands with both wings flung out, clearing both sides
+    getupAttack: { ...DUO_GA.getupAttack, name: 'Wing Sweep', // from flat on its back: rocks, flips over and lands with both wings flung out, clearing both sides
       anim: f => ({
         ...tween(f, [
           [0, { rot: Math.PI, sx: 1.04, sy: 0.94, arm: 4 }],
@@ -167,7 +167,7 @@ const DUO_MOVESET = {
     },
   },
   aerials: { // drawn at a preview-only air: -40, like Claw'd's
-    neutralAir: { ...DUO_AA.neutralAir, // hoo hoo!: tuck, then spin a full turn with both wings flung straight out
+    neutralAir: { ...DUO_AA.neutralAir, name: 'Hoo Hoo!', // hoo hoo!: tuck, then spin a full turn with both wings flung straight out
       hitbox: { x: -48, y: -60, w: 96, h: 62 },
       anim: f => {
         const p = tween(f, [[0, DUO_AIR], [3, { sx: 0.92, sy: 1.08, rot: -0.25, arm: [6, 6], legs: duoFeet([2, -3], [-2, -3]) }],
@@ -176,7 +176,7 @@ const DUO_MOVESET = {
         return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40, say: duoSay('hoo hoo!', f, 4, 26) };
       },
     },
-    forwardAir: { ...DUO_AA.forwardAir, // ✗ wrong!: lean back with the front wing raised high, then chop it down in front
+    forwardAir: { ...DUO_AA.forwardAir, name: 'Wrong Answer', // ✗ wrong!: lean back with the front wing raised high, then chop it down in front
       hitbox: { x: 24, y: -62, w: 46, h: 50 },
       anim: f => ({
         ...tween(f, [
@@ -190,7 +190,7 @@ const DUO_MOVESET = {
         speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40, say: duoSay('✗ wrong!', f, 7, 27),
       }),
     },
-    backAir: { ...DUO_AA.backAir, // remember me?: tip forward and kick the back foot out behind, back wing flaring
+    backAir: { ...DUO_AA.backAir, name: 'Remember Me?', // remember me?: tip forward and kick the back foot out behind, back wing flaring
       hitbox: { x: -54, y: -36, w: 34, h: 30 },
       anim: f => ({
         ...tween(f, [
@@ -204,7 +204,7 @@ const DUO_MOVESET = {
         air: -40, say: duoSay('remember me?', f, 6, 24),
       }),
     },
-    upAir: { ...DUO_AA.upAir, // level up ↑: a backflip, wings out and feet sweeping over the top
+    upAir: { ...DUO_AA.upAir, name: 'Level Up', // level up ↑: a backflip, wings out and feet sweeping over the top
       hitbox: { x: -36, y: -100, w: 72, h: 48 },
       anim: f => {
         const p = tween(f, [[0, DUO_AIR], [4, { sx: 1.1, sy: 0.88, rot: 0.1, arm: [4, 4], legs: duoFeet([2, -3], [-2, -3]) }],
@@ -214,7 +214,7 @@ const DUO_MOVESET = {
         return { ...p, rot: f < 4 ? p.rot : 0.1 - (Math.PI * 2 + 0.1) * k, air: -40, say: duoSay('level up ↑', f, 5, 24) };
       },
     },
-    downAir: { ...DUO_AA.downAir, // streak lost.: wings up, both feet driven straight down. Spikes
+    downAir: { ...DUO_AA.downAir, name: 'Streak Lost', // streak lost.: wings up, both feet driven straight down. Spikes
       hitbox: { x: -30, y: -10, w: 60, h: 30 },
       anim: f => ({
         ...tween(f, [
@@ -231,7 +231,7 @@ const DUO_MOVESET = {
     },
   },
   smashAttacks: { // c = 0 … 1 charge held (the game passes it; the viewer shows none)
-    forwardSmash: { ...DUO_SA.forwardSmash, // pop quiz: hold up a flash card and study it (charge holds here, frame 10), then slam it forward and
+    forwardSmash: { ...DUO_SA.forwardSmash, name: 'Pop Quiz', // pop quiz: hold up a flash card and study it (charge holds here, frame 10), then slam it forward and
       // it turns over: ✓ correct is a big hit, ✗ wrong a feeble one. The game rolls the answer on release: odds right uncharged … fully charged
       hitbox: { x: 30, y: -56, w: 50, h: 42 }, damage: 15, odds: 0.5, oddsCharged: 0.9, missDamage: 5, missKb: { base: 15, growth: 40, angle: 38 },
       anim: (f, n, c = 0, roll = true) => { // roll = the answer (false = wrong; anything else shows it right)
@@ -254,7 +254,7 @@ const DUO_MOVESET = {
         };
       },
     },
-    upSmash: { ...DUO_SA.upSmash, // streak flame: crouch as a flame kindles behind it and the streak counts up (charge holds here, frame 8),
+    upSmash: { ...DUO_SA.upSmash, name: 'Streak Flame', // streak flame: crouch as a flame kindles behind it and the streak counts up (charge holds here, frame 8),
       // then spring up as it erupts into a pillar overhead. The longer the charge, the longer the streak and the taller the fire
       hitbox: { x: -36, y: -150, w: 72, h: 110 },
       anim: (f, n, c = 0) => {
@@ -276,7 +276,7 @@ const DUO_MOVESET = {
         };
       },
     },
-    downSmash: { ...DUO_SA.downSmash, // unskippable ad: duck while an ad panel hovers over each side, its skip timer counting down
+    downSmash: { ...DUO_SA.downSmash, name: 'Unskippable Ad', // unskippable ad: duck while an ad panel hovers over each side, its skip timer counting down
       // (charge holds here, frame 8), then both slam down onto the floor, hitting both sides. Knockback goes away from Duo
       hitbox: { x: -80, y: -58, w: 160, h: 58 },
       anim: (f, n, c = 0) => {
@@ -299,7 +299,7 @@ const DUO_MOVESET = {
     },
   },
   specials: {
-    neutralSpecial: { // heart zap: hold up one of its hearts and zap it forward. Duo has 5 a stock: each use spends one and hits harder than
+    neutralSpecial: { name: 'Heart Zap', // heart zap: hold up one of its hearts and zap it forward. Duo has 5 a stock: each use spends one and hits harder than
       // the last (the game passes how many it had before this use); with none left it fizzles
       input: 'B (V / L), no direction · ground or air · 5 hearts a stock', hearts: 5, startup: 10, active: 4, endlag: 22, damage: 5,
       kb: { base: 25, growth: 60, angle: 40 }, hitbox: { x: 24, y: -62, w: 54, h: 48 }, landingLag: 10,
@@ -321,7 +321,7 @@ const DUO_MOVESET = {
         };
       },
     },
-    sideSpecial: { // reminder: flick a wing and a push notification pops out, then drifts after the nearest target, turning to follow it
+    sideSpecial: { name: 'Reminder', // reminder: flick a wing and a push notification pops out, then drifts after the nearest target, turning to follow it
       // through anything. One out at a time
       input: 'B (V / L) + a direction, ground or air · turns that way first', startup: 12, active: 2, endlag: 22, damage: 7,
       kb: { base: 25, growth: 50, angle: 45 }, hitbox: null, landingLag: 10, projectile: { x: 50, y: -44, speed: 240, life: 3, homing: 2.2, r: 16 },
@@ -337,7 +337,7 @@ const DUO_MOVESET = {
         say: duoSay('🔔 sent', f, 12, 36),
       }),
     },
-    upSpecial: { // streak freeze: raise both wings, slam them down, and a block of ice shoots up out of the floor ahead, launching whoever's
+    upSpecial: { name: 'Streak Freeze', // streak freeze: raise both wings, slam them down, and a block of ice shoots up out of the floor ahead, launching whoever's
       // standing there. Ground or air (in the air it bursts up from Duo's feet)
       input: 'up + B (V / L), ground or air', startup: 8, active: 6, endlag: 22, damage: 10, kb: { base: 40, growth: 75, angle: 85 },
       hitbox: { x: 24, y: -84, w: 48, h: 84 }, landingLag: 12,
@@ -354,7 +354,7 @@ const DUO_MOVESET = {
         say: f >= 8 && f < 36 ? [...duoSay('🧊 streak freeze equipped', f, 8, 36), 16] : null,
       }),
     },
-    downSpecial: { // streak mode: a streak meter fills while Duo fights (streak.fill s, a flame bursting up behind it when it's full). Full,
+    downSpecial: { name: 'Streak Mode', // streak mode: a streak meter fills while Duo fights (streak.fill s, a flame bursting up behind it when it's full). Full,
       // this strains, swells and bursts it into buff Duo for streak.time s, the meter draining as it goes: its hits do mult × damage and kb × knockback out of
       // hitboxes size × as big, it takes heavy × the knockback, and its attacks turn into punches (buffed, below). Not full: a warning.
       // Losing a stock loses the streak
@@ -379,7 +379,7 @@ const DUO_MOVESET = {
     },
   },
   grabs: { // throws use Claw'd's throwAnim: the target rides carry until the release frame, say = [before, after] it
-    grab: { ...DUO_GR.grab, // lean in and clamp the front wing round whatever's there
+    grab: { ...DUO_GR.grab, name: 'Wing Clamp', // lean in and clamp the front wing round whatever's there
       anim: f => ({
         ...tween(f, [
           [0, {}],
@@ -392,7 +392,7 @@ const DUO_MOVESET = {
         blink: f >= 9 && f < 16 ? 0.5 : 0,
       }),
     },
-    dashGrab: { ...DUO_GR.dashGrab, // out of a run: dives in wing-first and slides on the momentum
+    dashGrab: { ...DUO_GR.dashGrab, name: 'Wing Dive', // out of a run: dives in wing-first and slides on the momentum
       anim: f => ({
         ...tween(f, [
           [0, { y: -3, rot: 0.12 }], // = run frame 0
@@ -411,7 +411,7 @@ const DUO_MOVESET = {
         return { ...DUO_HOLD, rot: -0.04 + 0.02 * b, sx: 1.02 + 0.01 * b, sy: 0.98 - 0.01 * b, carry: [52, -4 + b, 0] };
       },
     },
-    pummel: { ...DUO_GR.pummel, // *peck*: a quick headbutt
+    pummel: { ...DUO_GR.pummel, name: 'Peck', // *peck*: a quick headbutt
       anim: f => ({
         ...tween(f, [
           [0, DUO_HOLD],
@@ -422,7 +422,7 @@ const DUO_MOVESET = {
         blink: f >= 5 && f < 9 ? 0.8 : 0, say: ['*peck*', Math.max(0, Math.min(1, f / 3, (16 - f) / 4))],
       }),
     },
-    forwardThrow: { ...DUO_GR.forwardThrow, // skip this lesson? no.: rear back and shove it away
+    forwardThrow: { ...DUO_GR.forwardThrow, name: 'Skip Lesson', // skip this lesson? no.: rear back and shove it away
       anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['skip this lesson?', '✗ no.'], keys: [
         [0, DUO_HOLD],
         [7, { x: -4, rot: -0.18, sx: 0.94, sy: 1.06, arm: [-8, -6], legs: duoFeet([2, 0], [1, 0]), carry: [42, -8, -0.15] }],
@@ -431,7 +431,7 @@ const DUO_MOVESET = {
         [29, {}],
       ], extra: f => ({ speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
     },
-    backThrow: { ...DUO_GR.backThrow, // you missed a day: hoist it overhead with both wings and heave it over backwards
+    backThrow: { ...DUO_GR.backThrow, name: 'Missed A Day', // you missed a day: hoist it overhead with both wings and heave it over backwards
       anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['you missed a day…', '↶ back to day 0'], keys: [
         [0, DUO_HOLD],
         [6, { rot: -0.1, sx: 0.92, sy: 1.1, arm: -44, carry: [28, -62, -0.8] }],
@@ -441,7 +441,7 @@ const DUO_MOVESET = {
         [37, {}],
       ] }),
     },
-    upThrow: { ...DUO_GR.upThrow, // lesson complete!: crouch under it, then fling it skyward with a big flap
+    upThrow: { ...DUO_GR.upThrow, name: 'Lesson Complete', // lesson complete!: crouch under it, then fling it skyward with a big flap
       anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['lesson complete!', '⬆ +20 XP'], keys: [
         [0, DUO_HOLD],
         [8, { sx: 1.16, sy: 0.84, arm: [4, 2], legs: duoFeet([-3, 0], [3, 0]), carry: [48, 0, 0] }],
@@ -451,7 +451,7 @@ const DUO_MOVESET = {
         [35, {}],
       ] }),
     },
-    downThrow: { ...DUO_GR.downThrow, // spanish or vanish: lift it overhead and slam it into the floor, where it bounces up
+    downThrow: { ...DUO_GR.downThrow, name: 'Spanish Or Vanish', // spanish or vanish: lift it overhead and slam it into the floor, where it bounces up
       anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['spanish or vanish.', '💥 vanished'], keys: [
         [0, DUO_HOLD],
         [6, { y: -6, rot: -0.05, sx: 0.9, sy: 1.12, arm: -44, carry: [30, -62, 0] }],
@@ -465,7 +465,7 @@ const DUO_MOVESET = {
   // hanging on with both wings hooked over the lip: Claw'd's ledge moves with the wings swung twice as far (four times reaches past the top)
   ledge: {
     ...duoBorrow('ledge', 2),
-    ledgeAttack: { ...MOVESET.ledge.ledgeAttack, // haul up, land in a crouch and sweep the front wing low along the stage
+    ledgeAttack: { ...MOVESET.ledge.ledgeAttack, name: 'Back To Class', // haul up, land in a crouch and sweep the front wing low along the stage
       anim: f => {
         const p = duoize(MOVESET.ledge.ledgeAttack.anim, 2)(f);
         if (f >= 13) p.arm = tween(f, [[13, { arm: [0, 8] }], [16, { arm: [-8, -16] }], [20, { arm: [-8, -16] }], [28, { arm: [-2, -4] }], [36, { arm: [0, 0] }]]).arm;
@@ -474,7 +474,7 @@ const DUO_MOVESET = {
     },
   },
   defense: {
-    shield: { ...MOVESET.defense.shield, // Do Not Disturb: crouch behind a phone held up in front, eyes peeking over it. Its battery runs down
+    shield: { ...MOVESET.defense.shield, name: 'Focus Mode', // Do Not Disturb: crouch behind a phone held up in front, eyes peeking over it. Its battery runs down
       // as the shield wears (the game passes the wear; the preview drains it over the hold)
       anim: f => {
         const brace = { sx: 1.14, sy: 0.74, arm: [4, -30], legs: duoFeet([-2, 0], [2, 0]), ph: 1 };
@@ -483,7 +483,7 @@ const DUO_MOVESET = {
         return { ...p, ph: undefined, phone: p.ph > 0.05 ? [16, -22, p.ph, -0.08] : null, blink: f >= 3 && f < 52 ? 0.3 : 0, wear: Math.min(1, Math.max(0, (f - 4) / 46)) };
       },
     },
-    shieldBreak: { ...MOVESET.defense.shieldBreak, // the battery ran out: the screen dies, the phone tumbles away, Duo pops up and lands dizzy
+    shieldBreak: { ...MOVESET.defense.shieldBreak, name: 'Dead Battery', // the battery ran out: the screen dies, the phone tumbles away, Duo pops up and lands dizzy
       anim: f => ({
         ...duoize(MOVESET.defense.shieldBreak.anim)(f), shatter: null,
         phone: f < 24 ? [16 + 2 * f, -22 - 4 * f + 0.35 * f * f, 1 - f / 24, 0.25 * f, true] : null,
@@ -501,7 +501,7 @@ const DUO_MOVESET = {
         return p.blast ? { ...p, blast: [...p.blast, DUO, (x, y, r) => drawHeart(x, y, r / 13)] } : p;
       },
     },
-    respawn: { ...MOVESET.reactions.respawn, say: '🔧 streak repaired', // lowered back in on the platform
+    respawn: { ...MOVESET.reactions.respawn, name: 'Streak Repaired', say: '🔧 streak repaired', // lowered back in on the platform
       anim: f => ({ ...duoize(MOVESET.reactions.respawn.anim)(f), say: ['🔧 streak repaired', f < 100 ? Math.min(1, f / 10) : 0] }),
     },
   },

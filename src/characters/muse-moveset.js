@@ -8,17 +8,27 @@
 // "Time for a break?". The dodges are Snoo's.
 // Snoo's grabs on Muse's wider body: its back arm, reaching forward, stretches further to get round the body to the foe too, a
 // little higher than the front one so both show
-const MUSE_GRABS = Object.fromEntries(Object.entries(SNOO_MOVESET.grabs).map(([k, m]) => [k, { ...m, anim: (f, n) => {
+const MUSE_GRABS = Object.fromEntries(Object.entries(SNOO_MOVESET.grabs).map(([k, m]) => [k, { ...m, name: undefined, anim: (f, n) => {
   const p = m.anim(f, n), arm = Array.isArray(p.arm) ? p.arm : [p.arm || 0, p.arm || 0];
   return Array.isArray(p.reach) && p.reach[0] > 0 ? { ...p, reach: [p.reach[0] + 30, p.reach[1]], arm: [arm[0] - 5, arm[1]] } : p;
 } }]));
+// Snoo's names carry Reddit branding (votes, karma…) that doesn't fit Muse; give a group copies with Muse's own names, or strip to none
+const named = (set, names) => Object.fromEntries(Object.entries(set).map(([k, m]) => [k, { ...m, name: names[k] }]));
 const MUSE_MOVESET = {
-  movement: SNOO_MOVESET.movement, groundAttacks: SNOO_MOVESET.groundAttacks, aerials: SNOO_MOVESET.aerials, ledge: SNOO_MOVESET.ledge,
+  movement: SNOO_MOVESET.movement,
+  groundAttacks: named(SNOO_MOVESET.groundAttacks, { // Snoo's moves under Muse's own names: its votes become likes / hearts
+    jab1: 'Plush Punch', jab2: 'Boop Boop', jab3: 'Fuzzy Headbutt', dashAttack: 'Fluff Slide', forwardTilt: 'Tiny Kick',
+    upTilt: 'Like Whip', downTilt: 'Heart Sweep', getupAttack: 'Wake-Up Scroll',
+  }),
+  aerials: named(SNOO_MOVESET.aerials, {
+    neutralAir: 'Reel Spin', forwardAir: 'Fluff Chop', backAir: 'Swipe Back', upAir: 'Like Flip', downAir: 'Heart Spike',
+  }),
+  ledge: SNOO_MOVESET.ledge,
   // hold the button to charge (chargeFrames, chargeMult, chargeAt as Snoo's)
   smashAttacks: {
     forwardSmash: { // llama kick: Muse points ahead and a llama pops in in front of it, facing it; it crouches, rear down (charge
       // holds here, frame 12: lower the longer it charges), then bucks both back legs out forward while Muse cheers, and poofs off
-      input: 'heavy (X / K), hold to charge', startup: 16, active: 4, endlag: 30, damage: 16, kb: { base: 34, growth: 100, angle: 38 },
+      name: 'Llama Kick', input: 'heavy (X / K), hold to charge', startup: 16, active: 4, endlag: 30, damage: 16, kb: { base: 34, growth: 100, angle: 38 },
       hitbox: { x: 40, y: -56, w: 72, h: 50 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 12,
       anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none)
         const p = tween(f, [
@@ -39,13 +49,13 @@ const MUSE_MOVESET = {
     },
     upSmash: { // Instagram story: Snoo's crouch (charge holds, frame 8) and spring up, arms high, and its story ring bursts open
       // overhead with Muse's face in it, launching whatever's above or beside it
-      ...SNOO_MOVESET.smashAttacks.upSmash, hitbox: { x: -42, y: -156, w: 84, h: 156 },
+      ...SNOO_MOVESET.smashAttacks.upSmash, name: 'Insta Story', hitbox: { x: -42, y: -156, w: 84, h: 156 },
       anim: (f, n, c) => { const { bigvote, ...p } = SNOO_MOVESET.smashAttacks.upSmash.anim(f, n, c); return { ...p, story: f >= 11 && f < 38 ? (f - 11) / 27 : null }; },
     },
     downSmash: { // Beat Saber: pulls on a Quest headset and lights a saber in each hand as a red and a blue cube slide in either
       // side, raises both crossed overhead (charge holds here, frame 8), then slashes both down and out at once, slicing the cubes.
       // Hits both sides; knockback goes away from Muse
-      input: 'down + heavy (X / K), hold to charge', startup: 12, active: 5, endlag: 22, damage: 14, kb: { base: 30, growth: 96, angle: 25 },
+      name: 'Beat Saber', input: 'down + heavy (X / K), hold to charge', startup: 12, active: 5, endlag: 22, damage: 14, kb: { base: 30, growth: 96, angle: 25 },
       hitbox: { x: -84, y: -60, w: 168, h: 60 }, both: true, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => {
         const wide = [[-4, 0], [0, 0], [0, 0], [4, 0]];
@@ -74,7 +84,7 @@ const MUSE_MOVESET = {
     neutralSpecial: { // spark stream: draws both hands back, thrusts them out together and streams Muse sparks from between them,
       // hitting over and over, short range. Hold B to keep it going (loop: frames 10 … 22 play over, for up to chargeFrames in
       // all), shorter the longer it goes, like Bowser's fire breath
-      input: 'B (V / L), no direction · hold to keep it going, ground or air', startup: 8, active: 16, endlag: 18, damage: 1.2, every: 4,
+      name: 'Spark Stream', input: 'B (V / L), no direction · hold to keep it going, ground or air', startup: 8, active: 16, endlag: 18, damage: 1.2, every: 4,
       kb: { base: 8, growth: 10, angle: 30 }, hitbox: { x: 40, y: -56, w: 72, h: 36 }, grow: { w: -26 }, landingLag: 10,
       hold: 'special', loop: [10, 22], chargeFrames: 120,
       anim: (f, n, c = 0) => { // c = 0 … 1 of the stream spent (the game passes it; the viewer shows none)
@@ -87,7 +97,7 @@ const MUSE_MOVESET = {
     },
     sideSpecial: { // Facebook poke: draws the front arm back, then shoots it out far ahead, finger first, and pokes; whoever it gets
       // wears a "Muse poked you!" for a moment
-      input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 3, endlag: 26, damage: 7, kb: { base: 25, growth: 60, angle: 35 },
+      name: 'Poke', input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 3, endlag: 26, damage: 7, kb: { base: 25, growth: 60, angle: 35 },
       hitbox: { x: 56, y: -46, w: 70, h: 24 }, landingLag: 12, sticker: { secs: 1.2, draw: drawPokeNote },
       anim: f => ({
         ...tween(f, [
@@ -104,7 +114,7 @@ const MUSE_MOVESET = {
     },
     upSpecial: { // birthday balloons: a bunch pops up in its raised hands and floats it up (steer with ← →), bumping whatever's above;
       // they burst at the top (the last, bigger hit) and it falls helpless
-      input: 'B (V / L) + ↑, ground or air · steer with ← → · falls helpless after', startup: 6, active: 40, endlag: 6, damage: 2, every: 10,
+      name: 'Birthday Balloons', input: 'B (V / L) + ↑, ground or air · steer with ← → · falls helpless after', startup: 6, active: 40, endlag: 6, damage: 2, every: 10,
       kb: { base: 20, growth: 20, angle: 85 }, finisher: { damage: 5, kb: { base: 40, growth: 60, angle: 88 } },
       hitbox: { x: -34, y: -150, w: 68, h: 76 }, landingLag: 16, burst: { vy: -330, frames: 40 }, helpless: true,
       anim: f => {
@@ -116,7 +126,7 @@ const MUSE_MOVESET = {
     },
     downSpecial: { // Meta AI, imagine: a prompt pops up over Muse ("Imagine a piano", or a duck, a cake, an anvil: a random pick),
       // it dreams it up high ahead of itself, then points, and down it drops on whoever's there
-      input: 'B (V / L) + ↓, ground or air', startup: 24, active: 5, endlag: 20, damage: 13, kb: { base: 35, growth: 75, angle: 65 },
+      name: 'Imagine…', input: 'B (V / L) + ↓, ground or air', startup: 24, active: 5, endlag: 20, damage: 13, kb: { base: 35, growth: 75, angle: 65 },
       hitbox: { x: 30, y: -72, w: 56, h: 72 }, landingLag: 12, pick: MUSE_IMAGINE,
       anim: (f, n, c, pick = 0) => ({
         ...tween(f, [
@@ -136,23 +146,25 @@ const MUSE_MOVESET = {
   grabs: { // Snoo's grab, dash grab, hold and throws (their votes come out as likes and hearts), with Meta's labels on top
     ...MUSE_GRABS,
     pummel: { // nods and bonks it, and a like pops up
-      ...MUSE_GRABS.pummel,
+      ...MUSE_GRABS.pummel, name: 'Like Bonk',
       anim: f => ({ ...MUSE_GRABS.pummel.anim(f), vote: f >= 5 ? [44, -84, (f - 5) / 11, 1] : null }),
     },
     forwardThrow: { // sets it down, winds up and swats it away: shared
-      ...MUSE_GRABS.forwardThrow,
+      ...MUSE_GRABS.forwardThrow, name: 'Shared!',
       anim: f => ({ ...MUSE_GRABS.forwardThrow.anim(f), tag: f >= 12 && f < 32 ? ['Shared!', 64, -82, (f - 12) / 20, META] : null }),
     },
     backThrow: { // hoists it up over its head and heaves it over backwards: unfriended
-      ...MUSE_GRABS.backThrow,
+      ...MUSE_GRABS.backThrow, name: 'Unfriended',
       anim: f => ({ ...MUSE_GRABS.backThrow.anim(f), tag: f >= 16 && f < 36 ? ['Unfriended', -66, -76, (f - 16) / 20, '#65676b'] : null }),
     },
+    upThrow: { ...MUSE_GRABS.upThrow, name: 'Like Toss' }, // tosses it up and springs after it: a like this time
+    downThrow: { ...MUSE_GRABS.downThrow, name: 'Heart Slam' }, // slams it down into the floor: a heart this time
   },
   defense: {
     ...SNOO_MOVESET.defense,
     shield: { // doomscrolling: a giant phone stands up in front of it like a riot shield and it hunches behind it, glassy-eyed,
       // flicking the feed up its screen with a finger (in the game it shrinks, cracks, thins out and fades as the shield wears down)
-      input: 'hold dodge (Shift / Z)', frames: 60,
+      name: 'Doomscroll', input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const hunch = { rot: 0.1, sx: 1.04, sy: 0.94, swing: [0.3, 1.25], arm: [2, 0], blink: 0.55, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]], shield: 1 };
         const p = tween(f, [[0, {}], [4, hunch], [50, hunch], [57, {}], [60, {}]]);
@@ -161,14 +173,14 @@ const MUSE_MOVESET = {
       },
     },
     shieldBreak: { // the feed scatters, it pops up flailing and lands dizzy: Instagram tells it to take a break
-      ...SNOO_MOVESET.defense.shieldBreak, oops: [['Time for a break?', "you've been scrolling for a while"]],
+      ...SNOO_MOVESET.defense.shieldBreak, name: 'Feed Break', oops: [['Time for a break?', "you've been scrolling for a while"]],
       anim: f => ({ ...SNOO_MOVESET.defense.shieldBreak.anim(f), oopsMsg: ['Time for a break?', "you've been scrolling for a while"] }),
     },
   },
   reactions: {
     ...SNOO_MOVESET.reactions,
     respawn: { // lowered in on the platform, saying hi
-      ...SNOO_MOVESET.reactions.respawn, say: "Hi, I'm Muse!",
+      ...SNOO_MOVESET.reactions.respawn, name: undefined, say: "Hi, I'm Muse!",
       anim: f => { const p = SNOO_MOVESET.reactions.respawn.anim(f); return { ...p, say: ["Hi, I'm Muse!", p.say[1]] }; },
     },
   },

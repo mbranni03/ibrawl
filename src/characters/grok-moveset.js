@@ -31,6 +31,7 @@ const GROK_MOVESET = {
   // Frame data and fields as in clawd-moveset.js; hitboxes fit the 52 x 56 ball
   groundAttacks: {
     jab1: { // quick headbutt: rock back, snap the front of the ball forward
+      name: 'Quick Bonk',
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 20, y: -46, w: 30, h: 26 },
       anim: f => ({
@@ -46,6 +47,7 @@ const GROK_MOVESET = {
       }),
     },
     jab2: { // second headbutt, hopping into it so it lands higher
+      name: 'High Bonk',
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
       hitbox: { x: 18, y: -62, w: 30, h: 30 },
       anim: f => ({
@@ -61,6 +63,7 @@ const GROK_MOVESET = {
       }),
     },
     jab3: { // finisher: coil back, then throw itself into one full forward roll and bowl through
+      name: 'Strike Roll',
       input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 16, y: -52, w: 42, h: 46 },
       anim: f => {
@@ -81,6 +84,7 @@ const GROK_MOVESET = {
       },
     },
     dashAttack: { // cannonball: tuck in tight out of the run and roll two full turns through them, sliding on the momentum
+      name: 'Cannonball',
       input: 'light while running', startup: 6, active: 10, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 50 },
       hitbox: { x: 4, y: -52, w: 52, h: 50 },
       anim: f => {
@@ -101,6 +105,7 @@ const GROK_MOVESET = {
       },
     },
     forwardTilt: { // body check: lean back tall, then slam in stretched sideways
+      name: 'Body Check',
       input: 'forward + light', step: 260, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 22, y: -46, w: 42, h: 38 },
       anim: f => ({
@@ -116,6 +121,7 @@ const GROK_MOVESET = {
       }),
     },
     upTilt: { // squash, then spring straight up and bonk it with the top of the ball; lands with a bounce
+      name: 'Top Bonk',
       input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -16, y: -98, w: 54, h: 42 },
       anim: f => ({
@@ -132,6 +138,7 @@ const GROK_MOVESET = {
       }),
     },
     downTilt: { // from the crouch: flatten into a pancake and skid in low along the floor
+      name: 'Pancake Slide',
       input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: 22, y: -22, w: 42, h: 20 },
       anim: f => ({
@@ -147,6 +154,7 @@ const GROK_MOVESET = {
       }),
     },
     getupAttack: { // from upside down: rock, flip upright, and spin in place like a top, clearing both sides. Can't be hurt until it hits
+      name: 'Top Spin',
       input: 'light / heavy (from knockdown)', startup: 12, active: 6, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -60, y: -40, w: 120, h: 40 }, both: true, intangible: [0, 12],
       anim: f => ({
@@ -169,6 +177,7 @@ const GROK_MOVESET = {
   smashAttacks: {
     forwardSmash: { // Community Note: rear back while a note types itself out overhead (more of it the longer the charge), then headbutt
       // the card into them. The hitbox is the card, reaching past the ball; it stays stuck on whoever it hits for a moment
+      name: 'Community Note',
       input: 'heavy (X / K), hold to charge', step: 240, startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 100, angle: 38 },
       hitbox: { x: 24, y: -64, w: 66, h: 50 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 10,
       sticker: { secs: 1.2, draw: (x, y, rot, a) => drawStuckNote(x, y, rot, a) },
@@ -197,6 +206,7 @@ const GROK_MOVESET = {
     },
     upSmash: { // Trending: squash down, then spray a fountain of X posts up out of its top. Anyone above gets carried up the column
       // by a hit every `every` frames (damage / kb), and the last one (finisher) launches them
+      name: 'Trending',
       input: 'up + heavy (X / K), hold to charge', startup: 10, active: 25, every: 5, endlag: 22, damage: 1.5, kb: { base: 22, growth: 0, angle: 90 },
       finisher: { damage: 6, kb: { base: 34, growth: 100, angle: 90 } },
       hitbox: { x: -38, y: -160, w: 76, h: 130 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 7,
@@ -218,6 +228,7 @@ const GROK_MOVESET = {
     },
     downSmash: { // The Boring Company: spin up like a drill (faster with charge) and screw down into the floor, spraying dirt both ways
       // (a small hit), then tunnel: steered with ← →, or left alone it digs on ahead; pops out as tunnelOut (burrow: in index.html)
+      name: 'The Boring Company',
       input: 'down + heavy (X / K), hold to charge · ← → steer underground, attack / jump to pop out', startup: 12, active: 4, endlag: 8,
       damage: 4, kb: { base: 40, growth: 30, angle: 75 }, hitbox: { x: -56, y: -22, w: 112, h: 22 }, both: true,
       chargeFrames: 60, chargeMult: 1.4, chargeAt: 7, burrow: { out: 'tunnelOut', speed: 300, dist: 200, max: 90 }, // px/s · px dug if not steered · frames under at most
@@ -235,6 +246,7 @@ const GROK_MOVESET = {
       },
     },
     tunnelOut: { // bursting back up out of the tunnel with an uppercut, both sides; keeps the down smash's charge
+      name: 'Breakout',
       input: 'end of the down smash tunnel', startup: 4, active: 5, endlag: 26, damage: 13, kb: { base: 32, growth: 98, angle: 80 },
       hitbox: { x: -34, y: -84, w: 68, h: 84 }, both: true, chargeFrames: 60, chargeMult: 1.4,
       anim: f => {
@@ -261,6 +273,7 @@ const GROK_MOVESET = {
   // and the throw after hits mult × harder (damage and knockback), the stamp riding along on them for a moment
   grabs: {
     grab: { // eyes light up and a beam shoots out ahead; a whiff lets it fizzle back
+      name: 'Tractor Beam',
       input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -58, w: 72, h: 46 }, grab: true,
       anim: f => {
         const ext = f < 3 ? 0 : f < 6 ? (f - 3) / 3 : f < 9 ? 1 : Math.max(0, 1 - (f - 9) / 8);
@@ -271,6 +284,7 @@ const GROK_MOVESET = {
       },
     },
     dashGrab: { // out of a run: skids in, beam first, sliding on the momentum
+      name: 'Beam Dash',
       input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -58, w: 84, h: 46 }, grab: true,
       anim: f => {
         const ext = f < 5 ? 0 : f < 9 ? (f - 5) / 4 : f < 12 ? 1 : Math.max(0, 1 - (f - 12) / 10);
@@ -290,6 +304,7 @@ const GROK_MOVESET = {
       },
     },
     pummel: { // "@grok is this true?": the beam flares and zaps them. Each one is a reply toward the ratio
+      name: 'Fact Check',
       input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
       anim: f => ({
         ...beamed(tween(f, [
@@ -302,6 +317,7 @@ const GROK_MOVESET = {
       }),
     },
     forwardThrow: { // Repost: the beam swings them round in a loop, a green repost arrow circling with them, and flings them on ahead
+      name: 'Repost',
       input: 'forward (holding)', startup: 14, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
       anim: f => beamed(throwAnim({ at: 14, n: 33, fly: [13, -5, 0.2], say: ['↻ repost', 'reposted'], keys: [
         [0, GHOLD],
@@ -314,6 +330,7 @@ const GROK_MOVESET = {
       ], extra: f => ({ repost: f < 16 ? [f / 16, 60, -64] : null, speed: f >= 14 && f < 20 ? 0.6 : 0 }) })(f)),
     },
     backThrow: { // Blocked: swings them up over its head and down behind, and a block sign slams onto them as they go
+      name: 'Blocked',
       input: 'back (holding)', startup: 14, active: 1, endlag: 22, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: f => beamed(throwAnim({ at: 14, n: 37, fly: [-12, -4, -0.15], say: ['🚫 block', 'blocked'], keys: [
         [0, GHOLD],
@@ -325,6 +342,7 @@ const GROK_MOVESET = {
       ], extra: f => ({ blocked: f >= 14 && f < 40 ? [(f - 14) / 26, -120 - 4 * (f - 14), -70] : null }) })(f)),
     },
     upThrow: { // Going viral: lifts them overhead in the beam, then hearts burst up under them and the likes count races them skyward
+      name: 'Going Viral',
       input: 'up (holding)', startup: 14, active: 1, endlag: 21, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: f => beamed(throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['📈 going viral', '♥ 1.2M'], keys: [
         [0, GHOLD],
@@ -336,6 +354,7 @@ const GROK_MOVESET = {
       ], extra: f => ({ hearts: f >= 12 && f < 40 ? [(f - 12) / 28, 0, -160] : null }) })(f)),
     },
     downThrow: { // Steamroll: drops them flat on the floor, rolls right over them and back, and they pop up flattened
+      name: 'Steamroll',
       input: 'down (holding)', startup: 16, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: f => {
         const p = beamed(throwAnim({ at: 16, n: 36, fly: [3, -9, 0.3], say: ['steamroll', 'flattened'], keys: [
@@ -356,7 +375,7 @@ const GROK_MOVESET = {
   defense: {
     shield: { // a verified bubble pops up round it, ✓ badge up front; it hunkers down inside, eyes squeezed (the game shrinks, fades and
       // cracks the bubble as the shield wears down)
-      ...MOVESET.defense.shield,
+      ...MOVESET.defense.shield, name: 'Verified',
       anim: f => {
         const brace = { sx: 1.08, sy: 0.9, shield: 1 };
         const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
@@ -365,7 +384,7 @@ const GROK_MOVESET = {
       },
     },
     shieldBreak: { // the bubble pops: Grok's flung up, lands dizzy with a "rate limit exceeded"-style toast (mash to shake it off sooner)
-      ...MOVESET.defense.shieldBreak,
+      ...MOVESET.defense.shieldBreak, name: 'Rate Limited',
       oops: [['rate limit exceeded', '429 · too many requests'], ['verification revoked', '✓ removed · subscription lapsed'], ['grok is at capacity', 'try again in a few minutes']],
       anim: f => {
         const p = tween(f, [
@@ -540,7 +559,7 @@ const GROK_MOVESET = {
         : { air: -100, blast: [(f - 20) / 60, Math.PI - 0.6], blastDraw: (x, y, t, ang) => drawGrokBlast(x, y, t, ang) }, // right on the edge it left by
     },
     respawn: { // lowered in on the platform (an X on its front); stands there until any input, then drops
-      ...MOVESET.reactions.respawn, say: '> grok: back online', mark: (x, y, r) => drawXMark(x, y, r),
+      ...MOVESET.reactions.respawn, name: 'Back Online', say: '> grok: back online', mark: (x, y, r) => drawXMark(x, y, r),
       anim: f => { const p = MOVESET.reactions.respawn.anim(f); return { ...p, say: p.say && ['> grok: back online', p.say[1]], padMark: (x, y, r) => drawXMark(x, y, r) }; },
     },
   },
@@ -548,6 +567,7 @@ const GROK_MOVESET = {
   // drawn with a preview-only air: -40 like Claw'd's; rot always ends on a whole turn so the eyes land back on the front
   aerials: {
     neutralAir: { // spin in place twice, fast then easing off: the whole ball is the hitbox
+      name: 'Double Spin',
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -36, y: -64, w: 72, h: 70 }, landingLag: 8,
       anim: f => {
@@ -559,6 +579,7 @@ const GROK_MOVESET = {
       },
     },
     forwardAir: { // front flip: rear back, then bring the top of the ball over and down onto whatever's in front
+      name: 'Front Flip',
       input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
       hitbox: { x: 14, y: -58, w: 46, h: 52 }, landingLag: 10,
       anim: f => {
@@ -578,6 +599,7 @@ const GROK_MOVESET = {
       },
     },
     backAir: { // hurl itself backwards and squash its back into them, eyes still facing forward
+      name: 'Back Slam',
       input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -64, y: -52, w: 40, h: 44 }, landingLag: 9,
       anim: f => ({
@@ -593,6 +615,7 @@ const GROK_MOVESET = {
       }),
     },
     upAir: { // stretch tall and headbutt straight up, tipped back so the top of the ball leads
+      name: 'Rising Bonk',
       input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -28, y: -104, w: 56, h: 50 }, landingLag: 7,
       anim: f => ({
@@ -608,6 +631,7 @@ const GROK_MOVESET = {
       }),
     },
     downAir: { // cannonball: curl up, then plunge bottom-first, stretched like a dropped water balloon. Spikes
+      name: 'Water Balloon',
       input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -28, y: -16, w: 56, h: 30 }, landingLag: 14,
       anim: f => ({
@@ -629,6 +653,7 @@ const GROK_MOVESET = {
     neutralSpecial: { // Grok Imagine: hold B and a card overhead counts up as it generates (a sparkle beside it); let go (or hit 100%)
       // and it flings the picture, a polaroid of some AI slip-up (six fingers, three eyes, a melting clock). The longer the charge, the
       // bigger the picture and the harder it hits: damage × chargeMult and projectile.r × (1 + grow) at 100%. Ground or air
+      name: 'Grok Imagine',
       input: 'B (V / L), no direction · hold to charge, let go to throw · ground or air', state: 'imagine', hold: 'special', keepOnLand: true,
       startup: 12, active: 1, endlag: 18, damage: 4, kb: { base: 20, growth: 60, angle: 30 }, chargeFrames: 90, chargeMult: 3, chargeAt: 8, landingLag: 6,
       projectile: { x: 40, y: -32, speed: 620, life: 0.8, r: 13, grow: 0.9, draw: (x, y, r, spin, sh) => drawImagined(x, y, r, sh.t, Math.sign(sh.vx) || 1, sh.pic || 0) },
@@ -651,6 +676,7 @@ const GROK_MOVESET = {
       // up there. Held overheat frames past a full charge, it blows up under Grok instead: selfDamage to Grok, helpless.
       // flight: speed = [tap, full] px/s · turn = radians / frame steering in flight · tilt = the most it can lean then · fall = max px/s
       // sinking while charging in the air · aimTurn = radians / frame swinging the aim while charging, aimMax = how far · wreck: r = blast reach px, life = seconds before it blows on its own, coast = seconds it keeps flying straight, then gravity scale · mid = px up to the ship's middle
+      name: 'Starship',
       input: 'up + B (V / L), ground or air · hold to charge, let go to launch · ← → steer · B to bail', state: 'rocket',
       startup: 0, active: 40, endlag: 0, damage: 5, kb: { base: 30, growth: 50, angle: 70 }, hitbox: { x: -32, y: -112, w: 64, h: 112 },
       chargeFrames: 50, overheat: 70, selfDamage: 8, landingLag: 14,
@@ -675,6 +701,7 @@ const GROK_MOVESET = {
     },
     downSpecial: { // Neuralink: fire a chip that plugs into the first one it hits (a little damage, no knockback) and stays in, light
       // blinking. Down special again while a chip is in anyone: neuralZap. One chip at a time
+      name: 'Neuralink',
       input: 'down + B (V / L), ground or air · again to zap', state: 'neuralink', zap: 'neuralZap', startup: 10, active: 1, endlag: 16,
       damage: 2, kb: { base: 0, growth: 0, angle: 0 }, landingLag: 6,
       projectile: { x: 30, y: -36, speed: 700, life: 0.45, r: 7, draw: (x, y, r, spin, sh) => drawChipShot(x, y, r, sh.t, Math.sign(sh.vx) || 1) },
@@ -691,6 +718,7 @@ const GROK_MOVESET = {
       }),
     },
     neuralZap: { // the chip goes off: Grok's eyes flash, and wherever the chipped one is, it's zapped (knockback away from Grok)
+      name: 'Neural Zap',
       input: 'down + B with a chip in someone', startup: 8, active: 1, endlag: 20, damage: 10, kb: { base: 45, growth: 75, angle: 75 }, landingLag: 8,
       detonate: { secs: 0.45, draw: (x, y, rot, a) => drawZap(x, y, rot, a) },
       anim: f => ({
@@ -711,6 +739,7 @@ const GROK_MOVESET = {
       // One truck at a time. In the game the summon (startup) hands off to the ride; active / endlag here only pace the viewer's
       // preview of a ride and a hop out. ride: w, h = the truck's box · speed = [start, top] px/s, accel px/s² · bed, bedY = where a
       // scooped target rides, px behind / above its middle-bottom · scoop / ram = the hits with and without Grok at the wheel
+      name: 'Autopilot',
       input: 'B (V / L) + a direction, ground or air · jump to bail out', startup: 12, active: 24, endlag: 20, landingLag: 8,
       ride: { w: 116, h: 46, speed: [260, 720], accel: 1100, life: 2.2, bed: 36, bedY: 18,
         scoop: { carry: 0.35, damage: 12, kb: { base: 55, growth: 70, angle: 50 } }, ram: { damage: 8, kb: { base: 35, growth: 60, angle: 35 } } },
