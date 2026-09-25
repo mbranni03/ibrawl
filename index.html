@@ -161,7 +161,7 @@ let bricks = []; // Lego Man's loose bricks: boxes that tumble out and lie on th
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
 // every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
 // doesn't have yet (attacks, specials, grabs, defense, ledge) is simply off for it · jumps = air jumps · flap = air jump speed ·
-// glide = max fall speed holding jump · pad = draws its own respawn platform (pose.pad) · controls = its own descriptions for rows of the controls screen, by keys. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
+// glide = max fall speed holding jump · pad = draws its own respawn platform (pose.pad). draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
 const FIGHTER = {
   clawd: { name: "Claw'd", box: [60, 50], art: drawClawd, set: MOVESET },
   grok: { name: 'Grok Bot', box: [52, 56], art: drawGrok, set: GROK_MOVESET },
@@ -169,9 +169,7 @@ const FIGHTER = {
   android: { name: 'Android', box: [50, 64], art: drawAndroid, set: ANDROID_MOVESET },
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: SNOO_MOVESET },
-  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true, controls: { // his rows on the controls screen, where they differ
-    'X / K': 'heavy, hold for more bricks: brick hammer · + ↑: tower · + ↓: loose bricks · in the air: same aerials as light',
-    'V / L': 'special · booklet: ↑ ↓ pick a build, special: buy it with studs · + ← →: head boomerang · + ↑: staircase · + ↓: fall-apart counter' } },
+  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
   random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
@@ -212,26 +210,28 @@ function newFighter(f, x, y) {
 }
 const everyone = () => [...fighters.map(c => c.P), ...bags], inPlay = () => everyone().filter(p => p.state !== 'ko'); // anyone who can be hit · what the camera frames
 restart(); // Claw'd and the bag, behind the home screen
-const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', Space: 'jump',
-                 ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyG: 'grab', KeyI: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge (held on the ground: shield, like Smash): Z / Shift
+// key bindings: two sets, both live at once, changed on the controls screen and kept in the 'keys' cookie (a slot can be
+// empty: null). Brawlhalla-style light / heavy: J K (WASD) · C X (arrows); special L / V; grab I / G; dodge (held on the ground: shield, like Smash) Shift / Z
+const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'heavy', 'special', 'grab', 'dodge'];
+const DEFAULT_BINDS = [
+  { left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', jump: 'Space', attack: 'KeyJ', heavy: 'KeyK', special: 'KeyL', grab: 'KeyI', dodge: 'ShiftLeft' },
+  { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', jump: 'Space', attack: 'KeyC', heavy: 'KeyX', special: 'KeyV', grab: 'KeyG', dodge: 'KeyZ' }];
+const MENU_NAV = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }; // menus always take the arrows, whatever they're bound to
+let binds, KEYMAP; // KEYMAP = key code → action
+function setBinds(b, save) { // b's slots (anything missing or not a key code: the default), then KEYMAP from them
+  binds = DEFAULT_BINDS.map((d, s) => Object.fromEntries(ACTIONS.map(a => { const k = b?.[s]?.[a]; return [a, typeof k === 'string' || k === null ? k : d[a]]; })));
+  KEYMAP = {}; for (const set of binds) for (const a of ACTIONS) if (set[a]) KEYMAP[set[a]] ??= a;
+  if (save) document.cookie = `keys=${encodeURIComponent(JSON.stringify(binds))}; max-age=31536000; path=/; SameSite=Lax`;
+}
+try { setBinds(JSON.parse(decodeURIComponent(document.cookie.match(/(?:^|; )keys=([^;]*)/)?.[1] ?? 'null'))); } catch { setBinds(); }
+function bindKey(a, s, code) { binds.forEach(set => { for (const b of ACTIONS) if (set[b] === code && b !== a) set[b] = null; }); binds[s][a] = code; setBinds(binds, true); } // a key does one thing: it leaves any other action it was on
+const KEY_NAMES = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ShiftLeft: 'Shift', ShiftRight: 'R Shift', ControlLeft: 'Ctrl', ControlRight: 'R Ctrl', AltLeft: 'Alt', AltRight: 'R Alt', MetaLeft: 'Cmd', MetaRight: 'R Cmd' };
+const keyName = c => c ? KEY_NAMES[c] ?? c.replace(/^(Key|Digit)/, '') : '—';
 // ---------- pause menu ----------
 const MENU = ['resume', 'controls', 'restart', 'quit'], HOME_MENU = ['play', 'characters', 'controls'];
-// controls screen: two columns of [heading, [[keys, what they do], …]]; descriptions wrap at the ' · ' breaks
-const CONTROLS = [
-  [['move', [['← → / A D', 'walk · double-tap to run'], ['Space', 'jump · tap for a short hop · again in the air'],
-             ['↓ / S', 'crouch (+ ← → crawl) · tap: drop through a platform · hold in the air: fall through them · double-tap in the air: fast fall'],
-             ['on a ledge', '↑ / toward: climb · ↓ / away: let go · Space: jump · C / X: attack · dodge: roll']]],
-   ['defend', [['Shift / Z', 'hold: shield · + ← →: roll · + ↓: spot dodge · in the air: dodge any way, once per jump'],
-               ['tumbling', 'Shift / Z just before landing: tech · + ← →: tech roll'], ['knocked down', 'any key: get up · ← →: roll away · C / X: getup attack']]]],
-  [['attack', [['C / J', 'light: jab combo · + ← →: forward tilt · + ↑ ↓: tilts · running: dash attack · in the air: aerials'],
-               ['X / K', 'heavy, hold to charge: forward smash · + ↑: terminal uppercut · + ↓: /compact · in the air: same aerials as light'],
-               ['V / L', 'special · hold: think, up to ultrathink · + ← →: spark · + ↑: MCP tether · + ↓: subagent']]],
-   ['grab', [['G / I', 'grab · running: dash grab · or shield + C / J'], ['holding', 'C / J: pummel · ← → ↑ ↓: throw']]],
-   ['menu', [['Esc', 'pause']]]],
-];
-let paused = true, sel = 0, showControls = false, over = false, home = true, picking = false, vsT = null, menu = HOME_MENU; // boots to the home screen · picking = character select (after play) · vsT = when the vs screen started (after picking)
+let paused = true, sel = 0, showControls = false, keyEdit = null, over = false, home = true, picking = false, vsT = null, menu = HOME_MENU; // boots to the home screen · picking = character select (after play) · vsT = when the vs screen started (after picking)
 function setPaused(on) {
-  paused = on; sel = 0; showControls = false; over = false; home = false; picking = false; vsT = null; menu = MENU;
+  paused = on; sel = 0; showControls = false; keyEdit = null; over = false; home = false; picking = false; vsT = null; menu = MENU;
   for (const k in keys) keys[k] = false; jumpQ = downQ = dropQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = grabQ = techQ = techLock = false;
 }
 function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
@@ -305,17 +305,23 @@ function legoBuild(m) {
 function mechFit(on) { const [w, h] = fighter.box, k = on ? MECH_K : 1; P.x += (P.w - w * k) / 2; P.y += P.h - h * k; P.w = w * k; P.h = h * k; }
 function popMech() { P.mech = 0; mechFit(false); booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); }
 function choose(i) {
-  if (menu[i] === 'controls') showControls = true;
+  if (menu[i] === 'controls') { showControls = true; keyEdit = { r: 0, c: 0, wait: false }; } // keyEdit = the slot picked, wait = for its new key
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
   else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; lvls = []; sides = []; focus = 0; onBand = false; } // character select first, from scratch
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
-  if (e.code === 'Escape') { e.preventDefault(); if (showControls) showControls = false; else if (vsT != null) { vsT = null; picking = true; } else if (picking) picking = false; else if (!over && !home) setPaused(!paused); return; }
+  if (e.code === 'Escape') { e.preventDefault(); if (keyEdit?.wait) keyEdit.wait = false; else if (showControls) showControls = false; else if (vsT != null) { vsT = null; picking = true; } else if (picking) picking = false; else if (!over && !home) setPaused(!paused); return; }
   if (paused) {
-    const a = KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
-    if (showControls) { if (ok) showControls = false; }
+    const a = MENU_NAV[e.code] ?? KEYMAP[e.code], ok = e.code === 'Enter' || e.code === 'Space';
+    if (keyEdit?.wait) { bindKey(ACTIONS[keyEdit.r], keyEdit.c, e.code); keyEdit.wait = false; } // the key pressed for the slot waiting on one
+    else if (showControls) { // ↑ ↓ ← → move between the slots (and reset below them), Enter / Space change one
+      if (a === 'up' || a === 'down') keyEdit.r = (keyEdit.r + (a === 'up' ? ACTIONS.length : 1)) % (ACTIONS.length + 1);
+      else if (a === 'left' || a === 'right') keyEdit.c ^= 1;
+      else if (ok) keyEdit.r === ACTIONS.length ? setBinds(DEFAULT_BINDS, true) : keyEdit.wait = true;
+      else return;
+    }
     else if (vsT != null) { if (ok) fight(); else return; } // skip ahead
     else if (picking) { if (!pickKey(e.code, a)) return; }
     else if (a === 'up') sel = (sel + menu.length - 1) % menu.length;
@@ -360,12 +366,19 @@ function menuAt(e) {
   return paused && !showControls && !picking && vsT == null && Math.abs(x - W / 2) < 120 && i >= 0 && i < menu.length ? i : -1;
 }
 cv.addEventListener('mousemove', e => {
-  const i = menuAt(e), p = picking && selectAt(...at(e)); if (i >= 0) sel = i;
+  const i = menuAt(e), p = picking && selectAt(...at(e)), k = paused && showControls && slotAt(...at(e)); if (i >= 0) sel = i;
+  if (k && !keyEdit.wait) Object.assign(keyEdit, k);
   if (p?.tile != null) { focus = p.tile; onBand = false; } else if (p?.ready) onBand = true; // hover moves the keyboard focus too
-  cv.style.cursor = i >= 0 || p ? 'pointer' : '';
+  cv.style.cursor = i >= 0 || p || k ? 'pointer' : '';
 });
 cv.addEventListener('click', e => {
-  if (paused && showControls) { showControls = false; return; }
+  if (paused && showControls) { // a click on a slot waits for its key, off them goes back
+    const k = slotAt(...at(e));
+    if (k?.r === ACTIONS.length) { keyEdit.r = k.r; setBinds(DEFAULT_BINDS, true); }
+    else if (k) Object.assign(keyEdit, k, { wait: true });
+    else if (keyEdit.wait) keyEdit.wait = false; else showControls = false;
+    return;
+  }
   if (vsT != null) { fight(); return; }
   if (picking) { // character select hot spots (drawn in drawSelect)
     const p = selectAt(...at(e));
@@ -1393,14 +1406,14 @@ const idleAt = (t, k = 0) => M.idle.anim((Math.floor(t * 60) + 47 * k) % 120, 12
 function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
   if (home) ctx.clearRect(0, 0, W, H);
-  else { ctx.fillStyle = `rgba(38,35,31,${showControls ? 0.94 : 0.8})`; ctx.fillRect(0, 0, W, H); } // near-solid behind the dense controls text
+  else { ctx.fillStyle = `rgba(38,35,31,${showControls ? 0.94 : 0.8})`; ctx.fillRect(0, 0, W, H); } // near-solid behind the controls
   if (picking) return drawSelect(t);
   if (vsT != null) return drawVersus((performance.now() - vsT) / 1000);
   ctx.fillStyle = ctx.strokeStyle = home ? INK : '#efe7d6'; ctx.textAlign = 'center';
   if (home && !showControls) {
     drawTitle(t);
   } else if (!showControls) { ctx.font = '700 84px Caveat, cursive'; ctx.fillText(over ? (over === 'win' ? 'victory!' : 'defeat') : 'paused', W / 2, H / 2 - 70); }
-  if (showControls) drawControls(home ? INK : '#efe7d6');
+  if (showControls) drawKeys(home ? INK : '#efe7d6');
   else {
     ctx.font = '600 40px Caveat, cursive';
     menu.forEach((m, i) => {
@@ -1409,7 +1422,7 @@ function drawPause(t) {
     });
   }
   ctx.globalAlpha = 0.6; ctx.font = '600 22px Caveat, cursive'; // key hints (none on the home screen)
-  if (showControls || !home) ctx.fillText(showControls ? 'Esc / Enter / click  back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 250);
+  if (showControls || !home) ctx.fillText(showControls ? keyEdit?.wait ? `press a key for ${ACTION_NAMES[ACTIONS[keyEdit.r]]} · Esc cancel` : '↑ ↓ ← → choose · Enter / click  change · Esc back' : '↑ ↓ choose · Enter / Space / click select' + (over ? '' : ' · Esc resume'), W / 2, showControls ? H - 34 : H / 2 + 250);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
 }
 
@@ -1601,34 +1614,29 @@ function drawSelect(t) {
   ctx.textAlign = 'left';
 }
 
-// the controls screen: title, then each column's sections (heading + rule, then keys in orange beside their wrapped description)
-function drawControls(fg) {
-  ctx.font = '700 72px Caveat, cursive'; ctx.textAlign = 'center'; ctx.fillText('controls', W / 2, 92);
-  CONTROLS.forEach((col, c) => {
-    const x = c ? 690 : 110; let y = 158;
-    for (const [head, rows] of col) {
-      ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'left'; ctx.font = '700 30px Caveat, cursive';
-      ctx.fillText(head, x, y); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.35; line(x, y + 8, x + 480, y + 8, 1, 1); y += 38;
-      for (const [k, d0] of rows) {
-        const d = fighter.controls?.[k] ?? d0; // a fighter's own description for the row
-        ctx.globalAlpha = 1; ctx.fillStyle = CLAWD; ctx.textAlign = 'right'; ctx.font = '700 24px Caveat, cursive'; ctx.fillText(k, x + 118, y);
-        ctx.globalAlpha = 0.8; ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.font = '600 23px Caveat, cursive';
-        for (const l of wrap(d, 350)) { ctx.fillText(l, x + 132, y); y += 26; }
-        y += 8;
-      }
-      y += 14;
-    }
-  });
-  ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'center';
+// the controls screen: a row per action with its two slots (KEYS_AT.x[set], row y = KEYS_AT.y + r * KEYS_AT.dy), then reset under them
+const KEYS_AT = { x: [560, 800], y: 200, dy: 40, w: 190, h: 34 }, ACTION_NAMES = { attack: 'light' };
+function slotAt(x, y) {
+  const r = Math.round((y + 8 - KEYS_AT.y) / KEYS_AT.dy), c = KEYS_AT.x.findIndex(cx => Math.abs(x - cx) < KEYS_AT.w / 2);
+  if (r === ACTIONS.length + 1 && Math.abs(x - 680) < KEYS_AT.w / 2) return { r: ACTIONS.length, c: 0 }; // reset (a row's gap below the slots)
+  return r >= 0 && r < ACTIONS.length && c >= 0 && Math.abs(y + 8 - KEYS_AT.y - r * KEYS_AT.dy) < KEYS_AT.h / 2 ? { r, c } : null;
 }
-// split text into lines no wider than w, breaking only between ' · ' parts
-function wrap(text, w) {
-  const out = [];
-  for (const part of text.split(' · ')) {
-    const t = out.length ? out[out.length - 1] + ' · ' + part : part;
-    if (out.length && ctx.measureText(t).width <= w) out[out.length - 1] = t; else out.push(part);
-  }
-  return out;
+function drawKeys(fg) {
+  const { x: X, y: Y, dy, w, h } = KEYS_AT, box = (cx, y, on) => { ctx.globalAlpha = on ? 1 : 0.25; ctx.strokeStyle = on ? CLAWD : fg; ctx.lineWidth = on ? 2.6 : 1.4; ctx.beginPath(); ctx.roundRect(cx - w / 2, y - 25, w, h, 6); ctx.stroke(); };
+  ctx.font = '700 72px Caveat, cursive'; ctx.textAlign = 'center'; ctx.fillText('controls', W / 2, 92);
+  ctx.font = '700 30px Caveat, cursive'; ctx.globalAlpha = 0.8; X.forEach((cx, s) => ctx.fillText(`keys ${s + 1}`, cx, Y - 42));
+  ACTIONS.forEach((a, r) => {
+    const y = Y + r * dy;
+    ctx.globalAlpha = 0.8; ctx.fillStyle = fg; ctx.textAlign = 'right'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText(ACTION_NAMES[a] ?? a, X[0] - w / 2 - 24, y);
+    X.forEach((cx, s) => {
+      const on = keyEdit.r === r && keyEdit.c === s, waiting = on && keyEdit.wait;
+      box(cx, y, on); ctx.globalAlpha = 1; ctx.fillStyle = waiting ? fg : CLAWD; ctx.textAlign = 'center'; ctx.font = '700 26px Caveat, cursive';
+      ctx.fillText(waiting ? 'press a key…' : keyName(binds[s][a]), cx, y);
+    });
+  });
+  const y = Y + (ACTIONS.length + 1) * dy, on = keyEdit.r === ACTIONS.length;
+  box(680, y, on); ctx.globalAlpha = on ? 1 : 0.8; ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.font = '700 26px Caveat, cursive'; ctx.fillText('reset to defaults', 680, y);
+  ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg;
 }
 
 let last = performance.now(), acc = 0;
