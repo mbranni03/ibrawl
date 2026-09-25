@@ -78,6 +78,7 @@
 <script src="../src/characters/duo-moveset.js"></script>
 <script src="../src/characters/snoo.js"></script>
 <script src="../src/characters/lego.js"></script>
+<script src="../src/characters/lego-moveset.js"></script>
 <script>
 const VW = 480, VH = 270, SCALE = 2, GROUND = 200;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -102,7 +103,7 @@ const FIGHTERS = {
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
   duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: basic, draw: drawSnoo, fx: drawClawdFx },
-  lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
+  lego: { name: 'Lego Man', moves: { ...basic, ...LEGO_MOVESET }, draw: drawLego, fx: drawClawdFx, hurt: (p = {}) => ({ x: (p.x || 0) - 22 * (p.sx ?? 1), y: (p.y || 0) - 72 * (p.sy ?? 1), w: 44 * (p.sx ?? 1), h: 72 * (p.sy ?? 1) }) },
 };
 
 // character picker: a button showing the fighter, opening a list of them all, each with a little portrait
@@ -194,9 +195,17 @@ function drawFigure(fr) {
   }
   if (F.fx) F.fx(0, 0, pose);
   if (pose.carry) drawSack(pose.carry[0], air + pose.carry[1], pose.carry[2]); // grabbed bag, behind the claws
+  if (move.step) { const S = move.step, n = Math.floor(Math.max(0, fr - move.startup) / S.every), dx = move.drive * S.every / 60; for (let k = 1; k <= Math.min(n, move.active / S.every); k++) drawLegoPlate({ x: 6 - S.w / 2 - (n - k) * dx, y: move.anim(move.startup + k * S.every).air, w: S.w, h: S.h, col: k % 4 }); } // the staircase so far
   F.draw(0, air, pose);
+  if (move.toss && st >= 0) { const T = move.toss, tb = T.speed / T.decel, u = Math.min(st, 2 * tb); if (st < 2 * tb) drawLegoHead({ x: T.x + T.speed * u - T.decel * u * u / 2, y: air + T.y, rot: st * 22, face: 1 }); } // out and (preview: straight) back
+  if (move.builds) drawLegoBooklet(0, air - 84, move.builds.map(k => LEGO_MOVESET.specials[k]), Math.floor(fr / 20) % move.builds.length, Math.min(1, fr / move.open), 45); // Lego Man's pick list (with 45 studs), the pick stepping down
+  if (move.launch && st >= 0) { const L = move.launch, v = Math.min(L.speed[1], L.speed[0] + L.accel * st), tt = (v - L.speed[0]) / L.accel; drawLegoRocket({ x: L.x + L.speed[0] * tt + L.accel * tt * tt / 2 + v * (st - tt), y: air + L.y, dir: 1 }); } // flying off (no target to burst on here)
   const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
   if (pr && st >= 0) drawSpark(pr.x + pr.speed * st, air + pr.y, SPARK_R, st * 14);
+  if (move.scatter && st >= 0) for (let k = 0; k < move.scatter.count; k++) { // loose bricks (uncharged): arc out, land, slide to a stop
+    const [vx, vy] = scatterVel(k, 0), g = 2300, tl = (-vy + Math.sqrt(vy * vy + 2 * g * 19)) / g, ts = Math.max(0, Math.min(st - tl, vx / 1800)), t = Math.min(st, tl);
+    drawLooseBrick({ x: 14 + vx * t + vx * ts - 900 * ts * ts, y: Math.min(-7, -26 + vy * t + g * t * t / 2), w: 12, h: 7, rot: st < tl ? (8 + 5 * (k % 3)) * st : 0, col: k % 4 });
+  }
   if (!$('boxes').checked || !F.hurt) return;
   if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - SPARK_R, y: air + pr.y - SPARK_R, w: 2 * SPARK_R, h: 2 * SPARK_R }, BOX, 'rgba(224,82,58,0.18)');
   const hurt = F.hurt(pose); hurt.y += air;
