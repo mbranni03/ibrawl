@@ -5,6 +5,14 @@ const scatterVel = (k, c) => [140 + k * (55 + 35 * c), -220 - 60 * (k % 3)];
 // his crouch: plastic doesn't squash, so he sits down on the floor like a real minifig, legs straight out in front, leaning in
 const SIT = { y: 14, rot: 0.1, kick: [-1.67, 1.67], swing: [0.35, 0.8] }; // the kick keeps his legs level under the lean
 const seat = a => 21 - 21 * Math.cos(a) - 6.5 * Math.sin(a); // how far his hips drop so legs turned a (from hanging) still touch the floor
+// holding a grabbed target in the front clip, out at arm's length, leaning back a touch
+const LHOLD = { rot: -0.04, swing: [0.35, 1.2], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]], carry: [46, -4, 0] };
+// a throw: keys carry the target up to the release frame `at`; after it (preview only: the game has let go) it flies on at
+// fly = [vx, vy, spin] per frame, falling. extra(f) adds to the pose (and can steer carry before the release)
+const legoThrow = ({ keys, at, fly: [vx, vy, spin], extra }) => f => {
+  const p = tween(f, keys), h = tween(at, keys).carry, t = f - at;
+  return { ...p, carry: t < 0 ? p.carry : t < 18 ? [h[0] + vx * t, h[1] + vy * t + 0.5 * t * t, h[2] + spin * t] : null, ...extra?.(f) };
+};
 const LEGO_MOVESET = {
   movement: {
     ...MOVESET.movement,
@@ -303,6 +311,88 @@ const LEGO_MOVESET = {
         ...tween(f, [[0, { swing: 0.7 }], [18, { swing: 1.3, kick: 0.3 }], [22, { swing: 1.3, kick: 0.3 }], [37, {}]]),
         apart: f < 9 ? f / 9 : f < 18 ? 1 - (f - 9) / 9 : 0, puff: f >= 18 ? (f - 18) / 10 : null,
       }),
+    },
+  },
+
+  // grab = a hit that catches instead (the game then holds it: hold / pummel / a throw by direction). carry = [dx, dy, rot] where
+  // the held target's bottom-centre sits, from his feet
+  grabs: {
+    grab: { // the front C-clip snaps out and clicks shut on them; a whiff clicks on nothing
+      input: 'grab (G / U)', startup: 6, active: 3, endlag: 22, hitbox: { x: 14, y: -52, w: 38, h: 44 }, grab: true,
+      anim: f => tween(f, [
+        [0, {}],
+        [4, { x: -2, rot: -0.06, swing: [0.2, 0.4] }],
+        [6, { x: 5, rot: 0.12, swing: [0.5, 1.5], legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [9, { x: 5, rot: 0.12, swing: [0.5, 1.45], legs: [[-4, 0], [0, 0], [0, 0], [3, 0]] }],
+        [16, { x: 3, rot: 0.06, swing: [0.3, 1] }],
+        [31, {}],
+      ]),
+    },
+    dashGrab: { // out of a run: dives in clip-first and slides on the momentum
+      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 14, y: -52, w: 56, h: 44 }, grab: true,
+      anim: f => ({
+        ...tween(f, [
+          [0, { rot: 0.12 }],
+          [5, { x: -2, rot: -0.04, swing: [0.2, 0.3] }],
+          [9, { x: 12, y: -2, rot: 0.3, swing: [0.8, 1.6], kick: [0.5, 0], legs: [[-8, 0], [0, 0], [0, 0], [4, 0]] }],
+          [12, { x: 14, rot: 0.28, swing: [0.8, 1.55], kick: [0.45, 0], legs: [[-8, 0], [0, 0], [0, 0], [4, 0]] }],
+          [24, { x: 8, rot: 0.1, swing: [0.3, 1] }],
+          [40, {}],
+        ]),
+        dust: f >= 9 && f < 21 ? (f - 9) / 12 : null,
+      }),
+    },
+    hold: { // got them in the front clip, held out at arm's length, leaning back against the weight
+      input: 'grab connects', frames: 60, breakFree: 90, perDmg: 1.2,
+      anim: (f, n = 60) => { const b = Math.sin(f / n * Math.PI * 4); return { ...LHOLD, rot: -0.04 + 0.02 * b, swing: [0.35, 1.2 + 0.03 * b], carry: [46, -4 + b, 0] }; },
+    },
+    pummel: { // a headbutt into them
+      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      anim: f => tween(f, [[0, LHOLD], [4, { ...LHOLD, rot: -0.14 }], [5, { ...LHOLD, x: 3, rot: 0.24, blink: 1, carry: [48, -4, 0.06] }], [16, LHOLD]]),
+    },
+    forwardThrow: { // discus: turns once on the spot with them at arm's length (flipping round, side-on in between) and hurls them ahead
+      input: 'forward (holding)', startup: 14, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 30 },
+      anim: legoThrow({ at: 14, fly: [14, -3, 0.25], keys: [[0, LHOLD], [14, { ...LHOLD, x: 4, rot: 0.14, swing: [0.4, 1.5], carry: [52, -10, 0.3] }], [18, { x: 4, rot: 0.1, swing: [0.4, 1.5] }], [32, {}]],
+        extra: f => { // the turn: the target swings round behind him and back out front
+          if (f >= 14) return {};
+          const e = f / 14, a = 2 * Math.PI * e * e * (3 - 2 * e), c = Math.cos(a);
+          return { sx: (c < 0 ? -1 : 1) * (0.35 + 0.65 * Math.abs(c)), carry: [48 * c, -8, 0.3 * a / (2 * Math.PI)] };
+        } }),
+    },
+    backThrow: { // backflip suplex: springs up and flips over backwards, carrying them up over his head to slam down behind him
+      input: 'back (holding)', startup: 14, active: 1, endlag: 22, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      anim: legoThrow({ at: 14, fly: [-10, -3, -0.2], keys: [
+        [0, LHOLD],
+        [4, { ...LHOLD, y: 2, rot: 0.05, swing: [0.4, 1.8], carry: [40, -20, -0.3] }],
+        [9, { y: -26, rot: -2.2, swing: [2.4, 2.8], kick: 0.3, carry: [-6, -84, -1.9] }],
+        [14, { y: -14, rot: -4.2, swing: [2.6, 3.2], kick: 0.3, carry: [-54, -10, -3] }],
+        [22, { y: 0, rot: -2 * Math.PI, swing: 0.6 }],
+        [36, { rot: -2 * Math.PI }],
+      ] }),
+    },
+    upThrow: { // stud click: hoists them up and clicks them onto his head stud like a hat, then pops his head up and fires them off
+      input: 'up (holding)', startup: 16, active: 1, endlag: 18, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      anim: legoThrow({ at: 16, fly: [0, -14, 0.05], keys: [
+        [0, LHOLD],
+        [6, { ...LHOLD, swing: [2.4, 2.6], carry: [18, -60, 0] }],
+        [9, { swing: [2.7, 2.7], carry: [0, -73, 0] }],
+        [14, { y: 1, swing: [0.4, 0.4], carry: [0, -73, 0] }],
+        [16, { y: -3, swing: [0.9, 0.9], headLift: 9, carry: [0, -84, 0] }],
+        [22, { swing: 0.5, headLift: 2 }],
+        [34, {}],
+      ] }),
+    },
+    downThrow: { // plonk: throws them down flat in front of him, hops up and sits down hard on them; they bounce up out from under him
+      input: 'down (holding)', startup: 16, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      anim: legoThrow({ at: 16, fly: [2, -9, 0.1], keys: [
+        [0, LHOLD],
+        [6, { ...LHOLD, swing: [0.4, 1.9], carry: [44, -24, 0.6] }],
+        [9, { rot: 0.2, swing: [0.3, 1], carry: [50, 16, Math.PI / 2] }],
+        [12, { x: 22, y: -30, swing: 1, kick: [-1, 1], carry: [50, 16, Math.PI / 2] }],
+        [16, { x: 44, y: -28, rot: 0.1, kick: [-1.67, 1.67], swing: [0.35, 0.8], carry: [50, 16, Math.PI / 2] }],
+        [24, { x: 30, y: 4, kick: [-1.3, 1.3], swing: 0.6 }],
+        [36, {}],
+      ], extra: f => ({ puff: f >= 16 ? (f - 16) / 10 : null }) }),
     },
   },
 

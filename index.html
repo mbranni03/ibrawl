@@ -56,7 +56,7 @@ const has = group => !!fighter.set[group];
 const AIR_JUMPS = () => fighter.jumps || 1;
 const L = MOVESET.ledge, JABS = ['jab1', 'jab2', 'jab3'];
 const NO_KB = { base: 0, growth: 0, angle: 0 }; // damage only: the target stays put
-const GR = MOVESET.grabs, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws
+const GR = { ...MOVESET.grabs }, THROWS = ['forwardThrow', 'backThrow', 'upThrow', 'downThrow']; // holding the bag: hold / pummel / throws (the fighter in play's: a copy, swapped in on the vs screen)
 const SIDE_B = MOVESET.specials.sideSpecial, DOWN_B = MOVESET.specials.downSpecial; // usable on the ground and in the air, so they live in both maps
 const ATK = { ...MOVESET.groundAttacks, ...MOVESET.smashAttacks, sideSpecial: SIDE_B, downSpecial: DOWN_B, grab: GR.grab, dashGrab: GR.dashGrab }, AIR = { ...MOVESET.aerials, sideSpecial: SIDE_B, downSpecial: DOWN_B }; // attack states are named after their move
 const NEUTRAL_B = MOVESET.specials.neutralSpecial; // held charge, no hitbox yet
@@ -144,6 +144,7 @@ const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTE
 function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; [P.w, P.h] = fighter.box;
   for (const o of [ATK, MOVES]) Object.assign(o, MOVESET.groundAttacks, fighter.set.groundAttacks, MOVESET.smashAttacks, fighter.set.smashAttacks); // its own moves under the same state names
   for (const o of [AIR, MOVES]) Object.assign(o, MOVESET.aerials, fighter.set.aerials);
+  Object.assign(GR, MOVESET.grabs, fighter.set.grabs); for (const k of ['grab', 'dashGrab']) ATK[k] = MOVES[k] = GR[k]; for (const k of ['pummel', ...THROWS]) MOVES[k] = GR[k];
   if (fighter.set.specials !== MOVESET.specials) for (const [k, m] of Object.entries(fighter.set.specials || {})) { // Lego Man's: own state names
     MOVES[k] = m; if (m.startup == null) continue; // the booklet runs itself (bookletStep)
     AIR[k] = m; if (!m.thrust) ATK[k] = m; // the staircase is air-only: it hops off the ground first
@@ -380,7 +381,7 @@ function holdStep(dir) {
 }
 function throwStep() { // lets go on the startup frame
   const m = GR[P.state], b = heldBag();
-  if (P.f === m.startup && b) { b.held = false; hitBag(b, m.damage, m.kb, P.state === 'backThrow' ? -P.face : P.face); }
+  if (P.f === m.startup && b) { b.held = false; b.y = Math.min(b.y, P.y + P.h - b.h); hitBag(b, m.damage, m.kb, P.state === 'backThrow' ? -P.face : P.face); } // never left sunk into the floor (a pose laying it down low), or the stage would shove it out sideways
   if (P.f >= m.startup + m.active + m.endlag) setState('idle');
 }
 
