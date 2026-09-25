@@ -716,7 +716,7 @@ function clawdPose() {
     case 'ledgeRoll': return L.ledgeRoll.anim(Math.min(f, 35));
     case 'shield': case 'shieldDrop': { // the terminal shrinks a little, cracks and fades as the shield wears down
       const p = D.shield.anim(P.state === 'shieldDrop' ? Math.min(50 + f, 59) : f < 4 ? f : 4 + (f - 4) % 46);
-      p.shield *= 0.75 + 0.25 * P.shield; p.wear = 1 - P.shield; return p;
+      if (p.shield) p.shield *= 0.75 + 0.25 * P.shield; p.wear = 1 - P.shield; return p; // (a fighter with its own shield art reads wear)
     }
     case 'shieldBreak': return { ...SB.anim(Math.min(f, SB.frames - 1)), oopsMsg: P.oopsMsg };
     case 'airDodge': { const p = D[P.dodgeAnim].anim(Math.min(f, AD.frames - 1)); p.rot = (p.rot || 0) + P.dodgeTilt * Math.min(1, f / 3, Math.max(0, (AD.frames - f) / 10)); return p; }

@@ -147,8 +147,31 @@ const ANDROID_MOVESET = {
     ]) },
   },
 
-  // dodges only: no shield yet (the game offers one only to a fighter whose defense has it)
   defense: {
+    shield: { ...CLAWD_SET.defense.shield, anim: f => { // hold: crouch inside a battery bubble (the game drains it with the real shield health)
+      const brace = { sx: 1.1, sy: 0.82, swing: [0.7, 0.7], reach: [4, -4], head: [0, 3], legs: [[-2, 0], [-1, 0], [1, 0], [2, 0]] };
+      const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+      if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing
+      return { ...p, bubble: f < 4 ? f / 4 : f < 50 ? 1 : Math.max(0, 1 - (f - 50) / 7), wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // wear: the viewer's run-down
+    } },
+    shieldBreak: { ...CLAWD_SET.defense.shieldBreak, anim: f => { // the bubble pops, it bounces up and lands dizzy: "Unfortunately, Android has stopped."
+      const p = tween(f, [
+        [0, { sx: 0.9, sy: 1.12, swing: [2.4, 2.4], head: [0, -6], blink: 1, legs: legsAll(0, 2) }],
+        [14, { sx: 0.96, sy: 1.05, swing: [1.6, 1.6], head: [0, -3], blink: 1, legs: TUCK }],
+        [28, { sx: 0.94, sy: 1.08, swing: [0.8, 0.8], legs: REACH }],
+        [32, { sx: 1.16, sy: 0.82, swing: [0.3, 0.3] }],
+        [40, { sx: 1.04, sy: 0.94, swing: [0.2, 0.2] }],
+        [140, { sx: 1.04, sy: 0.94, swing: [0.2, 0.2] }],
+        [150, {}],
+      ]);
+      const dizzy = f >= 32 && f < 144, w = Math.sin((f - 32) / 9);
+      return {
+        ...p, air: f < 28 ? -60 * Math.sin(Math.PI * f / 28) : 0, // preview-only pop; the game launches it for real
+        rot: dizzy ? 0.1 * w : 0, head: dizzy ? [3 * w, 1] : p.head, blink: dizzy ? 0.6 : p.blink, dizzy: dizzy ? 0.01 + (f - 32) / 40 : 0,
+        bubblePop: f < 16 ? f / 16 : null, puff: f >= 28 && f < 34 ? (f - 28) / 6 : null,
+        crash: Math.max(0, Math.min(1, (f - 32) / 6, (110 - f) / 10)),
+      };
+    } },
     spotDodge: { ...CLAWD_SET.defense.spotDodge, anim: f => { // screen off in place
       const on = f < 3 ? 0 : f < 6 ? (f - 3) / 3 : f < 16 ? 1 : f < 21 ? 1 - (f - 16) / 5 : 0;
       return f < 3 ? tween(f, [[0, {}], [3, { sx: 1.1, sy: 0.88, head: [0, 2] }]]) : screenOff(on);

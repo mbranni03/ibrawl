@@ -12,6 +12,8 @@
 //     circle = [x, y, r, drawn 0 … 1, alpha] a Circle to Search scribble · captcha = [x, y, tick 0 … 1, alpha, scale] a reCAPTCHA box
 //     tabs = [x, y, slide -1 … 1, alpha] a Chrome tab strip, the open tab sliding that far (+ = forward) · cloud = [x, y, upload 0 … 1, alpha]
 //     a Drive cloud over an upload bar · trash = [x, y, lid 0 … 1 open, alpha] a trash can, bottom-centre at x, y
+//   bubble = 0 … 1 the shield: a battery bubble round it, shrinking and draining green → yellow → red as wear (0 … 1) grows
+//   bubblePop = 0 … 1 the bubble bursting (shield break) · crash = 0 … 1 the "Android has stopped" dialog over its head
 //   cable = 0 … 1 a USB-C cable plugging into its back · batt = 0 … 1 a battery over its head (bigger, with a bolt, while plugged in)
 //   dino = [x, y, alpha] the Chrome T-rex, bottom-centre x, y px from the feet (it doesn't lean with the body)
 //   earth = 0 … 1 a shockwave spreading along the floor both ways, throwing up map tiles (past 1: settling, gone at 1.8)
@@ -80,6 +82,42 @@ function drawAndroid(cx, bottom, pose = {}, face = 1) {
   if (pose.captcha) drawCaptcha(...at(pose.captcha));
   if (pose.tabs) { const [x, y, slide, a] = at(pose.tabs); drawTabStrip(x, y, slide * face, a); }
   if (pose.cloud) drawDriveCloud(...at(pose.cloud));
+  const mid = [cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 30]; // the middle of the body, where the bubble sits
+  if (pose.bubble > 0.02) androidBubble(...mid, pose.bubble, 1 - (pose.wear || 0));
+  if (pose.bubblePop != null) androidBubblePop(...mid, pose.bubblePop);
+  if (pose.crash > 0) androidCrash(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 104, pose.crash);
+}
+
+// the shield: a see-through bubble centred at x, y, grown in to size 0 … 1, shrinking and going from green through yellow to red as
+// the charge left (level 0 … 1) runs down, with a battery meter sitting on its rim showing that level
+const levelColor = level => level < 0.25 ? GOOGLE[1] : level < 0.55 ? GOOGLE[2] : ANDROID;
+function androidBubble(x, y, size, level) {
+  const r = 44 * size * (0.72 + 0.28 * level), c = levelColor(level);
+  ctx.save(); ctx.strokeStyle = c; ctx.fillStyle = c;
+  ctx.globalAlpha *= 0.2; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill();
+  ctx.globalAlpha /= 0.2; ctx.lineWidth = 2.6; ellipse(x, y, r, r, 0.6);
+  ctx.strokeStyle = '#fff'; ctx.globalAlpha *= 0.8; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(x, y, r * 0.8, -2.6, -1.9); ctx.stroke(); // shine
+  ctx.restore();
+  if (size > 0.5) androidBattery(x, y - r, level, false);
+}
+// the bubble bursting at x, y as t runs 0 … 1: a red ring flying out and fading, with droplets shooting off it
+function androidBubblePop(x, y, t) {
+  if (t >= 1) return;
+  const r = 34 + 40 * t;
+  ctx.save(); ctx.globalAlpha *= 1 - t; ctx.strokeStyle = GOOGLE[1]; ctx.lineWidth = 3 * (1 - t) + 1; ellipse(x, y, r, r, 1.2);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+  for (let k = 0; k < 8; k++) { const a = k / 8 * 6.28 + 0.3; line(x + Math.cos(a) * (r + 4), y + Math.sin(a) * (r + 4), x + Math.cos(a) * (r + 12), y + Math.sin(a) * (r + 12), 0.5, 1); }
+  ctx.restore();
+}
+// the classic (Holo-era) crash dialog, centred at x, y, faded to a: dark card, the message, a blue rule and an OK button
+function androidCrash(x, y, a) {
+  ctx.save(); ctx.globalAlpha *= Math.min(1, a); ctx.translate(x, y);
+  ctx.fillStyle = '#282828'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(-66, -22, 132, 44, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('Unfortunately, Android', 0, -12); ctx.fillText('has stopped.', 0, -2);
+  ctx.fillStyle = '#33b5e5'; ctx.fillRect(-66, 7, 132, 1.2); // the Holo blue rule
+  ctx.fillStyle = '#fff'; ctx.font = '700 8px sans-serif'; ctx.fillText('OK', 0, 14.5);
+  ctx.restore();
 }
 
 // Circle to Search: a glowing scribble in Google's colours looping round x, y, drawn that far (a little past a full turn), over a white glow
@@ -153,12 +191,12 @@ function drawTrash(x, y, lid, alpha = 1) {
   ctx.restore();
 }
 
-// a battery icon centred at x, y, filled to level 0 … 1 (red when nearly empty), with a lightning bolt while charging
+// a battery icon centred at x, y, filled to level 0 … 1 (yellow when low, red nearly empty), with a lightning bolt while charging
 function androidBattery(x, y, level, charging) {
   const w = charging ? 28 : 18, h = w / 2;
   ctx.save(); ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineJoin = 'round';
   ctx.fillStyle = PAPER; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 2.5); ctx.fill();
-  ctx.fillStyle = level < 0.2 ? GOOGLE[1] : ANDROID; ctx.fillRect(-w / 2 + 2, -h / 2 + 2, (w - 4) * level, h - 4);
+  ctx.fillStyle = levelColor(level); ctx.fillRect(-w / 2 + 2, -h / 2 + 2, (w - 4) * level, h - 4);
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 2.5); ctx.stroke();
   ctx.fillStyle = INK; ctx.fillRect(w / 2, -h / 4, 2.5, h / 2); // nub
   if (charging) { ctx.fillStyle = GOOGLE[2]; ctx.lineWidth = 1; path([[2, -h / 2 - 3], [-4, 1], [0, 1], [-2, h / 2 + 3], [4, -1], [0, -1]]); ctx.fill(); ctx.stroke(); }
