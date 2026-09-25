@@ -43,6 +43,44 @@ const stagePoly = [[240, 500], [1040, 500], [1040, 530], [960, 610], [320, 610],
 const plats = [{ x: 330, y: 375, w: 210 }, { x: 740, y: 375, w: 210 }, { x: 535, y: 255, w: 210 }]; // pass-through
 const BLAST = { l: -220, r: W + 220, t: -360, b: H + 200 };
 
+// ---------- camera ----------
+// Smash-style: frames everyone in play (padded, more room above than below), zooms between zmin and zmax, and eases toward that
+// framing so it never jerks: out fast (keeps up with a launch), back in slowly. It can look out as far as the blast zone, so a fighter
+// flying off is on screen until the moment it's KO'd, but never past it (zmin), so nobody is KO'd in plain view. cam = the world point at screen centre + zoom
+const CAM = { ...BLAST, padX: 260, padUp: 260, padDown: 140, zmin: Math.max(W / (BLAST.r - BLAST.l), H / (BLAST.b - BLAST.t)), zmax: 1.35, pan: 3, zoomIn: 1.6, zoomOut: 6 };
+const cam = { x: W / 2, y: H / 2, z: 1 };
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function stepCam(dt) {
+  if (P.state === 'ko') return; // hold still while the KO blast plays, so it stays where it went out
+  let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
+  for (const o of [P, ...targets]) {
+    const x = clamp(o.x + o.w / 2, CAM.l, CAM.r), y = clamp(o.y + o.h / 2, CAM.t, CAM.b); // someone flying off still only pulls it so far
+    l = Math.min(l, x); r = Math.max(r, x); t = Math.min(t, y); b = Math.max(b, y);
+  }
+  l -= CAM.padX; r += CAM.padX; t -= CAM.padUp; b += CAM.padDown;
+  const z = clamp(Math.min(W / (r - l), H / (b - t)), CAM.zmin, CAM.zmax), rate = z < cam.z ? CAM.zoomOut : CAM.zoomIn;
+  cam.z += (z - cam.z) * (1 - Math.exp(-rate * dt));
+  const k = 1 - Math.exp(-Math.max(CAM.pan, rate) * dt); // pans as fast as it's zooming out
+  const hw = W / 2 / cam.z, hh = H / 2 / cam.z;
+  cam.x += (clamp((l + r) / 2, CAM.l + hw, CAM.r - hw) - cam.x) * k;
+  cam.y += (clamp((t + b) / 2, CAM.t + hh, CAM.b - hh) - cam.y) * k;
+  const [sx, sy] = onScreen();
+  if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) { cam.seen = [sx, sy]; cam.exit = null; } else cam.exit = exitPoint(); // a KO blasts from where they left
+}
+const onScreen = () => [(P.x + P.w / 2 - cam.x) * cam.z + W / 2, (P.y + P.h / 2 - cam.y) * cam.z + H / 2];
+// where P's path crossed the screen's edge on the way out: from the last point it was seen at toward where it is now
+function exitPoint() {
+  if (cam.exit || !cam.seen) return cam.exit;
+  const [ax, ay] = cam.seen, [bx, by] = onScreen(), dx = bx - ax, dy = by - ay;
+  const t = Math.min(dx < 0 ? -ax / dx : dx > 0 ? (W - ax) / dx : 1, dy < 0 ? -ay / dy : dy > 0 ? (H - ay) / dy : 1);
+  return [ax + dx * t, ay + dy * t];
+}
+// world → screen: z scaled around cam; depth < 1 moves less (parallax for the background)
+function view(depth = 1) {
+  const z = 1 + (cam.z - 1) * depth;
+  ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-(W / 2 + (cam.x - W / 2) * depth), -(H / 2 + (cam.y - H / 2) * depth));
+}
+
 // ---------- player ----------
 const G = 2300, RUN = 440, DASH = 600, WALK = 190, CRAWL = 110, JUMP = 930, HOP = 640, AIRJUMP = 820;
 const TURN_SPEED = 1.4; // turnaround plays this much faster than a plain brake
@@ -163,6 +201,7 @@ function setPaused(on) {
 function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
+  Object.assign(cam, { x: W / 2, y: H / 2, z: 1, seen: null, exit: null });
   stocks = STOCKS; fx.length = shots.length = bricks.length = rockets.length = booms.length = 0; sub = cart = wreck = nelly = thrown = null; makeTargets();
   for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); // Lego Man's stairs
   [P.w, P.h] = fighter.box; // out of the mech
@@ -465,7 +504,7 @@ function hitClawd(dmg, kb, dir) {
 
 // crossed the blast zone: freeze, and leave a blast at the screen edge where it went out, pointing back in (the respawn follows)
 function ko() {
-  const x = Math.min(W - 30, Math.max(30, P.x + P.w / 2)), y = Math.min(H - 30, Math.max(30, P.y + P.h / 2));
+  const [ex, ey] = exitPoint() || [W / 2, 0], x = clamp(ex, 30, W - 30), y = clamp(ey, 30, H - 30); // right where it left the screen, nudged in to show
   P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; thrown = null; for (const b of targets) b.held = b.pinned = false; P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
 }
 function respawn() {
@@ -1072,11 +1111,14 @@ function render(t) {
   ctx.drawImage(paper, 0, 0, W, H);
   ctx.lineCap = ctx.lineJoin = 'round';
 
-  // faint pencil background
+  // faint pencil background (far away: follows the camera at half strength)
+  ctx.save(); view(0.5);
   ctx.strokeStyle = INK; ctx.globalAlpha = 0.18; ctx.lineWidth = 1.5;
   ellipse(1040, 150, 62, 62, 2);
   line(40, 470, 330, 440, 3, 1); line(330, 440, 620, 468, 3, 1); line(700, 460, 1000, 430, 3, 1); line(1000, 430, 1240, 462, 3, 1);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 1; ctx.restore();
+
+  ctx.save(); view();
 
   // main stage
   ctx.fillStyle = '#e3d9c6'; path(stagePoly); ctx.fill();
@@ -1120,10 +1162,11 @@ function render(t) {
   // player (flickers after respawn)
   for (const d of fx) d.draw ? d.draw(d.x, d.y, d.t) : drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
-  if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (P.state !== 'ride' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  if (P.state !== 'ride' && P.state !== 'ko' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
   if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
   if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
+  ctx.restore();
+  if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, { ...p, x: 0 }); } // KO blast: on the screen's edge (x = the preview's drift)
 
   // hud
   drawHealth(t);
@@ -1445,10 +1488,11 @@ function wrap(text, w) {
 
 let last = performance.now(), acc = 0;
 function frame(now) {
-  acc += Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.min(0.1, (now - last) / 1000); acc += dt; last = now;
   if (paused) acc = 0;
   if (vsT != null && now - vsT > VS_TIME * 1000) fight();
   while (!paused && acc >= STEP) { update(STEP); acc -= STEP; } // game over can pause mid-frame
+  if (!paused) stepCam(dt); // after the moves, so it frames what's drawn
   cv.style.translate = hitstop > 0 ? `${(Math.random() - 0.5) * 6}px ${(Math.random() - 0.5) * 6}px` : ''; // shake during hit freeze
   render(now / 1000);
   requestAnimationFrame(frame);
