@@ -229,7 +229,7 @@ function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
-  else if (menu[i] === 'play') picking = true; // character select first
+  else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; focus = 0; onBand = false; } // character select first, from scratch
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
