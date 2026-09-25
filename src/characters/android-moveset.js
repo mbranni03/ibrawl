@@ -58,7 +58,7 @@ const A_HOLD = { rot: -0.04, swing: [1.35, 1.25], reach: [30, 4], legs: [[-3, 0]
 // Ledge, defense and reactions keep Claw'd's frame data and root motion (the game moves the fighter by their x / air), so each
 // is his move with Android's own animation: CLAWD_SET = his, by group
 const CLAWD_SET = { ledge: MOVESET.ledge, defense: MOVESET.defense, reactions: MOVESET.reactions };
-const smooth = t => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+const androidEase = t => { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
 // hanging off the ledge: both floating hands hooked over the lip (in the game about 35 px ahead of it, 40 px up), legs dangling
 const A_HANG = { x: -60, air: 40, sy: 1.04, rot: 0.08, swing: [1.95, 1.9], reach: [36, 0], legs: legsAll(0, 3) };
 const A_HAUL = { x: -60, air: 46, sx: 1.06, sy: 0.92, swing: [2.2, 2.1], reach: [36, 2], legs: legsAll(0, 2) }; // dipping to pull up
@@ -124,7 +124,7 @@ const ANDROID_MOVESET = {
         [28, { x: 84, sx: 1.16, sy: 0.8, swing: [0.3, 0.3] }],
         [36, { x: 90 }],
       ]);
-      if (f >= 10 && f < 25) Object.assign(p, { chrome: Math.PI * 2 * smooth((f - 9) / 17) * 1.2, sx: 1, sy: 1 });
+      if (f >= 10 && f < 25) Object.assign(p, { chrome: Math.PI * 2 * androidEase((f - 9) / 17) * 1.2, sx: 1, sy: 1 });
       return { ...p, puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
     } },
     ledgeAttack: { ...CLAWD_SET.ledge.ledgeAttack, anim: f => ({ // haul up with the front arm cocked, drop into a crouch and sweep it low along the stage

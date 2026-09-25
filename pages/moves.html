@@ -73,6 +73,7 @@
 <script src="../src/characters/grok.js"></script>
 <script src="../src/characters/grok-moveset.js"></script>
 <script src="../src/characters/wumpus.js"></script>
+<script src="../src/characters/wumpus-moveset.js"></script>
 <script src="../src/characters/android.js"></script>
 <script src="../src/characters/android-moveset.js"></script>
 <script src="../src/characters/duo.js"></script>
@@ -101,7 +102,7 @@ const withTodo = set => ({ ...todo, ...Object.fromEntries(Object.entries(set).ma
 const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
   grok: { name: 'Grok Bot', moves: withTodo(GROK_MOVESET), draw: drawGrok, fx: drawClawdFx, hurt: grokHurtbox },
-  wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
+  wumpus: { name: 'Wumpus', moves: withTodo(WUMPUS_MOVESET), draw: drawWumpus, fx: drawClawdFx },
   android: { name: 'Android', moves: withTodo(ANDROID_MOVESET), draw: drawAndroid, fx: drawClawdFx, hurt: androidHurtbox },
   duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: withTodo(SNOO_MOVESET), draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
@@ -215,6 +216,7 @@ function drawFigure(fr) {
   if (phaseAt(fr) === 'active' && move.hitbox) { // hitbox is relative to the fighter's bottom-center, facing right
     const hb = typeof move.hitbox === 'function' ? move.hitbox(fr) : move.hitbox; // moving / growing ones: at this frame, full charge
     drawRect({ x: x + hb.x, y: y + hb.y, w: hb.w, h: hb.h }, BOX, 'rgba(224,82,58,0.18)');
+    const sw = move.sweet; if (sw) drawRect({ x: x + sw.x, y: y + sw.y, w: sw.w, h: sw.h }, BOX, 'rgba(224,82,58,0.3)'); // the stronger spot inside it
   }
 }
 

@@ -133,7 +133,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
   if (pose.say) {
     ctx.save(); ctx.globalAlpha *= pose.say[1]; ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK;
     const c = pose.carry, over = c && Math.abs(c[0]) < 45 ? bottom + c[1] - 86 : Infinity; // above a bag carried overhead
-    ctx.fillText(pose.say[0], mx, Math.min(bottom - 78 - (pose.say[2] || 0), over)); ctx.restore();
+    ctx.fillText(pose.say[0], mx, Math.min(bottom + Math.min(0, pose.y || 0) - 78 - (pose.say[2] || 0), over)); ctx.restore(); // rises with a lifted pose
   }
   if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged, pose.flow); }
   if (pose.shatter != null && !pose.body) { // terminal shards burst up and out from where it was held, tumble and fade
@@ -244,7 +244,7 @@ function drawSack(x, y, rot = 0) {
 }
 
 // KO blast: a fan of thick ink / orange rays shooting out toward ang and a big Claude spark, all fading out as t goes 0 → 1
-function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = the rays between the ink ones · mark = what bursts in the middle (x, y, r, spin)
+function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = the rays between the ink ones · mark = what bursts in the middle (x, y, r, spin), false = nothing
   const e = 1 - (1 - Math.min(1, t * 3)) ** 2; // shoots out fast
   ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= Math.min(1, (1 - t) * 2.5);
   for (let k = 0; k < 11; k++) {
@@ -252,7 +252,7 @@ function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = t
     ctx.strokeStyle = k % 2 ? color : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
     line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 1.5, 1);
   }
-  mark(x, y, SPARK_R * (1 + 2 * e), t * 3);
+  if (mark) mark(x, y, SPARK_R * (1 + 2 * e), t * 3);
   ctx.restore();
 }
 
