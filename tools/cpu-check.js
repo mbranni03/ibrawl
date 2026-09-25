@@ -9,7 +9,7 @@ const stub = `var noop = () => {}, bad = (n, ...r) => { if (r.some(v => !(v >= 0
 var checks = { arc: (x, y, r) => bad('arc', r), ellipse: (x, y, rx, ry) => bad('ellipse', rx, ry), createRadialGradient: (a, b, r0, c, d, r1) => (bad('createRadialGradient', r0, r1), { addColorStop: noop }), roundRect: (x, y, w, h, r) => bad('roundRect', ...[].concat(r ?? 0)),
   measureText: () => ({ width: 10, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 10, actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 0 }), getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }), getImageData: () => ({ data: new Uint8ClampedArray(4) }) };
 var ctxStub = new Proxy({}, { get: (t, k) => k in t ? t[k] : checks[k] || (String(k).startsWith('create') ? () => ({ addColorStop: noop }) : noop), set: (t, k, v) => (t[k] = v, true) });
-var fakeCanvas = () => ({ style: {}, getContext: () => ctxStub, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), addEventListener: noop });
+var fakeCanvas = () => ({ style: {}, getContext: () => ctxStub, toBlob: noop, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), addEventListener: noop });
 var document = { getElementById: fakeCanvas, createElement: fakeCanvas }, window = globalThis, addEventListener = noop, requestAnimationFrame = noop, location = {}, Path2D = function () {};`;
 const check = `
 let hardWins = 0, trainedWins = 0, games = 0, kos = 0, sds = 0, errors = [];

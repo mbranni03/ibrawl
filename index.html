@@ -42,7 +42,8 @@ const cv = document.getElementById('c'); ctx = cv.getContext('2d');
 const dpr = Math.min(2, window.devicePixelRatio || 1);
 cv.width = W * dpr; cv.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-const paper = makePaper(W, H, dpr);
+const paper = makePaper(W, H, dpr); // the canvas's CSS background, so frames just clear to it instead of repainting every pixel
+paper.toBlob(b => cv.style.background = `url(${URL.createObjectURL(b)}) 0 0 / 100% 100%`);
 
 // ---------- arena ----------
 const stage = { x: 240, y: 500, w: 800, h: 110 }; // solid collision box
@@ -1179,7 +1180,7 @@ function surfaceBelow() {
 
 function render(t) {
   seed = Math.floor(t * 8) * 7919 + 1;
-  ctx.drawImage(paper, 0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
   ctx.lineCap = ctx.lineJoin = 'round';
 
   // faint pencil background (far away: follows the camera at half strength)
@@ -1391,7 +1392,7 @@ const idleAt = (t, k = 0) => M.idle.anim((Math.floor(t * 60) + 47 * k) % 120, 12
 
 function drawPause(t) {
   // home: clean paper with ink; pause / game over: the frozen game dimmed with light text
-  if (home) ctx.drawImage(paper, 0, 0, W, H);
+  if (home) ctx.clearRect(0, 0, W, H);
   else { ctx.fillStyle = `rgba(38,35,31,${showControls ? 0.94 : 0.8})`; ctx.fillRect(0, 0, W, H); } // near-solid behind the dense controls text
   if (picking) return drawSelect(t);
   if (vsT != null) return drawVersus((performance.now() - vsT) / 1000);
@@ -1635,10 +1636,11 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); acc += dt; last = now;
   if (paused) acc = 0;
   if (vsT != null && now - vsT > VS_TIME * 1000) fight();
-  while (!paused && acc >= STEP) { update(STEP); acc -= STEP; } // game over can pause mid-frame
+  let steps = 0;
+  while (!paused && acc >= STEP) { update(STEP); acc -= STEP; steps++; } // game over can pause mid-frame
   if (!paused) stepCam(dt); // after the moves, so it frames what's drawn
   cv.style.translate = hitstop > 0 ? `${(Math.random() - 0.5) * 6}px ${(Math.random() - 0.5) * 6}px` : ''; // shake during hit freeze
-  render(now / 1000);
+  if (steps || paused) render(now / 1000); // a frame with no step would redraw the same picture (120 Hz+ screens: half the draws)
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
