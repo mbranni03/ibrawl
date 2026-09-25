@@ -1,8 +1,9 @@
 // Muse's moveset (drawn by muse.js): Snoo's body moves (snoo-moveset.js, loaded first), which fit the same rig of stretchy stubby
 // arms and little feet; muse.js draws likes and hearts where Snoo hands out votes. Its smashes are Meta's: a llama kick (Meta's
 // Llama) to the side, an Instagram story bursting open overhead (on Snoo's body motion), and a Beat Saber slash both ways in a
-// Quest headset. No specials, grabs or shield yet (off in the game), and so no shield break; the dodges are
-// Snoo's too.
+// Quest headset. Its specials: a stream of Muse sparks from its hands (held, like fire breath), a long stretchy Facebook poke, birthday balloons up
+// (its recovery), and a Meta AI prompt that drops whatever it imagined. No grabs or shield yet (off in the game), and so no shield
+// break; the dodges are Snoo's too.
 const MUSE_MOVESET = {
   movement: SNOO_MOVESET.movement, groundAttacks: SNOO_MOVESET.groundAttacks, aerials: SNOO_MOVESET.aerials, ledge: SNOO_MOVESET.ledge,
   // hold the button to charge (chargeFrames, chargeMult, chargeAt as Snoo's)
@@ -58,6 +59,70 @@ const MUSE_MOVESET = {
           cubes: f < 30 ? [Math.min(1, f / 8), f >= 12 ? (f - 12) / 18 : null] : null,
         };
       },
+    },
+  },
+  // usable on the ground and in the air; extra fields as in snoo-moveset.js, plus hold / loop (the neutral special's)
+  specials: {
+    neutralSpecial: { // spark stream: draws both hands back, thrusts them out together and streams Muse sparks from between them,
+      // hitting over and over, short range. Hold B to keep it going (loop: frames 10 … 22 play over, for up to chargeFrames in
+      // all), shorter the longer it goes, like Bowser's fire breath
+      input: 'B (V / L), no direction · hold to keep it going, ground or air', startup: 8, active: 16, endlag: 18, damage: 1.2, every: 4,
+      kb: { base: 8, growth: 10, angle: 30 }, hitbox: { x: 40, y: -56, w: 72, h: 36 }, grow: { w: -26 }, landingLag: 10,
+      hold: 'special', loop: [10, 22], chargeFrames: 120,
+      anim: (f, n, c = 0) => { // c = 0 … 1 of the stream spent (the game passes it; the viewer shows none)
+        // both hands out together in front, the back one reaching round the body to meet the front one
+        const cast = { x: 2, rot: 0.08, sx: 1.03, sy: 0.97, reach: [76, 20], arm: [0, -1], blink: 0.4, legs: [[-4, 0], [0, 0], [0, 0], [2, 0]] };
+        const p = tween(f, [[0, {}], [7, { x: -2, rot: -0.1, sx: 0.96, sy: 1.06, reach: [-8, -8], arm: [-2, -2] }], [10, cast], [24, cast], [42, {}]]);
+        if (f >= 10 && f < 24) p.y = Math.sin(f * 1.6) * 0.8; // rumbling with it
+        return { ...p, stream: [f, c, f < 8 ? 0 : f < 10 ? (f - 8) / 2 : f < 24 ? 1 : Math.max(0, 1 - (f - 24) / 5)] };
+      },
+    },
+    sideSpecial: { // Facebook poke: draws the front arm back, then shoots it out far ahead, finger first, and pokes; whoever it gets
+      // wears a "Muse poked you!" for a moment
+      input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 3, endlag: 26, damage: 7, kb: { base: 25, growth: 60, angle: 35 },
+      hitbox: { x: 56, y: -46, w: 70, h: 24 }, landingLag: 12, sticker: { secs: 1.2, draw: drawPokeNote },
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [8, { x: -4, rot: -0.1, sx: 0.96, sy: 1.04, reach: [0, -8], swing: [0.3, 0.3] }],
+          [12, { x: 4, rot: 0.12, sx: 1.06, sy: 0.95, reach: [0, 128], swing: [0.2, 0], blink: 0.3, legs: [[-6, 0], [0, 0], [0, 0], [4, 0]] }],
+          [15, { x: 4, rot: 0.12, sx: 1.06, sy: 0.95, reach: [0, 126], swing: [0.2, 0], blink: 0.3, legs: [[-6, 0], [0, 0], [0, 0], [4, 0]] }],
+          [22, { x: 2, rot: 0.05, reach: [0, 40] }],
+          [34, { reach: [0, 6] }],
+          [41, {}],
+        ]),
+        poke: f >= 9 && f < 30, speed: f >= 12 && f < 16 ? 0.5 : 0,
+      }),
+    },
+    upSpecial: { // birthday balloons: a bunch pops up in its raised hands and floats it up (steer with ← →), bumping whatever's above;
+      // they burst at the top (the last, bigger hit) and it falls helpless
+      input: 'B (V / L) + ↑, ground or air · steer with ← → · falls helpless after', startup: 6, active: 40, endlag: 6, damage: 2, every: 10,
+      kb: { base: 20, growth: 20, angle: 85 }, finisher: { damage: 5, kb: { base: 40, growth: 60, angle: 88 } },
+      hitbox: { x: -34, y: -150, w: 68, h: 76 }, landingLag: 16, burst: { vy: -330, frames: 40 }, helpless: true,
+      anim: f => {
+        const up = { swing: [-3, 3], arm: [-3, -3], legs: legsAll(0, 3) };
+        const p = tween(f, [[0, {}], [5, { ...up, sx: 1.06, sy: 0.94 }], [8, { ...up, sy: 1.06 }], [44, { ...up, sy: 1.04 }], [52, { swing: [-1.6, 1.6], legs: legsAll(0, 2) }]]);
+        if (f >= 8 && f < 46) p.rot = 0.06 * Math.sin((f - 8) / 9); // dangling
+        return { ...p, balloons: f < 56 ? [Math.min(1, f / 5), f >= 46 ? (f - 46) / 10 : null, f / 9] : null };
+      },
+    },
+    downSpecial: { // Meta AI, imagine: a prompt pops up over Muse ("Imagine a piano", or a duck, a cake, an anvil: a random pick),
+      // it dreams it up high ahead of itself, then points, and down it drops on whoever's there
+      input: 'B (V / L) + ↓, ground or air', startup: 24, active: 5, endlag: 20, damage: 13, kb: { base: 35, growth: 75, angle: 65 },
+      hitbox: { x: 30, y: -72, w: 56, h: 72 }, landingLag: 12, pick: MUSE_IMAGINE,
+      anim: (f, n, c, pick = 0) => ({
+        ...tween(f, [
+          [0, {}],
+          [5, { swing: [-0.6, 0.6], arm: [-2, -2], blink: 0.3 }],
+          [10, { sy: 1.04, swing: [-1.4, 1.4], blink: 1 }], // dreaming it up
+          [21, { sy: 1.04, swing: [-1.5, 1.5], blink: 1 }],
+          [24, { x: 2, rot: 0.06, swing: [-0.2, 1.3], reach: [0, 14] }], // there!
+          [30, { x: 1, sy: 0.97, swing: [-0.3, 1.2], reach: [0, 12] }],
+          [49, {}],
+        ]),
+        imagine: f < 50 ? [f < 3 ? f / 3 : f < 22 ? 1 : Math.max(0, 1 - (f - 22) / 6), f < 20 ? 150 : Math.max(0, 150 * (1 - ((f - 20) / 6) ** 2)),
+          f < 8 ? 0 : Math.min(1, (f - 8) / 10), f < 26 ? 0 : (f - 26) / 24, pick ?? 0] : null,
+      }),
     },
   },
   defense: Object.fromEntries(Object.entries(SNOO_MOVESET.defense).filter(([k]) => !k.startsWith('shield'))),

@@ -10,9 +10,17 @@
 //            front) · slash = 0 … 1 their swing's glowing trail, fanning back to where they were raised overhead, fading
 //   cubes = [in 0 … 1, cut] a red and a blue Beat Saber cube sliding in either side; cut = 0 … 1 once sliced, halves flying (or null)
 //   headset = 0 … 1 size of the Quest headset strapped over its face window (it grins under it)
+// and its specials:
+//   stream = [phase (frames), spent 0 … 1, on 0 … 1] electric-blue sparks shooting from between its hands, shorter as it's spent
+//   poke = true: a pointing finger on the end of the front arm · balloons = [size 0 … 1, pop 0 … 1 or null, sway] birthday
+//   balloons tied to its raised hands · imagine = [prompt 0 … 1, drop height px, size 0 … 1, landed 0 … 1, pick] a Meta AI prompt
+//   over its head, and what it imagined (MUSE_IMAGINE[pick]) appearing high up ahead of it and dropping
 const MUSE = '#eadcc4', MUSE_FUR = '#c2ab88', MUSE_FACE = '#f7dfc6', MUSE_BLUSH = 'rgba(240,120,120,0.45)';
 const META = '#0866ff', MUSE_HEART = '#ff3040', LLAMA = '#fbf8f2';
 const SABER = ['#ff2a4a', '#1f8bff']; // Beat Saber's red (left hand) and blue (right)
+const SPARKS = ['#8b5cf6', '#ff7ad9', '#ffffff', '#0866ff']; // Muse Spark's violet, pink, white and Meta blue
+const BALLOONS = [['#f25c54', -15, -54], ['#3a86ff', 0, -68], ['#ffd23f', 15, -54]]; // colour, and x, y above the hands
+const MUSE_IMAGINE = ['a piano', 'a rubber duck', 'a birthday cake', 'an anvil']; // what the down special can come up with
 const IG = ['#feda75', '#fa7e1e', '#d62976', '#962fbf', '#4f5bd5']; // Instagram's gradient, bottom left to top right
 const LIKE_CUFF = [[-1, -0.1], [-0.64, -0.1], [-0.64, 0.9], [-1, 0.9]]; // the thumbs-up, 2 wide, cuff then hand, thumb up
 const LIKE_HAND = [[-0.52, -0.08], [-0.12, -0.55], [-0.06, -1], [0.18, -1], [0.3, -0.62], [0.2, -0.22], [0.84, -0.22], [1, -0.04],
@@ -62,6 +70,7 @@ function drawMuse(cx, bottom, pose = {}, face = 1) {
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(-swing[i]);
     museFuzz(dx * len / 2, dy * len / 2, len / 2 + 3, 6, Math.atan2(dy, dx));
     if (pose.sabers > 0.02) museSaber(Math.atan2(dy, dx), len, pose.sabers, i, pose.slash != null ? [pose.slash, (i ? 3 : -3) - swing[i]] : null);
+    if (i && pose.poke) museFuzz(dx * (len + 8), dy * (len + 8), 5, 2.8, Math.atan2(dy, dx)); // the pointing finger
     if (i) { ctx.fillStyle = MUSE; ctx.beginPath(); ctx.arc(dx * 2, dy * 2, 5, 0, 6.28); ctx.fill(); }
     ctx.restore();
   };
@@ -81,10 +90,13 @@ function drawMuse(cx, bottom, pose = {}, face = 1) {
 
   if (pose.headset > 0.05) museHeadset(pose.headset);
   drawArm(1); // the front arm, over the body
+  if (pose.stream?.[2] > 0.02) museStream(...pose.stream); // over the hands
   ctx.restore();
   if (pose.vote) museVote(cx + (pose.x || 0) * face, bottom + (pose.y || 0), face, ...pose.vote);
   if (pose.llama) museLlama(cx + 66 * face, bottom, face, ...pose.llama); // where it stands, whatever Muse does
   if (pose.cubes) museCubes(cx, bottom, face, ...pose.cubes);
+  if (pose.balloons) museBalloons(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 62 * (pose.sy ?? 1), ...pose.balloons);
+  if (pose.imagine) museImagine(cx, bottom, face, cx + (pose.x || 0) * face, bottom + (pose.y || 0), ...pose.imagine);
   if (pose.story != null) museStory(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 118, pose.story);
 }
 
@@ -206,3 +218,134 @@ function museCubes(x, floor, face, u, cut) {
     ctx.restore();
   }
 }
+
+// a four-point sparkle about the origin, r to each tip, turned by spin
+function sparkPath(r, spin = 0) {
+  ctx.beginPath(); ctx.moveTo(r * Math.sin(spin), -r * Math.cos(spin));
+  for (let k = 1; k <= 4; k++) {
+    const a = spin + k * Math.PI / 2, m = a - Math.PI / 4;
+    ctx.quadraticCurveTo(0.12 * r * Math.sin(m), -0.12 * r * Math.cos(m), r * Math.sin(a), -r * Math.cos(a));
+  }
+  ctx.closePath();
+}
+
+// the neutral special's spark stream, in Muse's body frame: electric blue, shooting from between its hands held out together. A blue
+// glow fading out, jagged crackles flickering along it, and sparks: streaks tapering back from white-hot tips, sprayed out and
+// sinking as they cool (each out and gone in 12 frames, so the loop is seamless); a bright flash at the hands. spent shortens it,
+// on fades it
+const SPARK_BLUE = '#1f8bff', SPARK_GLOW = '#8fd0ff';
+const SPARK_ROWS = [0.1, -0.7, 0.5, -0.2, 0.9, -0.5, 0.3, -0.9, 0.7, 0, -0.35, 0.6, -0.8, 0.25, -0.1, 0.45]; // each spark's side of the stream
+function museStream(ph, spent, on) {
+  const L = 54 * (1 - 0.45 * spent), mx = 56, my = -38; // its reach, from between the hands
+  ctx.save(); ctx.globalAlpha *= on; ctx.lineCap = ctx.lineJoin = 'round';
+  const g = ctx.createLinearGradient(mx, 0, mx + L, 0); g.addColorStop(0, 'rgba(31,139,255,0.22)'); g.addColorStop(1, 'rgba(31,139,255,0)');
+  ctx.fillStyle = g; path([[mx, my - 4], [mx + L, my - 18], [mx + L, my + 18], [mx, my + 4]]); ctx.fill(); // a glow fading out
+  const glowLine = (pts, w) => { // a bright line: wide pale glow, blue body, white core
+    for (const [c, lw, a] of [[SPARK_GLOW, w * 2.6, 0.35], [SPARK_BLUE, w * 1.4, 1], ['#fff', w * 0.6, 1]]) {
+      ctx.save(); ctx.globalAlpha *= a; ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); pts.forEach(([x, y], n) => n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore();
+    }
+  };
+  for (let b = 0; b < 2; b++) { // crackles: fine jagged bolts out into the stream, forking once, redrawn each frame so they flicker
+    const pts = [[mx, my]], d = (b ? -1 : 1) * 10, n = 9, reach = L * (0.55 + 0.2 * rnd());
+    for (let k = 1; k <= n; k++) pts.push([mx + reach * k / n, my + d * k / n + j(1.5 + k * 0.9)]);
+    glowLine(pts, 1.1);
+    const [fx, fy] = pts[5]; glowLine([[fx, fy], [fx + 7, fy + d * 0.4 + j(3)], [fx + 12, fy + d * 0.9 + j(3)]], 0.8);
+  }
+  SPARK_ROWS.forEach((side, k) => { // sprayed out from the mouth each at its own angle and speed, sinking as they fly: a streak that
+    // tapers back from a white-hot tip
+    const u = (ph / 12 + k / SPARK_ROWS.length) % 1, a = side * 0.42, sp = 0.75 + 0.3 * ((k * 7) % 5) / 4, d = u * L * sp;
+    const x = mx + 3 + Math.cos(a) * d, y = my + Math.sin(a) * d + 8 * u * u, len = 4 + 10 * (1 - u) * sp, w = 1.5 * (1 - 0.5 * u);
+    const back = f => [x - Math.cos(a) * len * f, y - (Math.sin(a) * len + 2 * u) * f];
+    ctx.save(); ctx.globalAlpha *= Math.min(1, (1 - u) * 2.5);
+    glowLine([back(1), [x, y]], w * 0.5); glowLine([back(0.45), [x, y]], w);
+    ctx.restore();
+  });
+  for (let k = 0; k < 3; k++) { // twinkles: little four-point flashes popping up along it
+    const tx = mx + 10 + rnd() * L * 0.9, ty = my + (rnd() - 0.5) * 26 * (tx - mx) / L, r = 2 + rnd() * 3;
+    glowLine([[tx - r, ty], [tx + r, ty]], 0.7); glowLine([[tx, ty - r], [tx, ty + r]], 0.7);
+  }
+  ctx.fillStyle = 'rgba(143,208,255,0.55)'; ctx.beginPath(); ctx.arc(mx + 2, my, 6 + j(1), 0, 6.28); ctx.fill(); // the flash at the hands
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(mx + 2, my, 3, 0, 6.28); ctx.fill();
+  ctx.restore();
+}
+
+// "Muse poked you!", stuck on whoever the side special hit (a sticker: x, y where, rot its tilt, a fading): a white pill with a blue
+// rim and a pointing finger. Never mirrored
+function drawPokeNote(x, y, rot, a) {
+  ctx.save(); ctx.translate(x, y - 34); ctx.rotate(rot * 0.3 - 0.08); ctx.globalAlpha *= a; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  ctx.fillStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-50, -11, 100, 22, 11); ctx.fill(); ctx.strokeStyle = META; ctx.stroke();
+  ctx.fillStyle = META; ctx.beginPath(); ctx.arc(-38, 0, 7, 0, 6.28); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.lineCap = 'round'; line(-42, 1, -34, -3, 0.2, 1); // the finger, poking
+  ctx.fillStyle = '#1c1e21'; ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('Muse poked you!', 7, 0.5);
+  ctx.restore();
+}
+
+// the up special's birthday balloons, tied at x, y (Muse's raised hands): strings up to three balloons, swaying; size k pops them in,
+// and once pop (0 … 1) they've burst: a ring of dashes where each was, fading. Never mirrored
+function museBalloons(x, y, k, pop, sway) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(0.12 * Math.sin(sway)); ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
+  for (const [col, bx, by] of BALLOONS) {
+    const tx = bx * k, ty = by * k; // its knot
+    if (pop != null) {
+      ctx.save(); ctx.globalAlpha *= 1 - pop; ctx.strokeStyle = col; ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r = 8 + 14 * pop; line(tx + Math.cos(a) * r, ty - 12 + Math.sin(a) * r, tx + Math.cos(a) * (r + 6), ty - 12 + Math.sin(a) * (r + 6), 0.3, 1); }
+      ctx.restore(); continue;
+    }
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(tx * 0.3 + 4, ty * 0.5, tx, ty); ctx.stroke(); // string
+    ctx.save(); ctx.translate(tx, ty - 12 * k); ctx.scale(k, k);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 10.5, 12.5, 0, 0, 6.28); ctx.fill(); ctx.lineWidth = 2; ellipse(0, 0, 10.5, 12.5, 0.4);
+    path([[0, 12], [-2.5, 16], [2.5, 16]]); ctx.fill(); ctx.lineWidth = 1.4; ctx.stroke(); // knot
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-3, -3, 5, Math.PI * 1.05, Math.PI * 1.45); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// the down special: a Meta AI prompt bubble over Muse (at mx, my: its feet), "Imagine …" behind the Meta AI ring, and the thing it
+// imagined, at 58 px ahead of where it stood (cx, floor), shimmering in size k high up at y (px above the floor), then dropping:
+// it squashes as it lands (landed 0 … 1) and fades. Only the bubble reads left to right; the thing faces Muse's way
+function museImagine(cx, floor, face, mx, my, prompt, y, k, landed, pick = 0) {
+  if (prompt > 0.02) {
+    const text = 'Imagine ' + MUSE_IMAGINE[pick];
+    ctx.save(); ctx.globalAlpha *= prompt; ctx.translate(mx, my - 98); ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 34;
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.roundRect(-w / 2, -12, w, 24, 12); ctx.fill(); ctx.stroke();
+    const g = ctx.createLinearGradient(-w / 2 + 6, 6, -w / 2 + 22, -6); g.addColorStop(0, META); g.addColorStop(1, SPARKS[1]);
+    ctx.strokeStyle = g; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-w / 2 + 14, 0, 5.5, 0, 6.28); ctx.stroke(); // the Meta AI ring
+    ctx.fillStyle = '#1c1e21'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, -w / 2 + 25, 0.5);
+    ctx.restore();
+  }
+  if (k < 0.02) return;
+  const sq = landed > 0 ? 1 - 0.25 * Math.sin(Math.min(1, landed * 3) * Math.PI) : 1; // squash on landing
+  ctx.save(); ctx.translate(cx + 58 * face, floor - y); ctx.globalAlpha *= landed > 0.6 ? (1 - landed) / 0.4 : 1;
+  if (k < 1) { // still being generated: sparkles round it
+    ctx.save(); ctx.globalAlpha *= 1 - k; for (let i = 0; i < 5; i++) { ctx.save(); ctx.translate(Math.cos(i * 1.3 + k * 6) * 26, -18 + Math.sin(i * 1.9 + k * 5) * 20); ctx.fillStyle = SPARKS[i % 4]; sparkPath(5, k * 3); ctx.fill(); ctx.restore(); }
+    ctx.restore();
+  }
+  ctx.scale(face * k / sq, k * sq); ctx.strokeStyle = INK; ctx.lineJoin = ctx.lineCap = 'round'; ctx.lineWidth = 2;
+  IMAGINED[pick]();
+  ctx.restore();
+}
+// each thing Muse can imagine, drawn with its bottom-centre on the origin, facing +x, about 44 wide
+const IMAGINED = [
+  () => { // an upright piano: a dark box, its keys, a lid
+    rbox(0, -24, 44, 48, 3, '#2b2320', 2); ctx.fillStyle = '#fff'; ctx.fillRect(-20, -26, 40, 8);
+    ctx.fillStyle = INK; for (let i = 0; i < 6; i++) ctx.fillRect(-16 + i * 7, -26, 3, 5);
+    ctx.lineWidth = 1.6; line(-20, -26, 20, -26, 0.2, 1); line(-22, -44, 22, -44, 0.3, 1);
+  },
+  () => { // a rubber duck
+    museFuzz(0, -13, 20, 13, 0, '#ffd23f'); museFuzz(10, -32, 11, 10, 0, '#ffd23f');
+    ctx.fillStyle = '#ff8c1a'; path([[19, -33], [29, -30], [19, -27]]); ctx.fill(); ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(13, -35, 1.8, 0, 6.28); ctx.fill();
+  },
+  () => { // a birthday cake: two tiers, icing, a candle
+    rbox(0, -10, 44, 20, 4, '#f7d6e0', 2); rbox(0, -28, 32, 16, 4, '#fbe9ef', 2);
+    ctx.strokeStyle = '#e8508a'; ctx.lineWidth = 2; line(-20, -14, 20, -14, 0.6, 1); ctx.strokeStyle = INK;
+    rbox(0, -42, 4, 12, 1.5, SABER[1], 1.4); ctx.fillStyle = '#ffb000'; ctx.beginPath(); ctx.ellipse(0, -52, 2.5, 4, 0, 0, 6.28); ctx.fill();
+  },
+  () => { // an anvil
+    ctx.fillStyle = '#5b5f68';
+    path([[-22, -36], [14, -36], [24, -30], [12, -26], [8, -14], [16, 0], [-16, 0], [-8, -14], [-12, -26], [-22, -28]]); ctx.fill(); ctx.stroke();
+  },
+];

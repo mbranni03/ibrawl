@@ -271,7 +271,7 @@ function special(dir) {
   if (m.streak && (P.buff > 0 || P.streak < 1)) return P.buff > 0 ? undefined : warn('streak not full', drawStreakIcon); // Duo's streak mode: needs a full meter
   if (m.builds && P.studs < Math.min(...m.builds.map(b => MOVES[b].cost))) return warn('not enough studs'); // can't afford any build: the booklet stays shut
   if (dir) P.face = dir; P.held = true; P.chg = 0; // held: a charge / a roll (B) keeps going while B is held (see chargeKey)
-  P.roll = m.projectile?.pick ? Math.floor(Math.random() * m.projectile.pick.length) : null; // a random outcome: I'm Feeling Lucky's app
+  const pick = m.projectile?.pick || m.pick; P.roll = pick ? Math.floor(Math.random() * pick.length) : null; // a random outcome: I'm Feeling Lucky's app, what Muse imagines
   if (m.dash && !P.ground) P.vy = Math.min(P.vy, -m.dash.pop); // an air roll pops up a little
   if (k === 'neutralSpecial' && (m.hearts || (m.startup == null && !m.state))) return think(); // Claw'd's held think / Duo's heart zap
   if (m.step) { // the first step's stud; the new staircase replaces the old
@@ -647,6 +647,11 @@ function stepPlayer(dt) {
     P.held = P.held && keys[cm.chargeKey || cm.hold || 'heavy']; // the button held: chargeKey / hold (Grok's), heavy for smashes
     if (P.held && P.f > cm.chargeAt && P.chg < cm.chargeFrames) { P.f = cm.chargeAt; P.chg++; }
     if (cm.odds != null && P.roll == null && !P.held && P.f > cm.chargeAt) P.roll = Math.random() < cm.odds + (cm.oddsCharged - cm.odds) * P.chg / cm.chargeFrames; // let go: a gamble (Duo's pop quiz) comes up right or wrong, better odds the longer it charged
+  }
+  if (cm?.loop) { // a held stream (Muse's spark breath): frames loop[0] … loop[1] play over while hold is held, up to chargeFrames of it
+    P.held = P.held && keys[cm.hold]; // in all (P.chg, which also shrinks it: sizeOf); each pass can hit again
+    if (P.f >= cm.startup) P.chg++;
+    if (P.held && P.f >= cm.loop[1] && P.chg < cm.chargeFrames) { P.f = cm.loop[0]; P.struck.clear(); }
   }
   if (P.ground && s in ATK) { // locked in until the recovery can be cancelled
     const m = ATK[s], i = JABS.indexOf(s), done = m.startup + m.active;
