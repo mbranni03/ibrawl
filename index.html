@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mascot Smackdown</title>
+<title>Supa Smackdown</title>
+<link rel="icon" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -1331,10 +1332,10 @@ function badge(x, dmg, hitT, portrait, lives) {
 
 const menuY = () => home ? H / 2 + 160 : H / 2 + 10; // first menu row's baseline (home: below the title and lineup)
 
-// home title: MASCOT over a tilted, ink-shadowed SMACKDOWN, then the fighters lined up on a ground line, Claw'd in the middle
+// home title: SUPA over a tilted, ink-shadowed SMACKDOWN, then the fighters lined up on a ground line, Claw'd in the middle
 function drawTitle(t) {
   ctx.save(); ctx.translate(W / 2, 215); ctx.rotate(-0.035);
-  ctx.font = '700 44px Caveat, cursive'; ctx.letterSpacing = '14px'; ctx.fillStyle = INK; ctx.fillText('MASCOT', 7, -112);
+  ctx.font = '700 44px Caveat, cursive'; ctx.letterSpacing = '14px'; ctx.fillStyle = INK; ctx.fillText('SUPA', 7, -112);
   ctx.letterSpacing = '0px'; ctx.font = '700 132px Caveat, cursive';
   ctx.fillText('SMACKDOWN', 5, 5); ctx.fillStyle = CLAWD; ctx.fillText('SMACKDOWN', 0, 0);
   ctx.strokeStyle = INK; ctx.lineWidth = 3; line(-250, 22, 250, 18, 2, 2); // scribbled underline
