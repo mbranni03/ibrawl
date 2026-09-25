@@ -177,6 +177,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
 const auraHue = l => l >= 3 ? -performance.now() / 4 % 360 : [0, 15, 44][l];
 const auraColor = (l, a = 1) => `hsla(${auraHue(l)}, 80%, 58%, ${a})`;
 function drawAura(x, y, rx, ry, floor, tier) {
+  rx = Math.abs(rx); ry = Math.abs(ry); // (a turnaround flips the pose through a negative scale: the aura's the same either way)
   const t = performance.now() / 1000;
   ctx.save();
   ctx.beginPath(); ctx.rect(x - 400, floor - 400, 800, 400); ctx.clip(); // nothing below the feet

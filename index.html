@@ -29,6 +29,7 @@
 <script src="src/characters/lego-moveset.js"></script>
 <script src="src/characters/android-moveset.js"></script>
 <script src="src/characters/snoo-moveset.js"></script>
+<script src="src/cpu.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -56,7 +57,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function stepCam(dt) {
   if (P.state === 'ko') return; // hold still while the KO blast plays, so it stays where it went out
   let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
-  for (const o of [P, ...targets]) {
+  for (const o of inPlay()) {
     const x = clamp(o.x + o.w / 2, CAM.l, CAM.r), y = clamp(o.y + o.h / 2, CAM.t, CAM.b); // someone flying off still only pulls it so far
     l = Math.min(l, x); r = Math.max(r, x); t = Math.min(t, y); b = Math.max(b, y);
   }
@@ -137,18 +138,19 @@ const think = () => { // resume from the last checkpoint reached · Duo's heart 
 const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { if (P.state === 'tunnel') return true; const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
-// collision box = Claw'd's body + legs (the arm nubs overhang it)
-const P = { x: 610, y: 380, w: 60, h: 50, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, think: 0, batt: 0 }; // batt = Android's stored fast charge 0 … 1 (spent on its next hit) · think = neutral special effort tier reached (0 … 3), kept until KO
+// the fighter in play (see newFighter): x, y, w, h = collision box (Claw'd's: body + legs, the arm nubs overhang it) · batt = Android's
+// stored fast charge 0 … 1 (spent on its next hit) · think = neutral special effort tier reached (0 … 3), kept until KO
+let P;
 const GROUNDED = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWalk', 'crouchUp', 'squat', 'land', 'landLag', 'shield', 'shieldDrop', 'knockdown', 'getup', 'tech', 'hold', 'pummel', ...THROWS, ...DODGES, ...Object.keys(ATK).filter(k => !(k in AIR))];
 const STOCKS = 3; let stocks = STOCKS;
 const fx = []; // dust clouds left in the world: { x, y, dir, t }
-const shots = []; // thrown sparks in flight: { x, y, vx, t, m }
+let shots = []; // thrown sparks in flight: { x, y, vx, t, m }
 let nelly = null; // Wumpus's side special: Nelly the snail { x, y, w, h, vx, vy, face, t, ground, on, N = her move data }
 let wreck = null; // a rocket-style up special's ship once the rider's off it: { x, y (its middle), vx, vy, t, m, boom = 0 … 1 once it's blowing up }
 let cart = null; // a ride special's vehicle (Grok's Cybertruck), Steve minecart style: { x, y, w, h, vx, vy, face, t, ground, on, m = the move, dist = px driven, bag = target scooped into it, bagT, done }
 let thrown = null; // Lego Man's head while it's off, flying (side special): { x, y, vx, dir, back, sp, t, rot, face, hit, T }
-const rockets = [], booms = []; // Lego Man's rockets in flight { x, y, v, dir, t, L } and their blasts { x, y, t, r }
-const bricks = []; // Lego Man's loose bricks: boxes that tumble out and lie on the floor, hurting whoever touches one: { x, y, w, h, vx, vy, rot, spin, col, dir, t, m }
+let rockets = [], booms = []; // Lego Man's rockets in flight { x, y, v, dir, t, L } and their blasts { x, y, t, r }
+let bricks = []; // Lego Man's loose bricks: boxes that tumble out and lie on the floor, hurting whoever touches one: { x, y, w, h, vx, vy, rot, spin, col, dir, t, m }
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
 // every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
 // doesn't have yet (attacks, specials, grabs, defense, ledge) is simply off for it · jumps = air jumps · flap = air jump speed ·
@@ -169,21 +171,40 @@ const FIGHTER = {
 const ROSTER = ['clawd', 'grok', 'wumpus', 'android', 'duo', 'snoo', 'lego']; // select screen order (LOGOS follows it)
 ROSTER.forEach((id, k) => FIGHTER[id].draw = (x, y, p, f, t) => FIGHTER[id].art(x, y, { ...idleAt(t, k), ...p }, f)); // each a little out of step
 fighter = FIGHTER.clawd;
-// punching targets: the CPUs picked on the select screen as dummies, or the training bag if none. Each takes hits and knockback like a
-// fighter (but never fights back) and drops back in where it started when it leaves the blast zone: CPUs STOCKS times, the bag forever
-const TARGET_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, hit: null, held: false, pinned: false, carted: false, sticker: null, pinT: 0, slowT: 0 }; // held = in Claw'd's claws · pinned = on the end of the up special's cord · pinT = s left stuck under a move's pin (Wumpus) · slowT = s left in slowmode
-const SPAWN_X = [822, 435, 1000]; // centres they drop in at: the first where the bag always did, the others to either side
-let targets = [], foes = [], cpus = [], rolled = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled) · foes = their targets, kept for the hud once out of lives
-function spawnTarget(b) { Object.assign(b, TARGET_SPAWN, { x: b.home - b.w / 2, y: -120 - b.i * 70, ground: false, on: null }); }
-function makeTargets() {
-  targets = (rolled.length ? rolled : ['bag']).map((id, i) => { const b = { id, i, w: FIGHTER[id].box[0], h: FIGHTER[id].box[1], home: SPAWN_X[i], lives: id === 'bag' ? null : STOCKS }; spawnTarget(b); return b; });
-  foes = targets.filter(b => b.lives != null);
-}
-const heldBag = () => targets.find(b => b.held);
-makeTargets();
+// in play: P1 and the CPUs picked on the select screen (fighters, below), or the training bag if none. The CPUs fight back (src/cpu.js
+// plays them) with STOCKS lives each; the bag just takes hits and knockback, and drops back in where it started when it leaves the blast zone
+const BAG_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, grabbed: false, pinned: false, carted: false, sticker: null, pinT: 0, slowT: 0 }; // what anyone who can be hit carries: grabbed = the P holding it in its claws · pinned = the P whose up special's cord it's on the end of · pinT = s left stuck under a move's pin (Wumpus) · slowT = s left in slowmode
+const SPAWN_X = [822, 435, 1000]; // centres the CPUs drop in at: the first where the bag always did, the others to either side
+let bags = [], foes = [], cpus = [], lvls = [], rolled = [], targets = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled), lvls = their levels (indexes into LVL / CPU_LEVELS: 0 beginner … 3 medium … 6 AI trained) · foes = the CPUs' fighters, kept for the hud once out of lives · targets = who the fighter in play can hit
+function spawnTarget(b) { Object.assign(b, BAG_SPAWN, { x: b.home - b.w / 2, y: -120, ground: false, on: null }); }
+const heldBag = () => targets.find(b => b.grabbed === P);
 const KB = 10; // knockback units → px/s
 
-const keys = {}; let jumpQ = false, downQ = false, dropQ = false, ffQ = false, dashQ = false, attackQ = false, heavyQ = false, specialQ = false, dodgeQ = false, grabQ = 0, techQ = 0, techLock = 0, sideQ = false, lastTap = { a: null, t: 0 }, lastDir = 0, pressT = {}, attackT = -1e9, tiltQ = false;
+let keys = {}, jumpQ = false, downQ = false, dropQ = false, ffQ = false, dashQ = false, attackQ = false, heavyQ = false, specialQ = false, dodgeQ = false, grabQ = 0, techQ = 0, techLock = 0, sideQ = false, lastTap = { a: null, t: 0 }, lastDir = 0, pressT = {}, attackT = -1e9, tiltQ = false;
+// the engine plays one fighter through its globals: P, its moves, its controls (above) and what it has out. Every fighter in play keeps
+// its own set of them (a context, c), and use(c) swaps c's in, stashing the ones that were in. P1's are in between frames, so key
+// presses always land on P1's controls. c.P.c = c; a CPU's context also has its brain (src/cpu.js)
+let fighters = [], human = null, cur = null; // fighters = P1's context, then the CPUs' still in the fight · cur = whose are in now
+const stash = c => Object.assign(c, { P, fighter, M, L, GR, SP, DOWN_B, ATK, AIR, NEUTRAL_B, US, MOVES, FLY, R, D, AD, SB, stocks, keys, jumpQ, downQ, dropQ, ffQ, dashQ, attackQ, heavyQ, specialQ, dodgeQ, grabQ, techQ, techLock, sideQ, lastTap, lastDir, pressT, attackT, tiltQ, sub, cart, wreck, nelly, thrown, shots, rockets, booms, bricks, targets });
+function use(c) {
+  if (c === cur) return;
+  if (cur) stash(cur);
+  ({ P, fighter, M, L, GR, SP, DOWN_B, ATK, AIR, NEUTRAL_B, US, MOVES, FLY, R, D, AD, SB, stocks, keys, jumpQ, downQ, dropQ, ffQ, dashQ, attackQ, heavyQ, specialQ, dodgeQ, grabQ, techQ, techLock, sideQ, lastTap, lastDir, pressT, attackT, tiltQ, sub, cart, wreck, nelly, thrown, shots, rockets, booms, bricks, targets } = cur = c);
+}
+// a fighter's context, fresh: its moves, STOCKS lives, P standing in the air with its feet at x, y (facing the middle), no controls held,
+// nothing out. Its globals are the ones in play after
+function newFighter(f, x, y) {
+  if (cur) stash(cur);
+  fighter = f; M = f.set.movement; loadMoves(f.set); stocks = STOCKS;
+  const [w, h] = f.box;
+  P = { ...BAG_SPAWN, x: x - w / 2, y: y - h, w, h, ground: false, on: null, jumps: 1, face: x > W / 2 ? -1 : 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0,
+    hearts: NEUTRAL_B.hearts || 0, toastT: null, studs: NEUTRAL_B.studs?.start ?? 0, gold: 0, mech: 0, stairs: false, warn: null, struck: new Map() }; // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left · struck = who the attack it's doing has hit (with which hit)
+  keys = {}; jumpQ = downQ = dropQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = sideQ = tiltQ = false; grabQ = techQ = techLock = lastDir = 0; lastTap = { a: null, t: 0 }; pressT = {}; attackT = -1e9;
+  sub = cart = wreck = nelly = thrown = null; shots = []; rockets = []; booms = []; bricks = []; targets = [];
+  cur = P.c = {}; stash(cur); return cur;
+}
+const everyone = () => [...fighters.map(c => c.P), ...bags], inPlay = () => everyone().filter(p => p.state !== 'ko'); // anyone who can be hit · what the camera frames
+restart(); // Claw'd and the bag, behind the home screen
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', Space: 'jump',
                  ArrowDown: 'down', KeyS: 'down', KeyC: 'attack', KeyJ: 'attack', KeyX: 'heavy', KeyK: 'heavy', KeyV: 'special', KeyL: 'special', KeyZ: 'dodge', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyG: 'grab', KeyI: 'grab' }; // brawlhalla light / heavy: C X (arrows) · J K (WASD); special: V / L; dodge (held on the ground: shield, like Smash): Z / Shift
 // ---------- pause menu ----------
@@ -210,11 +231,13 @@ function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
   Object.assign(cam, camHome());
-  stocks = STOCKS; fx.length = shots.length = bricks.length = rockets.length = booms.length = 0; sub = cart = wreck = nelly = thrown = null; makeTargets();
+  fx.length = 0;
   for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); // Lego Man's stairs
-  [P.w, P.h] = fighter.box; // out of the mech
-  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null,
-    studs: NEUTRAL_B.studs?.start ?? 0, gold: 0, mech: 0, stairs: false, warn: null }); // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left
+  cur = null; human = newFighter(fighter, W / 2, 430); // P1 in the middle, the CPUs dropping in
+  foes = rolled.map((id, i) => Object.assign(newFighter(FIGHTER[id], SPAWN_X[i], FIGHTER[id].box[1] - 120 - i * 70), { brain: cpuBrain(lvls[i] ?? 3) }));
+  fighters = [human, ...foes];
+  bags = rolled.length ? [] : [{ id: 'bag', w: FIGHTER.bag.box[0], h: FIGHTER.bag.box[1], home: SPAWN_X[0] }]; bags.forEach(spawnTarget);
+  use(human);
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
@@ -240,7 +263,7 @@ function special(dir) {
   if (m.dash && !P.ground) P.vy = Math.min(P.vy, -m.dash.pop); // an air roll pops up a little
   if (k === 'neutralSpecial' && (m.hearts || (m.startup == null && !m.state))) return think(); // Claw'd's held think / Duo's heart zap
   if (m.step) { // the first step's stud; the new staircase replaces the old
-    P.stairs = true; P.studs--; for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego === 'step') plats.splice(i, 1);
+    P.stairs = true; P.studs--; for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego === 'step' && plats[i].by === P) plats.splice(i, 1);
     Object.assign(P, { ground: false, on: null, fastFall: false, vy: Math.min(P.vy, -m.hop) });
   }
   if (m.builds) P.bk = { i: P.bk?.i || 0, u: !!keys.up, d: !!keys.down }; // the last pick is remembered
@@ -276,7 +299,7 @@ function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
-  else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; focus = 0; onBand = false; } // character select first, from scratch
+  else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; lvls = []; focus = 0; onBand = false; } // character select first, from scratch
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
@@ -337,7 +360,7 @@ cv.addEventListener('click', e => {
   if (vsT != null) { fight(); return; }
   if (picking) { // character select hot spots (drawn in drawSelect)
     const p = selectAt(...at(e));
-    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.slot) cpus.splice(p.slot - 1, 1); else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
+    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.level) lvls[p.level[0]] = lvl = p.level[1]; else if (p?.slot) { cpus.splice(p.slot - 1, 1); lvls.splice(p.slot - 1, 1); } else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
     return;
   }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
@@ -442,10 +465,11 @@ function tetherStep(dt) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, a = Math.atan2(ay - stage.y, P.face * (lx - ax));
     if (side * (P.x + P.w / 2 - lx) > 0 && Math.hypot(lx - ax, stage.y - ay) <= (wall ? US.reach : T.len) && (wall || Math.abs(a - T.ang) <= US.cone * Math.PI / 180)) { T.side = side; return; }
   }
-  const b = targets.find(b => !b.held && overlaps({ x: tx - 12, y: ty - 12, w: 24, h: 24 }, b));
+  const b = targets.find(b => !b.grabbed && overlaps({ x: tx - 12, y: ty - 12, w: 24, h: 24 }, b));
   if (b) { // plugged into a target: connected (see linkStep)
-    T.link = 0; T.bag = b; T.at = [Math.min(b.w - 4, Math.max(4, tx - b.x)), Math.min(b.h - 8, Math.max(8, ty - b.y))]; b.pinned = true;
-    hitBag(b, US.link.zapDmg, NO_KB, P.face); Object.assign(P, { toastT: 0, toastMsg: LINKED, toastOk: true }); return;
+    if (!hitBag(b, US.link.zapDmg, NO_KB, P.face)) { T.miss = true; return; } // shielded / countered: it doesn't take
+    T.link = 0; T.bag = b; T.at = [Math.min(b.w - 4, Math.max(4, tx - b.x)), Math.min(b.h - 8, Math.max(8, ty - b.y))]; b.pinned = P;
+    Object.assign(P, { toastT: 0, toastMsg: LINKED, toastOk: true }); return;
   }
   if (T.len >= US.reach || wall) T.miss = true; // nothing to plug into
 }
@@ -468,14 +492,16 @@ function breakShield() {
   const msgs = SB.oops || OOPS; P.oopsMsg = msgs[Math.floor(Math.random() * msgs.length)]; // which error toast pops up over its head (the fighter's own, or Claw'd's)
 }
 
-// holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart
+// holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart. A fighter hangs
+// there flinching (hitstun that's over as soon as it's let go), off whatever it was doing
 function grabBag(b) {
-  Object.assign(b, { held: true, vx: 0, vy: 0, pings: 0 }); P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
+  Object.assign(b, { grabbed: P, vx: 0, vy: 0, pings: 0 }); if (b.c) Object.assign(b, { state: 'hitstun', f: 0, stun: 1, ledge: 0, fastFall: false });
+  P.holdT = GR.hold.breakFree + GR.hold.perDmg * b.dmg; P.vx = 0; hitstop = 4; setState('hold');
   P.ratio = GR.hold.ratio ? { replies: 0, likes: GR.hold.ratio.likes, ratiod: false, at: 0 } : null; // Grok's ratio meter (grabs.hold.ratio)
 }
 function holdStep(dir) {
   const b = heldBag(); if (!b) return setState('idle');
-  if (--P.holdT <= 0) { Object.assign(b, { held: false, vx: P.face * 300, vy: -250 }); P.vx = -P.face * 200; return setState('idle'); }
+  if (--P.holdT <= 0) { Object.assign(b, { grabbed: false, vx: P.face * 300, vy: -250 }); P.vx = -P.face * 200; return setState('idle'); }
   if (P.state === 'pummel') {
     const m = GR.pummel;
     if (P.f === m.startup) {
@@ -494,31 +520,36 @@ function throwStep() { // lets go on the startup frame
   const m = GR[P.state], b = heldBag();
   if (P.f === m.startup && b) {
     const k = P.ratio?.ratiod ? GR.hold.ratio.mult : 1; // ratio'd: the throw hits harder, and the stamp stays on them a moment
-    b.held = false; b.y = Math.min(b.y, P.y + P.h - b.h); hitBag(b, m.damage * k, { ...m.kb, base: m.kb.base * k, growth: m.kb.growth * k }, P.state === 'backThrow' ? -P.face : P.face);
+    b.grabbed = false; b.y = Math.min(b.y, P.y + P.h - b.h); hitBag(b, m.damage * k, { ...m.kb, base: m.kb.base * k, growth: m.kb.growth * k }, P.state === 'backThrow' ? -P.face : P.face);
     if (k > 1) b.sticker = { t: 0, ...GR.hold.ratio.stamp };
     P.ratio = null;
   }
   if (P.f >= m.startup + m.active + m.endlag) setState('idle');
 }
 
-// every hit on Claw'd: damage, a freeze, then launched away from the hit; knockback picks a flinch (hitstun) or a tumble
+// every hit on the fighter in play: damage, a freeze, then launched away from the hit; knockback picks a flinch (hitstun) or a tumble.
+// A counter in its window turns it back; a raised shield takes it instead, wearing down by its damage (SHIELD_HIT per 12%) and breaking
+// if it runs out, sliding back a little. false = it didn't connect
 function hitClawd(dmg, kb, dir) {
-  const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return; } // countered: the hit does nothing
+  const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return false; } // countered: the hit does nothing
+  if (P.state === 'shield' && P.shield > 0) { P.shield -= SHIELD_HIT * dmg / 12; P.vx = dir * (150 + 20 * dmg); hitstop = Math.round(2 + dmg / 6); if (P.shield <= 0) breakShield(); return false; }
   hurt(dmg); hitstop = Math.round(3 + dmg / 4);
   const k = kb.base + kb.growth * P.dmg / 100, a = kb.angle * Math.PI / 180;
   P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); camPunch(k, P.x + P.w / 2, P.y + P.h / 2); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
-  Object.assign(P, { ground: false, on: null, ledge: 0, fastFall: false, airDodged: false, state: k >= R.tumble.threshold ? 'tumble' : 'hitstun', f: 0 }); // a new hit restarts it; refreshes the air dodge
+  Object.assign(P, { ground: false, on: null, ledge: 0, fastFall: false, airDodged: false, grabbed: false, pinT: 0, state: k >= R.tumble.threshold ? 'tumble' : 'hitstun', f: 0 }); // a new hit restarts it; refreshes the air dodge; knocks it out of a grab or off a pin
+  return true;
 }
 
 // crossed the blast zone: freeze, and leave a blast at the screen edge where it went out, pointing back in (the respawn follows)
 function ko() {
-  const [ex, ey] = exitPoint() || [W / 2, 0], x = clamp(ex, 30, W - 30), y = clamp(ey, 30, H - 30); // right where it left the screen, nudged in to show
-  P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; thrown = null; for (const b of targets) b.held = b.pinned = false; P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
+  const [ex, ey] = (cur === human ? exitPoint() : onScreen()) || [W / 2, 0], x = clamp(ex, 30, W - 30), y = clamp(ey, 30, H - 30); // right where it left the screen, nudged in to show (a CPU: where it is)
+  P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; thrown = null; for (const b of everyone()) { if (b.grabbed === P) b.grabbed = false; if (b.pinned === P) b.pinned = false; } P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
 }
+// back on the respawn platform (P1 in the middle, a CPU over where it dropped in), or out of lives: P1 loses, a CPU's out of the fight
 function respawn() {
-  if (--stocks <= 0) return gameOver();
+  if (--stocks <= 0) { if (cur === human) return gameOver(); cur.out = true; fighters = fighters.filter(c => !c.out); return; }
   [P.w, P.h] = fighter.box; // out of the mech
-  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, stairs: false, gold: 0, mech: 0 });
+  Object.assign(P, { x: (cur === human ? W / 2 : clamp(SPAWN_X[foes.indexOf(cur)], stage.x + 120, stage.x + stage.w - 120)) - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, slowT: 0, sticker: null, stairs: false, gold: 0, mech: 0 });
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -537,12 +568,41 @@ function dmgColor(d) {
   return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * k))})`;
 }
 
+// a frame: each fighter in turn, with what it has out (P1 can hit the CPUs or the bag, the CPUs can hit P1; a CPU's brain works its
+// controls first), then the stage's things. Someone grabbed, on a cord, in a cart or pinned stays where that puts it; slowmode plays
+// every other frame
+let tick = 0;
 function update(dt) {
   if (hitstop > 0) { hitstop--; return; } // impact freeze: nothing moves, but presses stay buffered
-  if (P.state !== 'ko') stepPlayer(dt);
-  else if (++P.f >= R.ko.frames - R.ko.blastAt) respawn(); // the blast plays out first
-  stepWorld(dt);
+  tick++;
+  for (const c of fighters) {
+    use(c);
+    targets = [...fighters.filter(o => (o === human) !== (c === human) && !o.P.safe).map(o => o.P), ...(c === human ? bags : [])];
+    if (P.pinT > 0 && (P.pinT -= dt) <= 0) [P.vx, P.vy] = P.pop; // pinned: stuck where it was hit, then popped free
+    if (P.grabbed || P.pinned || P.carted || P.pinT > 0 || (P.slowT > 0 && tick % 2)) {}
+    else if (P.state !== 'ko') { if (c.brain) cpuStep(c); stepPlayer(dt); }
+    else if (++P.f >= R.ko.frames - R.ko.blastAt) respawn(); // the blast plays out first
+    stepWorld(dt); wear(P, dt);
+    P.safe = P.state === 'ko' || P.state === 'respawn' || P.inv > 0 || intangible(); // nothing can touch it now
+  }
+  use(human);
+  for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego && (plats[i].t += dt) > plats[i].life) plats.splice(i, 1); // the stairs run out
+  for (const b of bags) {
+    b.hitT = Math.max(0, b.hitT - dt); wear(b, dt);
+    const tdt = b.slowT > 0 ? dt / 2 : dt; // slowmode: everything at half speed
+    if (b.pinT > 0) { if ((b.pinT -= dt) > 0) continue; [b.vx, b.vy] = b.pop; } // pinned: stuck where it was hit, then popped free
+    if (b.grabbed || b.pinned || b.carted) continue; // Claw'd (or its ride) places it
+    b.vy = Math.min(b.vy + G * tdt, 950);
+    b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx), (b.ground ? 1800 : 250) * tdt); // floor friction / air drag
+    move(b, tdt, s => { b.vy = 0; b.ground = true; b.on = s; });
+    b.rot = b.ground ? b.rot * 0.8 : b.rot + b.vx * tdt / 80; // tumbles while flying
+    if (out(b)) spawnTarget(b);
+  }
+  for (let i = fx.length - 1; i >= 0; i--) if ((fx[i].t += dt / (fx[i].dur || 0.25)) >= 1) fx.splice(i, 1);
+  if (foes.length && foes.every(c => c.out) && !over) gameOver(true); // last CPU out: P1 wins
 }
+// what's stuck on someone wears off: a sticker, slowmode
+function wear(b, dt) { if (b.sticker && (b.sticker.t += dt) > b.sticker.secs) b.sticker = null; b.slowT = Math.max(0, b.slowT - dt); }
 
 function stepPlayer(dt) {
   P.f++;
@@ -688,7 +748,7 @@ function stepPlayer(dt) {
     if (dg) target = P.vx = P.face * ((dg(P.f + 1).x || 0) - (dg(P.f).x || 0)) / dt; // rolls move exactly as their animation's x
     if (atk?.step && P.f === atk.startup) P.vx = P.face * Math.max(P.face * P.vx, atk.step); // the move's lunge
     accel = target ? 4200 : P.state === 'skid' ? (P.turn ? 1800 * TURN_SPEED : 1800) : P.state === 'dashAttack' ? 800 : atk || P.state === 'landLag' ? ATK_FRICTION : 3600; // attacks keep momentum
-  } else { target = P.state === 'shieldBreak' || stunned || (P.state === 'upSpecial' && US.warp) ? 0 : dir * RUN * pw * (P.state === 'specialFall' ? 0.6 : 1); accel = dir && target ? 2300 : 700; } // helpless drifts slower
+  } else { target = P.state === 'shieldBreak' || stunned || (P.state === 'upSpecial' && US.warp) ? 0 : dir * RUN * pw * (P.state === 'specialFall' ? 0.6 : 1); accel = dir && target ? 2300 : stunned ? 250 : 700; } // helpless drifts slower · launched: flies on like the bag till it can act
   const dv = target - P.vx;
   P.vx += Math.sign(dv) * Math.min(Math.abs(dv), accel * dt);
   const cl = AIR[P.state]; if (cl?.drive && P.f >= cl.startup) P.vx = P.face * cl.drive; // climbing the stairs: steadily ahead, no steering
@@ -744,28 +804,29 @@ function stepPlayer(dt) {
     // multi-hit (every = frames between hits): each hit is its own, and the last one is the finisher's damage / kb if it has one
     const n = m.every ? Math.floor((P.f - m.startup) / m.every) : 0, key = P.state + n, hf = m.finisher && n === Math.ceil(m.active / m.every) - 1 ? m.finisher : m;
     if (P.f >= m.startup && P.f < m.startup + m.active) for (const b of targets) {
-      if (b.hit === key || !overlaps(box, b)) continue;
-      b.hit = key; P.landed = true;
+      if (P.struck.get(b) === key || !overlaps(box, b) || (m.grab && b.grabbed)) continue;
+      P.struck.set(b, key);
       if (m.flight) { crashFlight(m); break; } // a rocket-style ship blows up on whoever it flies into
-      if (m.grab) { grabBag(b); break; } // one in the claws at a time
+      if (m.grab) { grabBag(b); P.landed = true; break; } // one in the claws at a time
       const h = sweet && overlaps(sweet, b) ? m.sweet : hf;
       const miss = P.roll === false && m.missKb; // a gamble that came up wrong hits softer
-      hitBag(b, (miss ? m.missDamage : h.damage) * (hb.mult ?? 1) * charged(m) * (m.hearts ? 1 + 0.3 * (m.hearts - P.roll) : 1), miss ? m.missKb : h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      if (!hitBag(b, (miss ? m.missDamage : h.damage) * (hb.mult ?? 1) * charged(m) * (m.hearts ? 1 + 0.3 * (m.hearts - P.roll) : 1), miss ? m.missKb : h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face)) continue; // both-sided moves send it away · shielded / countered: that's all
+      P.landed = true;
       if (m.sticker) b.sticker = { t: 0, ...m.sticker }; // e.g. a community note stuck on it
       const pin = m.pin && P.chg > 0 && clawdPose().pin; // charged at all: held where the pose's pin stuck in (a quarter as long … all of m.pin), the knockback saved for later
       if (pin) Object.assign(b, { pinT: m.pin * (0.25 + 0.75 * P.chg / m.chargeFrames), pop: [b.vx, b.vy], vx: 0, vy: 0, pinAt: [cx + P.face * (ox + pin[0]), P.y + P.h + pin[1], pin[2]] });
     }
   }
-  if (!m || P.f < m.startup) { for (const b of targets) b.hit = null; P.landed = false; }
-  for (const b of targets) if (b.pinned && !(P.state === 'upSpecial' && P.teth?.link != null)) b.pinned = false; // Claw'd got hit / landed: the cord's gone
+  if (!m || P.f < m.startup) { P.struck.clear(); P.landed = false; }
+  for (const b of everyone()) if (b.pinned === P && !(P.state === 'upSpecial' && P.teth?.link != null)) b.pinned = false; // Claw'd got hit / landed: the cord's gone
   const hb = heldBag();
   if (hb) { // in the claws, where the pose carries it; let go if the pose stops carrying it (Claw'd got hit)
     const c = clawdPose().carry;
-    if (c) Object.assign(hb, { x: P.x + P.w / 2 + P.face * c[0] - hb.w / 2, y: P.y + P.h + c[1] - hb.h, vx: 0, vy: 0, rot: P.face * c[2] }); else hb.held = false;
+    if (c) Object.assign(hb, { x: P.x + P.w / 2 + P.face * c[0] - hb.w / 2, y: P.y + P.h + c[1] - hb.h, vx: 0, vy: 0, rot: P.face * c[2] }); else hb.grabbed = false;
   }
   if (m?.build && P.f === m.startup) legoBuild(m);
   if (m?.step && P.f > m.startup && (P.f - m.startup) % m.step.every === 0) { // a step clicks in under his feet; then the next one's stud, or stop here
-    const S = m.step, k = (P.f - m.startup) / S.every; plats.push({ x: cx + P.face * 6 - S.w / 2, y: P.y + P.h, w: S.w, h: S.h, lego: 'step', col: k % 4, t: 0, life: S.life });
+    const S = m.step, k = (P.f - m.startup) / S.every; plats.push({ x: cx + P.face * 6 - S.w / 2, y: P.y + P.h, w: S.w, h: S.h, lego: 'step', by: P, col: k % 4, t: 0, life: S.life });
     if (k < Math.floor(m.active / S.every)) { if (P.studs >= 1) P.studs--; else { P.vx = P.vy = 0; setState('air'); } }
   }
   if (m?.toss && P.f === m.startup) { const T = m.toss; thrown = { x: cx + P.face * T.x, y: P.y + P.h + T.y, vx: P.face * T.speed, dir: P.face, back: false, sp: T.home[0], t: 0, rot: 0, face: P.face, hit: new Set(), T }; }
@@ -878,14 +939,15 @@ function stepWorld(dt) {
     const r = sh.r, box = { x: sh.x - r, y: sh.y - r, w: 2 * r, h: 2 * r }, hit = sh.cool <= 0 && targets.find(b => overlaps(box, b));
     if (hit) {
       const last = --sh.hits <= 0;
-      hitBag(hit, (pr.damage ?? sh.m.damage) * sh.k, last ? pr.kb || sh.m.kb : NO_KB, Math.sign(sh.vx) || P.face);
+      const ok = hitBag(hit, (pr.damage ?? sh.m.damage) * sh.k, last ? pr.kb || sh.m.kb : NO_KB, Math.sign(sh.vx) || P.face);
       if (!last) { sh.cool = pr.every; sh.vx *= 0.15; }
       if (pr.hitFx) fx.push({ x: sh.x, y: sh.y, t: 0, ...pr.hitFx }); // hitFx = { draw(x, y, t), dur s }
-      if (sh.m.plant) hit.sticker = { t: 0, ...sh.m.plant }; // plant = a sticker it leaves
+      if (ok && sh.m.plant) hit.sticker = { t: 0, ...sh.m.plant }; // plant = a sticker it leaves (not on a shield)
     }
     const wall = !pr.homing && overlaps(box, stage);
-    if (wall && pr.bounce && sh.vy > 0 && sh.y - sh.vy * dt + r <= stage.y + 2) { sh.y = stage.y - r; sh.vy *= -pr.bounce; } // landed on top: bounce
-    else if ((hit && sh.hits <= 0) || wall || sh.t > pr.life) shots.splice(i, 1);
+    const bounce = wall && pr.bounce && sh.vy > 0 && sh.y - sh.vy * dt + r <= stage.y + 2;
+    if (bounce) { sh.y = stage.y - r; sh.vy *= -pr.bounce; } // landed on top: bounce
+    if ((hit && sh.hits <= 0) || (wall && !bounce) || sh.t > pr.life) shots.splice(i, 1); // (a ball rolling along bounces every frame: it still runs out)
   }
 
   for (let i = bricks.length - 1; i >= 0; i--) { // loose bricks: tumble, settle flat, then lie in wait. Only targets can step on them
@@ -910,29 +972,12 @@ function stepWorld(dt) {
     }
   }
   for (let i = booms.length - 1; i >= 0; i--) if ((booms[i].t += dt / 0.45) >= 1) booms.splice(i, 1);
-  for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego && (plats[i].t += dt) > plats[i].life) plats.splice(i, 1); // the stairs run out
 
   if (thrown) stepThrown(dt);
   if (sub) stepSub(dt);
   if (nelly) stepNelly(dt);
   if (cart) stepCart(dt);
   if (wreck) stepWreck(dt);
-
-  for (const b of targets) {
-    b.hitT = Math.max(0, b.hitT - dt);
-    if (b.sticker && (b.sticker.t += dt) > b.sticker.secs) b.sticker = null;
-    b.slowT = Math.max(0, (b.slowT || 0) - dt); const tdt = b.slowT > 0 ? dt / 2 : dt; // slowmode: everything at half speed
-    if (b.pinT > 0) { if ((b.pinT -= dt) > 0) continue; [b.vx, b.vy] = b.pop; } // pinned: stuck where it was hit, then popped free
-    if (b.held || b.pinned || b.carted) continue; // Claw'd (or its ride) places it
-    b.vy = Math.min(b.vy + G * tdt, 950);
-    b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx), (b.ground ? 1800 : 250) * tdt); // floor friction / air drag
-    move(b, tdt, s => { b.vy = 0; b.ground = true; b.on = s; });
-    b.rot = b.ground ? b.rot * 0.8 : b.rot + b.vx * tdt / 80; // tumbles while flying
-    if (out(b) && (b.lives == null || --b.lives)) spawnTarget(b);
-  }
-  if (targets.some(b => b.lives === 0)) { targets = targets.filter(b => b.lives !== 0); if (!targets.length) return gameOver(true); } // last CPU out: Claw'd wins
-
-  for (let i = fx.length - 1; i >= 0; i--) if ((fx[i].t += dt / (fx[i].dur || 0.25)) >= 1) fx.splice(i, 1);
 }
 
 // Nelly crawls straight ahead (falls if she's in the air) until she slows the first target she touches, or gives up
@@ -942,8 +987,8 @@ function stepNelly(dt) {
   if (n.ground) n.vx = n.face * N.speed;
   n.vy = Math.min(n.vy + G * dt, 950);
   move(n, dt, s => { n.vy = 0; n.ground = true; n.on = s; });
-  const b = targets.find(b => !b.held && overlaps(n, b));
-  if (b) { hitBag(b, N.damage, N.kb, n.face); b.slowT = N.slow; fx.push({ x: n.x + n.w / 2, y: n.y + n.h, dir: n.face, t: 0 }); nelly = null; }
+  const b = targets.find(b => !b.grabbed && overlaps(n, b));
+  if (b) { if (hitBag(b, N.damage, N.kb, n.face)) b.slowT = N.slow; fx.push({ x: n.x + n.w / 2, y: n.y + n.h, dir: n.face, t: 0 }); nelly = null; }
 }
 
 // Lego Man's thrown head: out along its line, slowing, then back to his neck wherever he's got to (speeding up), where it clicks
@@ -999,7 +1044,7 @@ function stepCart(dt) {
     if ((c.bagT += dt) >= rd.scoop.carry || crash || out(c)) { b.carted = false; hitBag(b, rd.scoop.damage, rd.scoop.kb, c.face); return poofCart(); }
     return;
   }
-  const hit = targets.find(t => !t.held && overlaps(c, t));
+  const hit = targets.find(t => !t.grabbed && overlaps(c, t));
   if (hit && riding) { // scooped: into the back it goes, and Grok leaps out up and back
     Object.assign(hit, { carted: true, hitT: 0.3 }); c.bag = hit; hitstop = 5;
     P.vy = -AIRJUMP; P.vx = -c.face * 180; P.ground = false; setState('air');
@@ -1014,15 +1059,20 @@ function poofCart() {
   if (!out(c)) for (const d of [-1, 1]) fx.push({ x: c.x + c.w / 2 + d * 30, y: c.y + c.h, dir: d, t: 0 }, { x: c.x + c.w / 2 + d * 10, y: c.y + c.h - 20, dir: d, t: 0 });
 }
 
-// damage + knockback on a target, growing with its damage; bigger hits freeze longer
+// damage + knockback on a target from the fighter in play, growing with the target's damage; bigger hits freeze longer. A fighter
+// takes it its own way (hitClawd: its shield or counter can stop it). false = it didn't connect
 function hitBag(b, dmg, kb, dir) {
   dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt) * (P.gold > 0 ? MOVES.goldBrick.power.mult : 1) * (P.mech > 0 ? MOVES.mech.suit.mult : 1); P.batt = 0; // (+ Lego Man's gold brick / mech suit)
+   // the attacker's effort tier scales every hit, a stored fast charge just this one
+  if (b.c) { const me = cur, g = b.grabbed; use(b.c); const hit = hitClawd(dmg, kb, dir); use(me); if (g === P) b.grabbed = g; if (!hit) return false; } // (a pummel keeps the grip; anyone else's hit knocks it loose)
+  else {
+    b.dmg += dmg; b.hitT = 0.3; b.pinT = 0; // a hit knocks it off a pin
+    hitstop = Math.round(3 + dmg / 4);
+    const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
+    b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a); camPunch(s / KB, b.x + b.w / 2, b.y + b.h / 2);
+  }
   const ST = NEUTRAL_B.studs; if (ST) P.studs = Math.min(ST.max, P.studs + Math.round(dmg)); // Lego Man earns a stud per %
-   // only the player hits targets: its effort tier scales every hit, a stored fast charge just this one
-  b.dmg += dmg; b.hitT = 0.3; b.pinT = 0; // a hit knocks it off a pin
-  hitstop = Math.round(3 + dmg / 4);
-  const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
-  b.vx = dir * s * Math.cos(a); b.vy = -s * Math.sin(a); camPunch(s / KB, b.x + b.w / 2, b.y + b.h / 2);
+  return true;
 }
 
 function out(b) {
@@ -1145,9 +1195,11 @@ function render(t) {
     ctx.lineWidth = 2.2; poly(r, 1.3);
   }
 
-  // shadow
-  const sy = surfaceBelow();
-  if (sy !== null && P.state !== 'ko') {
+  // shadows
+  const all = [...fighters.filter(c => c !== human), human]; // each drawn with its own globals in; P1 on top
+  for (const c of all) {
+    use(c); const sy = surfaceBelow();
+    if (sy === null || P.state === 'ko') continue;
     const dist = sy - (P.y + P.h), s = Math.max(0.25, 1 - dist / 400);
     ctx.globalAlpha = 0.35 * s;
     ctx.fillStyle = 'rgba(42,38,34,0.35)';
@@ -1156,26 +1208,35 @@ function render(t) {
   }
 
   drawTargets(t);
-  if (sub) drawSub();
-  for (const k of bricks) if (k.m.life - k.t > 1.5 || Math.floor(k.t * 10) % 2) drawLooseBrick(k); // blinks before it goes
-  for (const r of rockets) drawLegoRocket(r);
-  for (const b of booms) drawLegoBoom(b.x, b.y, b.t, b.r);
-  if (thrown) drawLegoHead(thrown);
-  if (nelly) drawNelly(nelly.x + nelly.w / 2, nelly.y + nelly.h, nelly.t, nelly.face);
-  if (wreck) wreck.m.wreck.draw(wreck.x, wreck.y, Math.atan2(wreck.vx, -wreck.vy), wreck.boom);
-  if (cart && !cart.done) { const c = cart, air = c.ground ? 0 : Math.max(-0.25, Math.min(0.3, c.vy / 2500)); // noses down as it falls, a wheelie as it sets off
-    fighter.art(c.x + c.w / 2, c.y + c.h, { car: 1, empty: P.state !== 'ride', squint: true, wheel: c.dist / 11, rot: air - 0.1 * Math.max(0, 1 - c.t / 0.15) }, c.face); }
-  for (const sh of shots) { const k = Math.min(1, (sh.pr.life - sh.t) / 0.1); sh.m.shotArt ? sh.m.shotArt(sh.x, sh.y, Math.min(k, sh.t / 0.1), Math.sign(sh.vx) || 1) : (sh.pr.draw || drawSpark)(sh.x, sh.y, sh.r * k, sh.t * 14 * Math.sign(sh.vx), sh); } // shrinks away at max range
-  if (P.state === 'upSpecial' && US.warp) US.marker(P.warp[0], P.warp[1], P.f); // where the warp's headed
+  for (const c of all) { // what each has out
+    use(c);
+    if (sub) drawSub();
+    for (const k of bricks) if (k.m.life - k.t > 1.5 || Math.floor(k.t * 10) % 2) drawLooseBrick(k); // blinks before it goes
+    for (const r of rockets) drawLegoRocket(r);
+    for (const b of booms) drawLegoBoom(b.x, b.y, b.t, b.r);
+    if (thrown) drawLegoHead(thrown);
+    if (nelly) drawNelly(nelly.x + nelly.w / 2, nelly.y + nelly.h, nelly.t, nelly.face);
+    if (wreck) wreck.m.wreck.draw(wreck.x, wreck.y, Math.atan2(wreck.vx, -wreck.vy), wreck.boom);
+    if (cart && !cart.done) { const c = cart, air = c.ground ? 0 : Math.max(-0.25, Math.min(0.3, c.vy / 2500)); // noses down as it falls, a wheelie as it sets off
+      fighter.art(c.x + c.w / 2, c.y + c.h, { car: 1, empty: P.state !== 'ride', squint: true, wheel: c.dist / 11, rot: air - 0.1 * Math.max(0, 1 - c.t / 0.15) }, c.face); }
+    for (const sh of shots) { const k = Math.min(1, (sh.pr.life - sh.t) / 0.1); sh.m.shotArt ? sh.m.shotArt(sh.x, sh.y, Math.min(k, sh.t / 0.1), Math.sign(sh.vx) || 1) : (sh.pr.draw || drawSpark)(sh.x, sh.y, sh.r * k, sh.t * 14 * Math.sign(sh.vx), sh); } // shrinks away at max range
+    if (P.state === 'upSpecial' && US.warp) US.marker(P.warp[0], P.warp[1], P.f); // where the warp's headed
+  }
 
-  // player (flickers after respawn)
+  // fighters (flicker after respawn)
   for (const d of fx) d.draw ? d.draw(d.x, d.y, d.t) : drawDust(d.x, d.y, d.t, d.dir);
-  // x / air in poses are preview-only root motion; here physics moves Claw'd
-  if (P.state !== 'ride' && P.state !== 'ko' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
-  if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
-  if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
+  for (const c of all) {
+    use(c);
+    // x / air in poses are preview-only root motion; here physics moves Claw'd
+    if (P.state !== 'ride' && P.state !== 'ko' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+    if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
+    if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
+    else if (foes.length && P.state !== 'ko' && P.state !== 'booklet') drawMark(c === human);
+  }
+  drawStuck();
   ctx.restore();
-  if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, { ...p, x: 0 }); } // KO blast: on the screen's edge (x = the preview's drift)
+  for (const c of all) { use(c); if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, { ...p, x: 0 }); } } // KO blast: on the screen's edge (x = the preview's drift)
+  use(human);
 
   // hud
   drawHealth(t);
@@ -1206,35 +1267,46 @@ function drawSub() {
   ctx.save(); ctx.translate(bx, by); ctx.scale(k, k); ctx.lineWidth = 2; fighter.art(0, 0, { ...pose, x: 0 }, sub.face); ctx.restore();
 }
 
-// the targets (dummies turned to face Claw'd), shaking when hit; only the training bag floats its damage % above it
+// the training bag (turned to face Claw'd), shaking when hit, its damage % floating above it
 function drawTargets(t) {
-  for (const b of targets) {
+  for (const b of bags) {
     const sh = b.hitT * 14, bx = b.x + b.w / 2 + (Math.random() - 0.5) * sh + (b.pinT > 0 ? Math.sin(t * 50) * 1.5 : 0), by = b.y + b.h; // pinned: struggling
     FIGHTER[b.id].draw(bx, by, { rot: b.rot }, Math.sign(P.x + P.w / 2 - bx) || -1, t);
-    if (b.pinT > 0) drawPin(...b.pinAt, Math.min(1, b.pinT * 5)); // Wumpus's pin, still stuck through it (fades as it pops free)
-    if (b.held && b.pings) { // unread pings from Wumpus's pummel: a red badge on its shoulder
-      const x = bx + b.w / 2 - 2, y = b.y + 4; ctx.fillStyle = '#ed4245'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.pings, x, y + 0.5); ctx.textBaseline = 'alphabetic';
-    }
-    if (b.slowT > 0) { ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK; ctx.fillText(`slowmode · ${Math.ceil(b.slowT)}s`, bx, b.y - (b.id === 'bag' ? 44 : 10)); } // Nelly got it
-    if (b.sticker) b.sticker.draw(bx, b.y + b.h * 0.45, b.rot, Math.min(1, (b.sticker.secs - b.sticker.t) / 0.3)); // fades at the end
-    if (b.held && P.ratio) GR.hold.ratio.draw(bx, b.y - 44, P.ratio); // the ratio meter over whoever's held
-    if (b.id !== 'bag') continue;
+    drawOn(b, bx);
     ctx.font = '700 30px Caveat, cursive'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
     const pct = Math.round(b.dmg) + '%';
     ctx.strokeText(pct, bx, b.y - 12); ctx.fillStyle = dmgColor(b.dmg); ctx.fillText(pct, bx, b.y - 12);
   }
   ctx.textAlign = 'left';
 }
+const drawStuck = () => { for (const c of fighters) drawOn(c.P, c.P.x + c.P.w / 2); ctx.textAlign = 'left'; }; // over the fighters
+// what's on a target (the bag or a fighter), centred on bx
+function drawOn(b, bx) {
+  if (b.pinT > 0) drawPin(...b.pinAt, Math.min(1, b.pinT * 5)); // Wumpus's pin, still stuck through it (fades as it pops free)
+  if (b.grabbed && b.pings) { // unread pings from Wumpus's pummel: a red badge on its shoulder
+    const x = bx + b.w / 2 - 2, y = b.y + 4; ctx.fillStyle = '#ed4245'; ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.pings, x, y + 0.5); ctx.textBaseline = 'alphabetic';
+  }
+  if (b.slowT > 0) { ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = INK; ctx.fillText(`slowmode · ${Math.ceil(b.slowT)}s`, bx, b.y - (b.id === 'bag' ? 44 : 10)); } // Nelly got it
+  if (b.sticker) b.sticker.draw(bx, b.y + b.h * 0.45, b.rot, Math.min(1, (b.sticker.secs - b.sticker.t) / 0.3)); // fades at the end
+  const g = b.grabbed; if (g?.ratio) g.c.GR.hold.ratio.draw(bx, b.y - 44, g.ratio); // the holder's ratio meter over whoever it's holding
+}
+// over a fighter's head when there are CPUs: whose is whose (P1 orange, a CPU grey, like their tags on the select screen)
+function drawMark(you) {
+  const x = P.x + P.w / 2, y = P.y - 16, text = you ? 'P1' : 'CPU';
+  ctx.font = '700 17px Caveat, cursive'; ctx.textAlign = 'center'; const w = ctx.measureText(text).width + 12;
+  ctx.fillStyle = you ? CLAWD : '#6b7280'; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 17, w, 17, 4); ctx.moveTo(x - 5, y - 1); ctx.lineTo(x, y + 5); ctx.lineTo(x + 5, y - 1); ctx.fill();
+  ctx.fillStyle = PAPER; ctx.fillText(text, x, y - 4); ctx.textAlign = 'left';
+}
 
-// hud: Claw'd's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
+// hud: P1's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
 function drawHealth(t) {
   const portrait = (F, face) => () => { const h = F.box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
   badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1), stocks);
   if (NEUTRAL_B.studs) drawLegoStuds(W - 66, 44, P.studs); // Lego Man's studs, by his badge
-  foes.forEach((b, i) => {
-    ctx.globalAlpha = b.lives ? 1 : 0.35; // faded once out
-    badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, portrait(FIGHTER[b.id], -1), b.lives);
+  foes.forEach((c, i) => {
+    ctx.globalAlpha = c.out ? 0.35 : 1; // faded once out
+    badge(W - 120 - (foes.length - i) * 150, c.P.dmg, c.P.hitT, portrait(c.fighter, -1), c.stocks);
   });
   ctx.globalAlpha = 1;
 }
@@ -1320,6 +1392,7 @@ function drawVersus(s) {
     FIGHTER[id].draw(0, 0, { rot: id === 'bag' ? Math.sin(s * 3) * 0.04 : 0 }, -1, s); ctx.restore();
   });
   ctx.fillStyle = PAPER; ctx.textAlign = 'center'; ctx.font = `700 ${n > 1 ? 44 : 76}px Caveat, cursive`; ctx.fillText(foes.map(id => FIGHTER[id].name).join(' · '), W * 0.73, H * 0.88);
+  if (rolled.length) { ctx.font = '600 30px Caveat, cursive'; ctx.globalAlpha = 0.75; ctx.fillText(rolled.map((_, i) => LVL[lvls[i] ?? 3][0]).join(' · '), W * 0.73, H * 0.95); ctx.globalAlpha = 1; } // their levels
   ctx.restore();
   ctx.strokeStyle = PAPER; ctx.lineWidth = 6; line(W / 2 + cut, -10, W / 2 - cut, H + 10, 3, 2); // the seam
   const pop = s < 0.3 ? 0 : 1 + 1.4 * (1 - ease((s - 0.3) / 0.18)); // VS slams in after the panels
@@ -1382,17 +1455,22 @@ function selectAt(x, y) {
   for (let i = 0; i < TILES; i++) if (x > tileX(i) && x < tileX(i) + TILE.w && y > TILE.y && y < TILE.y + TILE.h) return { tile: i };
   if (y > BAND.y && y < BAND.y + BAND.h) return { ready: true };
   if (p1 && x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: true }; // clears the pick
+  for (let i = 1; i <= cpus.length; i++) if (x > pillX(i) && x < pillX(i) + PILL.w && y > PILL.y && y < PILL.y + PILL.h) return { level: [i - 1, (lvls[i - 1] + (x < pillX(i) + PILL.w / 2 ? -1 : 1) + LVL.length) % LVL.length] }; // left half ‹ / right half ›, wrapping
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
-const addCpu = id => { if (cpus.length < MAX_CPUS) cpus.push(id); };
+// CPU levels (what they mean: CPU_LEVELS in src/cpu.js): a ‹ level › switch on each CPU's slot picks its own; a new CPU gets the last one picked (lvl)
+const LVL = [['beginner', '#9cc3e6'], ['easy', '#8fb573'], ['casual', '#c9c55a'], ['medium', '#e9b949'], ['skilled', '#e8833a'], ['hard', '#d9442e'], ['AI trained', '#8b5cf6']], PILL = { w: 200, h: 34, y: SLOT.y + SLOT.h - 104 }, pillX = i => slotX(i) + (SLOT.w - PILL.w) / 2; // AI trained = the one tuned against CPUs: fast, relentless
+let lvl = 3; // medium
+const addCpu = id => { if (cpus.length < MAX_CPUS) { cpus.push(id); lvls.push(lvl); } };
 const pickTile = i => { const id = i === ROSTER.length ? 'random' : ROSTER[i]; p1 ? addCpu(id) : p1 = id; }; // the first pick is P1's fighter, the rest are CPUs
-function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick
+function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick · 1 2 3 every CPU's level
   const n = TILES;
   if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
   else if (a === 'down' || a === 'up') onBand = a === 'down';
   else if (code === 'Enter' || code === 'Space') onBand ? p1 && versus() : pickTile(focus);
-  else if (code === 'Backspace' || code === 'Delete') cpus.length ? cpus.pop() : p1 = null;
+  else if (code === 'Backspace' || code === 'Delete') cpus.length ? (cpus.pop(), lvls.pop()) : p1 = null;
+  else if (/^Digit[1-7]$/.test(code)) lvls.fill(lvl = +code[5] - 1);
   else return false;
   return true;
 }
@@ -1453,15 +1531,22 @@ function drawSelect(t) {
     }
     ctx.globalAlpha = ghost ? 0.5 : 1;
     ctx.fillStyle = i ? '#d6d2c9' : '#f3cdb9'; path(r); ctx.fill(); ctx.strokeStyle = i ? INK : CLAWD; hatch(r, 16, 0.12);
+    const cpu = i && !ghost; // (standing a little higher, over its level pills)
     ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 2, SLOT.w - 4, SLOT.h - 64); ctx.clip();
-    ctx.translate(x + SLOT.w / 2, y + 240); ctx.scale(2.4, 2.4); FIGHTER[id].draw(0, 0, {}, i ? -1 : 1, t); ctx.restore();
+    ctx.translate(x + SLOT.w / 2, y + (cpu ? 208 : 240)); ctx.scale(2.4, 2.4); FIGHTER[id].draw(0, 0, {}, i ? -1 : 1, t); ctx.restore();
     ctx.fillStyle = INK; path(rect(x, y + SLOT.h - 62, SLOT.w, 62)); ctx.fill(); // name plate
     ctx.fillStyle = PAPER; ctx.font = '700 40px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + SLOT.w / 2, y + SLOT.h - 18);
     ctx.strokeStyle = i ? INK : CLAWD; ctx.lineWidth = i ? 2.4 : 3.4; poly(r, 1.2);
     tag(x + 10, y + 10, i ? (ghost ? 'no CPUs' : `CPU ${i}`) : 'P1', i ? '#6b7280' : CLAWD);
     if (!ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
-    ctx.globalAlpha = 1;
+    if (cpu) { // its level: ‹ name ›
+      const [name, col] = LVL[lvls[i - 1]], px = pillX(i), cy = PILL.y + 25;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(px, PILL.y, PILL.w, PILL.h, 17); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+      ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 26px Caveat, cursive'; ctx.fillText(name, px + PILL.w / 2, cy);
+      ctx.font = '700 34px Caveat, cursive'; ctx.fillText('‹', px + 18, cy + 2); ctx.fillText('›', px + PILL.w - 18, cy + 2);
+    }
   }
+  if (cpus.length) { ctx.fillStyle = INK; ctx.globalAlpha = 0.6; ctx.textAlign = 'center'; ctx.font = '600 22px Caveat, cursive'; ctx.fillText('click ‹ › on a CPU to change its level · 1–7 set them all · AI trained = tuned against other AIs', W / 2, H - 9); ctx.globalAlpha = 1; }
   ctx.textAlign = 'left';
 }
 
