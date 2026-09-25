@@ -96,13 +96,14 @@ const title = k => k.replace(/([A-Z]|\d+)/g, ' $1').replace(/^./, c => c.toUpper
 // bounces instead of walking and Duo flies: grok-moveset.js, duo-moveset.js), and get the rest of his move list, all still to do
 const todo = Object.fromEntries(Object.entries(MOVESET).map(([g, moves]) => [g, Object.fromEntries(Object.keys(moves).map(k => [k, {}]))]));
 const basic = { ...todo, movement: MOVESET.movement };
+const withTodo = set => ({ ...todo, ...Object.fromEntries(Object.entries(set).map(([g, m]) => [g, { ...todo[g], ...m }])) }); // a fighter's moves, the rest still to do
 const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
-  grok: { name: 'Grok Bot', moves: { ...todo, ...GROK_MOVESET }, draw: drawGrok, fx: drawClawdFx },
+  grok: { name: 'Grok Bot', moves: withTodo(GROK_MOVESET), draw: drawGrok, fx: drawClawdFx, hurt: grokHurtbox },
   wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
   android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
-  duo: { name: 'Duo', moves: { ...todo, ...DUO_MOVESET }, draw: drawDuo, fx: drawClawdFx },
-  snoo: { name: 'Snoo', moves: { ...todo, ...SNOO_MOVESET }, draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
+  duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
+  snoo: { name: 'Snoo', moves: withTodo(SNOO_MOVESET), draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
   lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
 };
@@ -142,7 +143,8 @@ function pick(id) {
   IDS.forEach(i => $('who-' + i).setAttribute('aria-selected', i === id));
   for (const [group, moves] of Object.entries(F.moves)) {
     const h = document.createElement('h2'); h.textContent = title(group); $('nav').append(h);
-    for (const [key, move] of Object.entries(moves)) {
+    for (const [key, m] of Object.entries(moves)) {
+      const move = m.preview ? { ...m, anim: m.preview } : m; // a move the game plays in parts (Grok's Starship) previews as one run
       const b = document.createElement('button');
       b.textContent = title(key);
       if (move.anim) b.classList.add('done');
@@ -165,17 +167,18 @@ function select(i) {
   $('sub').textContent = `${F.name} · ${title(group)}${move.input ? ' · ' + move.input : ''}`;
 
   const { startup, active, endlag } = move;
-  phases = [startup, active, endlag].every(Number.isFinite)
+  phases = !move.previewFrames && [startup, active, endlag].every(Number.isFinite)
     ? [['startup', startup], ['active', active], ['endlag', endlag]]
     : [];
-  total = phases.length ? startup + active + endlag : move.frames || 60;
+  total = phases.length ? startup + active + endlag : move.previewFrames || move.frames || 60;
   $('bar').innerHTML = (phases.length
     ? phases.map(([n, v]) => `<div class="${n}" style="flex:${v}">${n} ${v}f</div>`).join('')
     : `<div class="none" style="flex:1">no frame data · looping ${total}f</div>`) + '<div class="head" id="head"></div>';
   $('boardwrap').hidden = !move.anim;
 
+  const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'function' ? 'ƒ' : typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
   $('data').innerHTML = Object.entries(move).filter(([k]) => k !== 'input').map(([k, v]) =>
-    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? Object.entries(v).map(([a, b]) => `${a}: ${b ?? '—'}`).join(' · ') : v}</dd>`).join('');
+    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? show(v) : v}</dd>`).join('');
 }
 
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
