@@ -179,6 +179,12 @@ const MUSE_MOVESET = {
   },
   reactions: {
     ...SNOO_MOVESET.reactions,
+    ko: { ...SNOO_MOVESET.reactions.ko, // spins off like Snoo, then a burst of Muse Spark's violet, pink and Meta blue round a spinning Meta ∞
+      anim: f => {
+        const p = SNOO_MOVESET.reactions.ko.anim(f);
+        return p.blast ? { ...p, blast: [p.blast[0], p.blast[1], ['#8b5cf6', '#ff7ad9', META, INK], (x, y, r, spin) => { ctx.save(); ctx.translate(x, y); ctx.rotate(spin * 0.3); metaLoop(r * 3, r * 1.2, 5); ctx.restore(); }] } : p;
+      },
+    },
     respawn: { // lowered in on the platform, saying hi
       ...SNOO_MOVESET.reactions.respawn, name: undefined, say: "Hi, I'm Muse!",
       anim: f => { const p = SNOO_MOVESET.reactions.respawn.anim(f); return { ...p, say: ["Hi, I'm Muse!", p.say[1]] }; },

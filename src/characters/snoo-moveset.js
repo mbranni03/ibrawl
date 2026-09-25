@@ -583,7 +583,8 @@ const SNOO_MOVESET = {
       swing: f < 14 ? [-1.8, 1.8] : [-1.6 - 0.15 * Math.sin(f / 4), 1.6 + 0.15 * Math.sin(f / 4 + 1)], ant: 1.1 })),
     tech: snooOver(MOVESET.reactions.tech, f => tween(f, [[0, { swing: [-1.4, 1.4] }], [5, { swing: [-1.9, 1.9], ant: -0.6 }], [11, { swing: [-0.6, 0.6], ant: 0.2 }], [22, {}]])),
     getup: snooOver(MOVESET.reactions.getup, f => tween(f, [[0, { swing: [-1.6, 1.6], ant: 1.1 }], [13, { swing: [0.4, -0.4], ant: -0.4 }], [18, { swing: [-1.4, 1.4], ant: 0.3 }], [26, {}]])),
-    ko: snooOver(MOVESET.reactions.ko, () => ({ swing: [-1.9, 1.9], ant: -1 })), // arms up, spinning off
+    ko: snooOver(MOVESET.reactions.ko, f => f < 20 ? { swing: [-1.9, 1.9], ant: -1 } // arms up, spinning off, then a burst of ink and orange-red round a karma orb
+      : { blast: [(f - 20) / 60, Math.PI - 0.6, SNOO_EYE, drawKarma] }),
     respawn: { // lowered in on the platform, [restored] (the opposite of [removed]) overhead
       ...MOVESET.reactions.respawn, name: 'Restored', say: '[restored]',
       anim: f => { const p = MOVESET.reactions.respawn.anim(f); return { ...p, swing: [-0.1, 0.1], say: ['[restored]', p.say[1]] }; },

@@ -639,10 +639,14 @@ const WUMPUS_MOVESET = {
         puff: f >= 18 ? (f - 18) / 8 : null,
       }),
     },
-    ko: { ...MOVESET.reactions.ko, // spins off shrinking (preview only), then a blurple burst at the edge
+    ko: { ...MOVESET.reactions.ko, // spins off shrinking (preview only), then a blurple burst at the edge round Discord's grey offline dot, Nitro sparkles circling it
       anim: f => f < 20
         ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, ears: 1.6, arms: 1.5, squint: true }
-        : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, WUMPUS, false] },
+        : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, WUMPUS, (x, y, r, spin) => {
+          ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.fillStyle = '#80848e'; ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, 6.28); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(x, y, r * 0.25, 0, 6.28); ctx.fill(); ctx.stroke();
+          sparkles(x, y, r * 0.9, 1, BOOST);
+        }] },
     },
     respawn: { // Discord's join message, over the respawn platform
       ...MOVESET.reactions.respawn, name: 'Wild Wumpus', say: 'A wild Wumpus appeared.',
