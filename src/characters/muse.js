@@ -11,6 +11,10 @@
 //   cubes = [in 0 … 1, cut] a red and a blue Beat Saber cube sliding in either side; cut = 0 … 1 once sliced, halves flying (or null)
 //   headset = 0 … 1 size of the Quest headset strapped over its face window (it grins under it)
 // and its specials:
+//   shield = 0 … 1 size of the doomscroll: a giant phone standing in front of it like a riot shield, feed posts scrolling up its
+//            screen (Muse flicks it with a finger: poke), doomscrolling… over its head; scroll = frames
+//            (their scroll) · wear = 0 … 1 how worn: the screen cracks, posts drop out, the glow dims · shatter = 0 … 1 posts and
+//            shards of phone scattering (shield break)
 //   tag = [text, x, y, t 0 … 1, colour] a label popping up at x, y (px from bottom-centre, like hitboxes) and drifting up (throws)
 //   stream = [phase (frames), spent 0 … 1, on 0 … 1] electric-blue sparks shooting from between its hands, shorter as it's spent
 //   poke = true: a pointing finger on the end of the front arm · balloons = [size 0 … 1, pop 0 … 1 or null, sway] birthday
@@ -55,6 +59,7 @@ function museFuzz(x, y, rx, ry, rot = 0, col = MUSE) {
 }
 
 function drawMuse(cx, bottom, pose = {}, face = 1) {
+  if (pose.shield > 0.05) museFeed(cx + ((pose.x || 0) + 62) * face, bottom + (pose.y || 0) - 40, 0.75 * pose.shield + 0.25, pose.wear || 0, pose.scroll || 0); // behind its reaching arm
   ctx.save();
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
   ctx.translate(0, -36); ctx.rotate(pose.rot || 0); ctx.translate(0, 36); // origin back at the feet
@@ -96,6 +101,9 @@ function drawMuse(cx, bottom, pose = {}, face = 1) {
   if (pose.tag) museTag(cx + ((pose.x || 0) + pose.tag[1]) * face, bottom + (pose.y || 0) + pose.tag[2], pose.tag[0], pose.tag[3], pose.tag[4]);
   if (pose.vote) museVote(cx + (pose.x || 0) * face, bottom + (pose.y || 0), face, ...pose.vote);
   if (pose.llama) museLlama(cx + 66 * face, bottom, face, ...pose.llama); // where it stands, whatever Muse does
+  const fx = cx + ((pose.x || 0) + 62) * face, fy = bottom + (pose.y || 0) - 40; // the shield's giant phone, out in front of it
+  if (pose.shield > 0.05) museTag(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 86, 'doomscrolling…', pose.shield >= 0.7 ? 0.3 : 0.3 * pose.shield / 0.7, META); // over its head, popping in (the game's worn shield never drops below 0.75)
+  if (pose.shatter != null) museFeedScatter(fx, fy, pose.shatter);
   if (pose.cubes) museCubes(cx, bottom, face, ...pose.cubes);
   if (pose.balloons) museBalloons(cx + (pose.x || 0) * face, bottom + (pose.y || 0) - 62 * (pose.sy ?? 1), ...pose.balloons);
   if (pose.imagine) museImagine(cx, bottom, face, cx + (pose.x || 0) * face, bottom + (pose.y || 0), ...pose.imagine);
@@ -359,5 +367,52 @@ function museTag(x, y, text, t, col) {
   ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif'; const w = ctx.measureText(text).width + 18;
   ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-w / 2, -10, w, 20, 10); ctx.fill(); ctx.stroke();
   ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 0, 0.5);
+  ctx.restore();
+}
+
+// a feed post, 30 x 22 about the origin: a white card, a coloured photo, two lines of text, sometimes a heart
+const FEED = ['#f25c54', '#3a86ff', '#ffd23f', '#8b5cf6']; // the photos' colours: the feed repeats every four posts
+const FEED_GAP = [0.6, 0.4, 0.8, 1.01]; // how worn the shield is before each of the four drops out (the last never does)
+function museCard(i) {
+  rbox(0, 0, 30, 22, 3, '#fff', 1.6);
+  ctx.fillStyle = FEED[i % FEED.length]; ctx.fillRect(-12, -8, 11, 11);
+  ctx.strokeStyle = '#c9ccd1'; ctx.lineWidth = 1.6; line(2, -6, 11, -6, 0.2, 1); line(2, -1, 9, -1, 0.2, 1); ctx.strokeStyle = INK;
+  if (i % 4 === 0) { ctx.save(); ctx.translate(-6, 7); ctx.scale(2.4, 2.4); ctx.fillStyle = MUSE_HEART; heartPath(); ctx.fill(); ctx.restore(); }
+}
+// the shield: a giant phone standing at x, y (its middle), size k, glowing faintly, feed posts scrolling up its screen. Worn (0 … 1),
+// its screen cracks, posts drop out and its glow dims. A post passes every 11.5 frames and the feed repeats every four, so the game's
+// 46-frame shield loop is seamless. Never mirrored
+const PHONE_CRACKS = [[0.25, [[6, -30], [1, -16], [9, -6], [3, 6]]], [0.5, [[-15, 2], [-5, 6], [-8, 18]]], [0.75, [[15, 14], [5, 20], [8, 33]]]];
+function museFeed(x, y, k, wear, scroll) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.strokeStyle = INK; ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.save(); ctx.globalAlpha *= 0.3 * (1 - 0.7 * wear); ctx.fillStyle = SPARK_GLOW; ctx.beginPath(); ctx.roundRect(-25, -45, 50, 90, 13); ctx.fill(); ctx.restore(); // the glow
+  rbox(0, 0, 38, 80, 9, '#1c1e21', 2.2); // the phone
+  const screen = () => { ctx.beginPath(); ctx.roundRect(-16, -36, 32, 72, 6); };
+  ctx.fillStyle = '#f4f7fb'; screen(); ctx.fill();
+  ctx.save(); screen(); ctx.clip();
+  for (let n = 0; n < 5; n++) {
+    const i = n + Math.floor(scroll / 11.5), u = (scroll % 11.5) / 11.5 + n, cy = 46 - u * 22; // posts rising up the screen
+    if (FEED_GAP[i % 4] < wear) continue; // worn: gaps in the feed
+    ctx.save(); ctx.translate(0, cy); ctx.scale(0.9, 0.9); museCard(i); ctx.restore();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#1c1e21'; ctx.beginPath(); ctx.roundRect(-6, -34, 12, 4, 2); ctx.fill(); // the camera notch
+  for (const [at, pts] of PHONE_CRACKS) if (wear >= at) for (const [c, w] of [[INK, 2.2], ['#fff', 1]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([px, py], n) => n ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// the shield breaking: posts and shards of the phone flying off every which way, tumbling and fading (shatter 0 … 1). Never mirrored
+function museFeedScatter(x, y, t) {
+  ctx.save(); ctx.globalAlpha *= 1 - t; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  for (let i = 0; i < 6; i++) { // shards
+    const a = -Math.PI / 2 + (i - 2.5) * 0.7, sp = 70 + 12 * (i % 3);
+    ctx.save(); ctx.translate(x + Math.cos(a) * sp * t, y + Math.sin(a) * sp * t + 90 * t * t); ctx.rotate((i % 2 ? -1 : 1) * 7 * t + i);
+    ctx.fillStyle = '#1c1e21'; path([[-7, -5], [8, -3], [1, 8]]); ctx.fill(); ctx.lineWidth = 1.4; ctx.stroke(); ctx.restore();
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = -Math.PI / 2 + (i - 3) * 0.55, sp = 60 + 14 * (i % 3);
+    ctx.save(); ctx.translate(x + Math.cos(a) * sp * t, y + Math.sin(a) * sp * t + 80 * t * t); ctx.rotate((i % 2 ? 1 : -1) * 5 * t); ctx.scale(0.8, 0.8); museCard(i); ctx.restore();
+  }
   ctx.restore();
 }

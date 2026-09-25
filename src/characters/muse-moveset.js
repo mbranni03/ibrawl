@@ -4,7 +4,8 @@
 // Quest headset. Its specials: a stream of Muse sparks from its hands (held, like fire breath), a long stretchy Facebook poke, birthday balloons up
 // (its recovery), and a Meta AI prompt that drops whatever it imagined. Its grabs are Snoo's (stretchy arms out, held at arm's
 // length), handing out likes as it pummels and on the up throw, a heart on the down throw, "Shared!" on the forward throw and
-// "Unfriended" on the back throw. No shield yet (off in the game), and so no shield break; the dodges are Snoo's too.
+// "Unfriended" on the back throw. Its shield: doomscrolling behind a giant phone, the feed scrolling up its screen; the break:
+// "Time for a break?". The dodges are Snoo's.
 // Snoo's grabs on Muse's wider body: its back arm, reaching forward, stretches further to get round the body to the foe too, a
 // little higher than the front one so both show
 const MUSE_GRABS = Object.fromEntries(Object.entries(SNOO_MOVESET.grabs).map(([k, m]) => [k, { ...m, anim: (f, n) => {
@@ -147,7 +148,23 @@ const MUSE_MOVESET = {
       anim: f => ({ ...MUSE_GRABS.backThrow.anim(f), tag: f >= 16 && f < 36 ? ['Unfriended', -66, -76, (f - 16) / 20, '#65676b'] : null }),
     },
   },
-  defense: Object.fromEntries(Object.entries(SNOO_MOVESET.defense).filter(([k]) => !k.startsWith('shield'))),
+  defense: {
+    ...SNOO_MOVESET.defense,
+    shield: { // doomscrolling: a giant phone stands up in front of it like a riot shield and it hunches behind it, glassy-eyed,
+      // flicking the feed up its screen with a finger (in the game it shrinks, cracks, thins out and fades as the shield wears down)
+      input: 'hold dodge (Shift / Z)', frames: 60,
+      anim: f => {
+        const hunch = { rot: 0.1, sx: 1.04, sy: 0.94, swing: [0.3, 1.25], arm: [2, 0], blink: 0.55, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]], shield: 1 };
+        const p = tween(f, [[0, {}], [4, hunch], [50, hunch], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.swing = [0.3, 1.25 + 0.1 * Math.sin((f - 4) / 11.5 * Math.PI * 2)]; // a flick every post
+        return { ...p, poke: f > 2 && f < 54, scroll: f, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // preview wears it out over the hold (the game uses the real shield health)
+      },
+    },
+    shieldBreak: { // the feed scatters, it pops up flailing and lands dizzy: Instagram tells it to take a break
+      ...SNOO_MOVESET.defense.shieldBreak, oops: [['Time for a break?', "you've been scrolling for a while"]],
+      anim: f => ({ ...SNOO_MOVESET.defense.shieldBreak.anim(f), oopsMsg: ['Time for a break?', "you've been scrolling for a while"] }),
+    },
+  },
   reactions: {
     ...SNOO_MOVESET.reactions,
     respawn: { // lowered in on the platform, saying hi

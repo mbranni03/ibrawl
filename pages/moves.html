@@ -158,7 +158,7 @@ const FIGHTERS = {
   duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: withTodo(SNOO_MOVESET), draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
-  muse: { name: 'Muse', moves: withTodo(MUSE_MOVESET), draw: drawMuse, fx: drawClawdFx,
+  muse: { name: 'Muse', moves: withTodo(MUSE_MOVESET), draw: drawMuse, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
     hurt: (p = {}) => { const w = 50 * (p.sx ?? 1), h = 70 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
   lego: { name: 'Lego Man', moves: withTodo(LEGO_MOVESET), draw: drawLego, fx: drawClawdFx, hurt: (p = {}) => ({ x: (p.x || 0) - 22 * (p.sx ?? 1), y: (p.y || 0) - 72 * (p.sy ?? 1), w: 44 * (p.sx ?? 1), h: 72 * (p.sy ?? 1) }) },
 };
