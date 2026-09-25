@@ -1,6 +1,6 @@
 // Wumpus's moveset (drawn by wumpus.js), Discord-flavoured. Movement is Claw'd's (clawd-moveset.js, loaded first); his arm and
 // leg poses move Wumpus's stubby arms and outer feet, reach punches a paw out and ears swing its floppy ears.
-// Fields are as in clawd-moveset.js. Groups not here yet (defense, ledge) are still to build.
+// Fields are as in clawd-moveset.js. His defense has no shield yet (so he can't shield); reactions are Claw'd's.
 let reaction = 0; // which emoji the forward smash is holding
 const sayW = (text, f, from, to) => f >= from && f < to ? [text, Math.min(1, (f - from) / 3, (to - f) / 8)] : null; // caption popping up over the head
 // movement: Claw'd's, plus Wumpus's arms swinging out from the shoulders (arms), which his arm offsets alone barely show.
@@ -9,6 +9,30 @@ const MV = MOVESET.movement, cycle = (f, n, k = 1) => Math.sin(f / n * Math.PI *
 const ease = (f, ks) => tween(f, ks.map(([k, a]) => [k, { a }])).a; // one number eased through [[frame, value], …]
 const armsOn = (m, arms) => ({ ...m, anim: (f, n = m.frames) => ({ ...m.anim(f, n), arms: arms(f, n) }) });
 const WHOLD = { rot: -0.05, ears: [0.2, 1.4], reach: [14, 16], legs: [[-3, 0], [0, 0], [0, 0], [2, 0]], carry: [50, -4, 0] }; // hugging it: front ear over it, paws on
+// dodges go Discord 'Invisible': faded out with the grey status dot while nothing can hurt it (from … to, ramping in and out over 2 frames)
+const invisible = (f, from, to) => Math.max(0, Math.min(1, (f - from + 2) / 2, (to - f + 2) / 2));
+// a ground roll 120px toward d: squash, tuck, one full turn, pop up still facing the same way (x is real movement in the game)
+const wRoll = d => f => {
+  const tuck = { sx: 0.84, sy: 0.84, ears: -0.3, arms: 0, legs: legsAll(0, -4) };
+  const p = tween(f, [[0, {}], [3, { sx: 1.1, sy: 0.84, rot: 0.1 * d, arms: 0.2 }], [6, { ...tuck, x: 12 * d }], [22, { ...tuck, x: 112 * d }], [25, { x: 120 * d, sx: 1.12, sy: 0.84, arms: 0.3 }], [30, { x: 120 * d }]]);
+  const e = Math.min(1, Math.max(0, (f - 4) / 18));
+  return { ...p, rot: d * Math.PI * 2 * e * e * (3 - 2 * e), invisible: invisible(f, 4, 20), [d > 0 ? 'dust' : 'dustAhead']: f >= 4 && f < 16 ? (f - 4) / 12 : null };
+};
+// a sideways air dodge toward d: flinch, then streak off stretched the way it's going, ears trailing
+const wSideDodge = d => f => ({
+  ...tween(f, [
+    [0, AIRBORNE],
+    [2, { sx: 0.92, sy: 1.08, rot: -0.1 * d, ears: 0.4, legs: TUCK }],
+    [4, { x: 30 * d, sx: 1.2, sy: 0.84, rot: 0.14 * d, ears: d > 0 ? [1.2, -0.3] : [-0.3, 1.2], arms: 0.9, legs: legsAll(-4 * d, -2) }],
+    [14, { x: 130 * d, sx: 1.16, sy: 0.86, rot: 0.1 * d, ears: d > 0 ? [1.1, -0.3] : [-0.3, 1.1], arms: 0.9, legs: legsAll(-4 * d, -2) }],
+    [18, { x: 140 * d, sx: 0.96, sy: 1.04, rot: -0.04 * d, ears: 0.3, legs: TUCK }],
+    [28, { ...AIRBORNE, x: 144 * d }],
+  ]),
+  invisible: invisible(f, 2, 18), speed: f >= 3 && f < 16 ? d * (1 - (f - 3) / 13) : 0, air: -40,
+});
+// hanging off the ledge by the front ear hooked over the lip, the rest of it dangling below (x / air from standing at the lip, as Claw'd's)
+const WHANG = { x: -55, air: 72, sy: 1.04, ears: [0.8, 2.7], arms: 1.2, legs: [[0, 3], [0, 0], [0, 0], [0, 3]] };
+const WHAUL = { x: -55, air: 78, sx: 1.06, sy: 0.92, ears: [0.9, 2.5], arms: 1.3, legs: legsAll(0, 2) }; // dipping to haul itself up
 const WUMPUS_MOVESET = {
   movement: {
     ...MV,
@@ -382,6 +406,119 @@ const WUMPUS_MOVESET = {
         [22, { x: 16, y: -18, rot: -0.1, ears: 1, arms: 1, carry: [48, 2, 0] }], // hopping back off as it pops out
         [37, { carry: [48, 2, 0] }],
       ] }),
+    },
+  },
+  defense: { // no shield (yet): dodge / rolls / air dodges only
+    spotDodge: {
+      input: 'dodge (Shift / Z)', frames: 26, intangible: [3, 18],
+      anim: f => ({
+        ...tween(f, [
+          [0, {}],
+          [3, { sx: 1.12, sy: 0.84, ears: 0.4, arms: 0.3 }],
+          [6, { sx: 0.9, sy: 0.9, ears: 1, arms: 0.8 }],
+          [16, { sx: 0.9, sy: 0.9, ears: 1.1, arms: 0.8 }],
+          [21, { sx: 1.08, sy: 0.92, ears: 0.3 }],
+          [26, {}],
+        ]),
+        invisible: invisible(f, 3, 18),
+      }),
+    },
+    rollForward: { input: 'dodge + forward', frames: 30, intangible: [4, 20], anim: wRoll(1) },
+    rollBack: { input: 'dodge + back', frames: 30, intangible: [4, 20], anim: wRoll(-1) },
+    airDodgeForward: { input: 'dodge + forward (airborne)', frames: 28, anim: wSideDodge(1) },
+    airDodgeBack: { input: 'dodge + back (airborne)', frames: 28, anim: wSideDodge(-1) },
+    airDodge: { // once per airtime: a burst of speed toward the held direction (none = stall in place), then free to act
+      input: 'dodge (airborne) + any direction', frames: 28, intangible: [2, 18], speed: 720, burst: 12, landingLag: 10,
+      anim: f => ({
+        ...tween(f, [
+          [0, AIRBORNE],
+          [2, { sx: 1.08, sy: 0.92, ears: 0.4, arms: 0.3, legs: TUCK }],
+          [5, { sx: 0.9, sy: 0.9, ears: 1.1, arms: 0.9, legs: TUCK }],
+          [18, { sx: 0.9, sy: 0.9, ears: 1.1, arms: 0.9, legs: TUCK }],
+          [24, { sx: 1.04, sy: 0.97, ears: 0.3, legs: TUCK }],
+          [28, AIRBORNE],
+        ]),
+        invisible: invisible(f, 2, 18), air: -40,
+      }),
+    },
+  },
+  ledge: { // the floor is the stage top; x / air are root motion while on the ledge (grab / hang / getup / jump wind-up)
+    ledgeGrab: {
+      input: 'fall near ledge', frames: 10,
+      anim: f => tween(f, [ // the ear flops over the lip and catches, weight drops and stretches, settles into the hang
+        [0, { x: -55, air: 60, sx: 0.92, sy: 1.12, ears: [0.6, 2.9], arms: 1.4, legs: legsAll(0, 3) }],
+        [4, { x: -55, air: 80, sx: 1.04, sy: 0.96, ears: [0.9, 2.6], arms: 1.3, legs: legsAll(0, 5) }],
+        [10, WHANG],
+      ]),
+    },
+    ledgeHang: {
+      input: 'none', frames: 60,
+      anim: (f, n) => { // dangling from the ear: slow sway, feet swinging behind
+        const s = Math.sin(f / n * Math.PI * 2);
+        return { ...WHANG, rot: 0.05 * s, arms: 1.2 + 0.15 * s, legs: [[-s, 3], [0, 0], [0, 0], [-s, 3]] };
+      },
+    },
+    ledgeGetup: {
+      input: 'toward stage / up', frames: 24,
+      anim: f => ({ // dip, haul up over the lip feet tucked, squash down onto the stage
+        ...tween(f, [
+          [0, WHANG],
+          [5, WHAUL],
+          [11, { x: -44, air: -6, sx: 0.9, sy: 1.12, rot: 0.25, ears: 1.4, arms: 1, legs: legsAll(0, -4) }],
+          [16, { x: -14, air: -4, rot: 0.15, ears: 0.6, legs: legsAll(0, -3) }],
+          [19, { sx: 1.16, sy: 0.8, arms: 0.3 }],
+          [24, {}],
+        ]),
+        puff: f >= 19 ? (f - 19) / 5 : null,
+      }),
+    },
+    ledgeJump: {
+      input: 'jump', frames: 40, launchAt: 6, // the game hands off to the normal jump arc at launchAt
+      anim: f => tween(f, [ // pull down on the ear, spring straight up off the ledge, drift over the stage
+        [0, WHANG],
+        [4, { ...WHAUL, air: 80, sx: 1.08, sy: 0.9 }],
+        [6, { x: -53, air: 66, sx: 0.88, sy: 1.18, ears: [1.5, 2.9], arms: 1.6, legs: legsAll(0, 3) }],
+        [20, { x: -40, air: -90, sx: 1.04, sy: 0.96, ears: 0.8, arms: 1.4, legs: TUCK }],
+        [34, { x: -24, air: -40, sx: 0.94, sy: 1.08, ears: 1, arms: 1.2, legs: REACH }],
+        [40, { x: -20, air: -30, sx: 0.94, sy: 1.08, ears: 1, arms: 1.2, legs: REACH }],
+      ]),
+    },
+    ledgeRoll: {
+      input: 'dodge (Shift / Z)', frames: 36, intangible: [0, 36], // can't be hurt the whole way
+      anim: f => { // haul up, tuck and roll a full turn onto the stage (gone invisible), pop up well inland
+        const tuck = { sx: 0.84, sy: 0.84, ears: -0.3, arms: 0, legs: legsAll(0, -4) };
+        const p = tween(f, [[0, WHANG], [5, WHAUL], [10, { ...tuck, x: -40, air: -10 }], [25, { ...tuck, x: 72, air: -4 }], [28, { x: 84, sx: 1.12, sy: 0.82, arms: 0.3 }], [36, { x: 90 }]]);
+        const e = Math.min(1, Math.max(0, (f - 9) / 17));
+        return { ...p, rot: Math.PI * 2 * e * e * (3 - 2 * e), invisible: invisible(f, 6, 28), puff: f >= 26 && f < 32 ? (f - 26) / 6 : null };
+      },
+    },
+    ledgeAttack: { // haul up and whip the front ear out low along the stage as it lands
+      input: 'light / heavy (on ledge)', startup: 16, active: 4, endlag: 16, damage: 7, kb: { base: 30, growth: 50, angle: 35 },
+      hitbox: { x: 22, y: -62, w: 44, h: 40 },
+      anim: f => ({
+        ...tween(f, [
+          [0, WHANG],
+          [4, WHAUL],
+          [9, { x: -44, air: -8, sx: 0.9, sy: 1.12, rot: 0.25, ears: 1.4, arms: 1, legs: legsAll(0, -4) }],
+          [13, { x: -16, air: -4, rot: -0.1, ears: [0.4, -0.5], legs: legsAll(0, -3) }],
+          [15, { x: -6, sx: 1.1, sy: 0.88, rot: -0.14, ears: [0.3, -0.6] }],
+          [16, { x: 4, sx: 1.08, sy: 0.92, rot: 0.2, ears: [0.2, 1.8], arms: 0.4, legs: [[-6, 0], [0, 0], [0, 0], [3, 0]] }],
+          [20, { x: 4, sx: 1.07, sy: 0.93, rot: 0.18, ears: [0.2, 1.7], arms: 0.4, legs: [[-6, 0], [0, 0], [0, 0], [3, 0]] }],
+          [28, { x: 2, rot: 0.05, ears: [0.1, 0.8] }],
+          [36, {}],
+        ]),
+        speed: f >= 16 && f < 20 ? 0.6 : 0,
+        puff: f >= 15 && f < 21 ? (f - 15) / 6 : null,
+      }),
+    },
+    ledgeDrop: {
+      input: 'away / down', frames: 24,
+      anim: f => tween(f, [ // let go: the ear slips off the lip, and it slides down the wall
+        [0, WHANG],
+        [4, { x: -57, air: 80, sx: 0.94, sy: 1.08, ears: [0.8, 2.2], arms: 1.3, legs: legsAll(0, 3) }],
+        [16, { x: -60, air: 140, sx: 0.96, sy: 1.04, ears: 1.8, arms: 1.4, legs: legsAll(0, 2) }],
+        [24, { x: -60, air: 140, sx: 0.96, sy: 1.04, ears: 1.8, arms: 1.4, legs: legsAll(0, 2) }],
+      ]),
     },
   },
   aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose

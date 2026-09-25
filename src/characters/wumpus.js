@@ -9,7 +9,7 @@
 //   rings = 0 … 1 green voice rings (and shouted words) rising off its head (up smash) · pin = [x, y of the point, size, alpha] a red pushpin (down smash)
 //   horn = [x, y (centre), size, blast 0 … 1 or null] an air horn, blasting sound (neutral special) · nelly = [x, y (bottom), t] Nelly the snail in its paws (side special)
 //   waves = 0 … 1 sound rings bursting off its head (the down special's counter) · muted = 0 … 1 a struck-through mic over its head (down throw)
-//   worn with the body: shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
+//   worn with the body: invisible = 0 … 1 gone see-through with Discord's grey invisible status dot (dodges) · shout = 0 … 1 mouth open · rocket = 0 … 1 flame of a Nitro tank strapped to its back (up special) · trail = [0 … 1, phase] Nitro sparkles streaming below it · headphones = 0 … 1 deafened headphones on its head
 //   legs = Claw'd's four [dx, dy] foot offsets, back to front: the outer two move these feet
 const WUMPUS = '#6f7cf0', WUMPUS_LIT = '#b4bcfb', WUMPUS_INK = '#2f3796';
 const BOOST = '#ff73fa', SPEAK = '#23a55a', NITRO = '#8d5cf6', PIN = '#ed4245', PEPE = '#4a8f3c';
@@ -19,6 +19,7 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   ctx.translate(cx + (pose.x || 0) * face, bottom + (pose.y || 0)); ctx.scale(face * (pose.sx ?? 1), pose.sy ?? 1);
   ctx.translate(0, -34); ctx.rotate(pose.rot || 0); ctx.translate(0, 34); // origin back at the feet
   ctx.strokeStyle = INK; ctx.lineCap = ctx.lineJoin = 'round';
+  const a0 = ctx.globalAlpha; if (pose.invisible) ctx.globalAlpha *= 1 - 0.65 * pose.invisible; // status: invisible
 
   const pair = v => Array.isArray(v) ? v : [v || 0, v || 0];
   if (pose.rocket != null) { // Nitro tank on its back, behind everything: Nitro's pink → purple, NITRO down the side, fins, a pink-purple flame
@@ -49,6 +50,11 @@ function drawWumpus(cx, bottom, pose = {}, face = 1) {
   for (const nx of [0, 8]) { ctx.beginPath(); ctx.roundRect(nx - 2, -46, 4, 2.4, 1.2); ctx.fill(); }
   ctx.lineWidth = 2;
   for (const ex of [-12, 19]) { ctx.beginPath(); ctx.arc(ex, -53, 3.2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+  if (pose.invisible) { // the status dot at the corner, like on an avatar: grey, hollow
+    ctx.globalAlpha = a0 * pose.invisible; ctx.fillStyle = PAPER; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(22, -34, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#80848e'; ctx.beginPath(); ctx.arc(22, -34, 4.6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(22, -34, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = a0 * (1 - 0.65 * pose.invisible);
+  }
   if (pose.shout) { ctx.fillStyle = WUMPUS_INK; ctx.beginPath(); ctx.ellipse(5, -36.5, 5, 3.4 * pose.shout, 0, 0, Math.PI * 2); ctx.fill(); } // mouth open under the snout
   if (pose.headphones) { // deafened: headphones clamped over the ears, with Discord's red slash through them
     ctx.save(); ctx.globalAlpha *= pose.headphones; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -52, 27, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
