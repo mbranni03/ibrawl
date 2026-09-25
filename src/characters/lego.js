@@ -11,6 +11,9 @@
 //   (0 = hanging straight down, + = swung forward)]: the wrecking ball's crane behind him · rocket = a brick rocket on his
 //   shoulder, 0 … 1 built · gold = a gold brick on his head stud, glowing · mech = drawn as his mech suit instead (legoMech),
 //   him in its cockpit · book = the instruction booklet in the front hand, 0 shut … 1 open ·
+//   wall = 0 … 1 his brick shield (a hut of bricks round him) risen out of the floor · wear = 0 … 1 how worn: cracks, then loose bricks ·
+//   headOff = [x, y, rot]: his head off on its own, centred at
+//   x, y from his feet on the floor (so it stays put whatever he does; pair with headless) ·
 //   apart = 0 … 1: every part flying off from where it belongs (the counter) ·
 //   headless = his head's off (thrown) · headLift = px it's pulled up off the neck
 const LEGO_RED = ['#f5432c', '#d8150a', '#8e0c04'], LEGO_BLUE = ['#3d86ef', '#0f58c8', '#07317a'], LEGO_YEL = ['#fff27a', '#f7d117', '#c99a00'];
@@ -121,6 +124,8 @@ function drawLegoBoom(x, y, t, R = 60) {
   }
   ctx.restore();
 }
+// the brick shield's hut, bottom up (so wear takes bricks off the top): two columns either side of him, a lintel over his head
+const LEGO_WALL = [...Array.from({ length: 12 }, (_, i) => [i % 2 ? 32 : -46, -10 * (i >> 1) - 10, 14, 10]), [-50, -68, 100, 8]];
 // his KO blast's look (drawBlast's cols, core): red / yellow / blue rays, and bricks flying out of the middle
 const LEGO_BLAST = [[LEGO_RED[1], LEGO_YEL[1], LEGO_BLUE[1]], (x, y, e, t) => drawLegoBoom(x, y, t, 60 + 60 * e)];
 // one of the down smash's loose bricks lying in wait: { x, y, w, h, rot, col } (a box in the world)
@@ -143,6 +148,21 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
     const [tx, r, n] = pose.tower, H = n * 10;
     ctx.save(); ctx.translate(tx, -(pose.y || 0)); ctx.beginPath(); ctx.rect(-30, -H - 30, 60, H + 30); ctx.clip(); ctx.translate(0, (1 - r) * (H + 3));
     for (let k = 0; k < n; k++) legoBrick(-12, -10 * (k + 1), 24, 10, LEGO_BRICKS[(k + 1) % 4], k === n - 1);
+    ctx.restore();
+  }
+  if (pose.wall) { // his shield: clicked up out of the floor (clipped at it); as it wears the bricks crack one by one, then work loose
+    const w = pose.wear || 0, loose = Math.max(0, (w - 0.6) / 0.4);
+    ctx.save(); ctx.translate(0, -(pose.y || 0)); ctx.beginPath(); ctx.rect(-60, -100, 120, 100); ctx.clip(); ctx.translate(0, (1 - pose.wall) * 80);
+    LEGO_WALL.forEach(([x, y, bw, h], i) => {
+      const r = i * 0.618 % 1; // this brick's own random: when it cracks, where, which way it's knocked
+      ctx.save(); ctx.translate(x + bw / 2, y + h / 2); ctx.rotate(loose * (r - 0.5) * 0.25); ctx.translate(loose * (r - 0.5) * 4 - x - bw / 2, -y - h / 2);
+      legoBrick(x, y, bw, h, LEGO_BRICKS[((i >> 1) + i % 2) % 4]);
+      if (w > 0.05 + 0.75 * r) { // a zigzag crack top to bottom
+        const cx = x + bw * (0.3 + 0.4 * r); ctx.strokeStyle = INK; ctx.lineWidth = LEGO_FINE;
+        ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + 3, y + h * 0.4); ctx.lineTo(cx - 2, y + h * 0.65); ctx.lineTo(cx + 1, y + h); ctx.stroke();
+      }
+      ctx.restore();
+    });
     ctx.restore();
   }
   if (pose.crane) { // a yellow crane clicked up out of the floor behind him: a brick mast, a boom out over his head, a chain, the ball
@@ -218,6 +238,7 @@ function drawLego(cx, bottom, pose = {}, face = 1) {
   legoPart(() => ctx.rect(-5.7, -53, 11.4, 2.8), legoShade(LEGO_YEL, -5.7, 5.7), LEGO_FINE + 0.3);
   if (!pose.headless) { const L = pose.headLift || 0; ctx.translate(0, -61 - L); ctx.rotate(-0.06 * L); ctx.translate(0, 61); legoHead(pose.blink, pose.gold); }
   ctx.restore();
+  if (pose.headOff) { const [hx, hy, hr] = pose.headOff; drawLegoHead({ x: cx + ((pose.x || 0) + hx) * face, y: bottom + hy, rot: hr * face, face }); }
 }
 
 // what the front hand holds, around its clip at hx, hy on an arm swung sw: under = the brick hammer (its bar runs under the clip),

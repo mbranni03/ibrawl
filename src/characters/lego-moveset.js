@@ -1,6 +1,6 @@
 // Lego Man's moveset (drawn by lego.js). He fights like a minifig moves: stiff limbs swung whole on their pins (swing / kick),
 // no elbows, no knees, and no squash. Only the turnaround skid is Claw'd's (clawd-moveset.js, loaded first) stiffened; the rest is
-// his own. His shield isn't built yet, so it's off.
+// his own.
 // the down smash's brick k (of this throw, c = 0 … 1 charge): its launch speed [forward, up] in px/s
 const scatterVel = (k, c) => [140 + k * (55 + 35 * c), -220 - 60 * (k % 3)];
 // his crouch: plastic doesn't squash, so he sits down on the floor like a real minifig, legs straight out in front, leaning in
@@ -348,8 +348,34 @@ const LEGO_MOVESET = {
     },
   },
 
-  // no shield yet (it stays off for him); frame data is Claw'd's
+  // frame data is Claw'd's
   defense: {
+    shield: { // hold: stamps, and a hut of bricks clicks up out of the floor round him while he sits tight under it (it cracks,
+      ...MOVESET.defense.shield,  // then works loose, as the shield wears down; the preview wears it out over the hold)
+      anim: f => {
+        const p = tween(f, [[0, {}], [2, { rot: -0.05, swing: [0.4, 0.4] }], [4, { ...SIT, swing: [-0.3, -0.3] }], [50, { ...SIT, swing: [-0.3, -0.3] }], [57, {}], [60, {}]]);
+        p.y = seat((p.kick?.[1] || 0) - (p.rot || 0));
+        return { ...p, shield: 0, wall: Math.min(1, f / 4, Math.max(0, (57 - f) / 7)), wear: Math.min(1, Math.max(0, (f - 4) / 46)), blink: f >= 4 && f < 50 ? 1 : 0, puff: f >= 2 && f < 10 ? (f - 2) / 8 : null };
+      },
+    },
+    shieldBreak: { // the shield ran out: the hut's gone and the jolt knocks his head clean off; he lands sitting, the head rolls to a
+      ...MOVESET.defense.shieldBreak, // stop in front of him. He gropes for it, it hops back on: click! (mash any key to get there sooner)
+      anim: f => {
+        const grope = f >= 28 && f < 126 ? Math.sin((f - 28) / 8) : 0;
+        const p = tween(f, [[0, { swing: 2.8 }], [8, { rot: -0.25, swing: [2.4, 2] }], [26, { ...SIT, swing: [0.5, 0.9] }], [126, { ...SIT, swing: [0.5, 0.9] }], [138, SIT], [150, {}]]);
+        p.swing = [p.swing[0], p.swing[1] + 0.3 * grope]; // the front clip patting the floor for his head
+        let head = null; // off from frame 2 (popped up off the neck) to 138 (back on)
+        if (f >= 2 && f < 28) { const u = (f - 2) / 26; head = [50 * u, -61 + 52.5 * u - 70 * Math.sin(Math.PI * u), 7.85 * u]; } // rolls to a stop on its side
+        else if (f >= 28 && f < 126) head = [50, -8.5, Math.PI / 2 + 0.12 * Math.sin((f - 28) / 6)];
+        else if (f >= 126 && f < 138) { const u = (f - 126) / 12; head = [50 - 47.5 * u, -8.5 - 38.5 * u - 30 * Math.sin(Math.PI * u), Math.PI / 2 * (1 - u)]; } // hops home
+        return {
+          ...p, air: f < 28 ? -60 * Math.sin(Math.PI * f / 28) : 0, blink: f < 138 ? 1 : 0, // preview-only pop; the game launches him for real
+          headless: !!head, headOff: head,
+          puff: f >= 28 && f < 34 ? (f - 28) / 6 : f >= 138 && f < 146 ? (f - 138) / 8 : null,
+          say: ['click!', Math.max(0, Math.min(1, (f - 136) / 4, (150 - f) / 6))],
+        };
+      },
+    },
     spotDodge: {
       ...MOVESET.defense.spotDodge,
       anim: f => { // turns side-on, as thin as a minifig is deep, arms in and eyes shut, then turns back

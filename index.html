@@ -88,7 +88,6 @@ const FIGHTER = {
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: { movement: MOVESET.movement } },
   lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true, controls: { // his rows on the controls screen, where they differ
-    'I': 'no shield yet · tumbling: tech with I / dodge',
     'X / K': 'heavy, hold for more bricks: brick hammer · + ↑: tower · + ↓: loose bricks · in the air: same aerials as light',
     'V / L': 'special · booklet: ↑ ↓ pick a build, special: buy it with studs · + ← →: head boomerang · + ↑: staircase · + ↓: fall-apart counter' } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
@@ -874,7 +873,7 @@ function render(t) {
   for (const d of fx) drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
   if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), headless: !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  else if (!(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
   if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
   if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
 
