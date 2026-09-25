@@ -164,6 +164,7 @@ const LEGO_MOVESET = {
 
   groundAttacks: {
     jab1: { // straight punch: the front arm snaps up level like a piston
+      name: 'Piston Punch',
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 22, y: -56, w: 24, h: 18 },
       anim: f => tween(f, [
@@ -176,6 +177,7 @@ const LEGO_MOVESET = {
       ]),
     },
     jab2: { // rising chop: the same arm keeps going, up and over in front of his face
+      name: 'Rising Chop',
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
       hitbox: { x: 16, y: -74, w: 28, h: 30 },
       anim: f => tween(f, [
@@ -188,6 +190,7 @@ const LEGO_MOVESET = {
       ]),
     },
     jab3: { // headbutt: rock back, then lurch the whole boxy head in, arms flung back, eyes shut
+      name: 'Brick Headbutt',
       input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 2, y: -74, w: 28, h: 30 },
       anim: f => ({
@@ -203,6 +206,7 @@ const LEGO_MOVESET = {
       }),
     },
     dashAttack: { // superman dive out of a run: arms straight out ahead, flat on his belly, sliding on the momentum
+      name: 'Superman Dive',
       input: 'light while running', startup: 6, active: 10, endlag: 22, damage: 7, kb: { base: 35, growth: 60, angle: 40 },
       hitbox: { x: 0, y: -32, w: 46, h: 30 },
       anim: f => ({
@@ -219,6 +223,7 @@ const LEGO_MOVESET = {
       }),
     },
     forwardTilt: { // front kick: lean back and swing the whole front leg up level
+      name: 'Front Kick',
       input: 'forward + light', step: 200, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 14, y: -38, w: 26, h: 22 },
       anim: f => tween(f, [
@@ -231,6 +236,7 @@ const LEGO_MOVESET = {
       ]),
     },
     upTilt: { // overhead swipe: the front arm swings up past his head, then back down the front
+      name: 'Overhead Swipe',
       input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -6, y: -84, w: 42, h: 38 },
       anim: f => tween(f, [
@@ -243,6 +249,7 @@ const LEGO_MOVESET = {
       ]),
     },
     downTilt: { // from sitting: spin twice on the spot like a top, arms out and legs sweeping round, hitting both sides
+      name: 'Sit Spin',
       input: 'down + light', startup: 5, active: 8, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: -40, y: -40, w: 80, h: 40 }, both: true,
       anim: f => {
@@ -262,6 +269,7 @@ const LEGO_MOVESET = {
     },
     getupAttack: { // from flat on his back: kicks over and drops into the splits, arms out, clearing both sides.
       // Can't be hurt until the hit comes out; knockback goes away from him
+      name: 'Splits Kick',
       input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -40, y: -26, w: 80, h: 26 }, both: true, intangible: [0, 12],
       anim: f => ({
@@ -351,7 +359,8 @@ const LEGO_MOVESET = {
   // frame data is Claw'd's
   defense: {
     shield: { // hold: stamps, and a hut of bricks clicks up out of the floor round him while he sits tight under it (it cracks,
-      ...MOVESET.defense.shield,  // then works loose, as the shield wears down; the preview wears it out over the hold)
+      // then works loose, as the shield wears down; the preview wears it out over the hold)
+      ...MOVESET.defense.shield, name: 'Brick Hut',
       anim: f => {
         const p = tween(f, [[0, {}], [2, { rot: -0.05, swing: [0.4, 0.4] }], [4, { ...SIT, swing: [-0.3, -0.3] }], [50, { ...SIT, swing: [-0.3, -0.3] }], [57, {}], [60, {}]]);
         p.y = seat((p.kick?.[1] || 0) - (p.rot || 0));
@@ -359,7 +368,8 @@ const LEGO_MOVESET = {
       },
     },
     shieldBreak: { // the shield ran out: the hut's gone and the jolt knocks his head clean off; he lands sitting, the head rolls to a
-      ...MOVESET.defense.shieldBreak, // stop in front of him. He gropes for it, it hops back on: click! (mash any key to get there sooner)
+      // stop in front of him. He gropes for it, it hops back on: click! (mash any key to get there sooner)
+      ...MOVESET.defense.shieldBreak, name: 'Head Pop',
       anim: f => {
         const grope = f >= 28 && f < 126 ? Math.sin((f - 28) / 8) : 0;
         const p = tween(f, [[0, { swing: 2.8 }], [8, { rot: -0.25, swing: [2.4, 2] }], [26, { ...SIT, swing: [0.5, 0.9] }], [126, { ...SIT, swing: [0.5, 0.9] }], [138, SIT], [150, {}]]);
@@ -376,9 +386,9 @@ const LEGO_MOVESET = {
         };
       },
     },
-    spotDodge: {
-      ...MOVESET.defense.spotDodge,
-      anim: f => { // turns side-on, as thin as a minifig is deep, arms in and eyes shut, then turns back
+    spotDodge: { // turns side-on, as thin as a minifig is deep, arms in and eyes shut, then turns back
+      ...MOVESET.defense.spotDodge, name: 'Paper Thin',
+      anim: f => {
         const p = tween(f, [[0, {}], [3, { swing: -0.1 }], [6, { swing: -0.15, blink: 1 }], [16, { swing: -0.15, blink: 1 }], [21, { swing: 0.2 }], [26, {}]]);
         const t = f < 11 ? Math.min(1, Math.max(0, (f - 2) / 5)) : Math.min(1, Math.max(0, (21 - f) / 5));
         return { ...p, sx: 1 - 0.65 * t * t * (3 - 2 * t) };
@@ -388,9 +398,9 @@ const LEGO_MOVESET = {
     rollBack: { ...MOVESET.defense.rollBack, anim: legoRoll(-1) },
     airDodgeForward: { ...MOVESET.defense.airDodgeForward, anim: legoAirDodge(1) },
     airDodgeBack: { ...MOVESET.defense.airDodgeBack, anim: legoAirDodge(-1) },
-    airDodge: {
-      ...MOVESET.defense.airDodge,
-      anim: f => ({ // pops loose into his parts for a moment, then clicks back together
+    airDodge: { // pops loose into his parts for a moment, then clicks back together
+      ...MOVESET.defense.airDodge, name: 'Pop Apart',
+      anim: f => ({
         ...tween(f, [[0, AIRBORNE], [2, { swing: 0.5, legs: TUCK }], [5, { swing: 0.8, apart: 0.35, legs: TUCK }], [16, { swing: 0.8, apart: 0.35, legs: TUCK }], [22, { swing: 0.3, legs: TUCK }], [28, AIRBORNE]]),
         blink: f >= 3 && f < 18 ? 1 : 0, air: -40,
       }),
@@ -452,7 +462,7 @@ const LEGO_MOVESET = {
       },
     },
     respawn: {
-      ...MOVESET.reactions.respawn, say: 'click!',
+      ...MOVESET.reactions.respawn, name: 'Click In', say: 'click!',
       anim: f => { // lowered in standing on a baseplate, then dropped
         const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
         return { ...LEGO_MOVESET.movement.idle.anim(f % 120, 120), air: -170 + 110 * e + 60 * d * d, pad: +(f < 100), say: ['click!', f < 100 ? Math.min(1, f / 10) : 0] };
@@ -468,6 +478,7 @@ const LEGO_MOVESET = {
     forwardSmash: { // brick hammer: pull out a hammer, heave it up over his head (charging clicks bricks onto the head, turn about
       // longer and wider), then bring it down level in front. No lunge: he stands his ground and lets the hammer do the work.
       // At the hit, longer reaches further out and wider covers more above and below
+      name: 'Brick Hammer',
       input: 'heavy (X / K), hold to charge', startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 100, angle: 30 },
       hitbox: { x: 24, y: -52, w: 44, h: 32 }, grow: { w: 18, y: -12, h: 24 }, bricks: [1, 3], chargeFrames: 60, chargeMult: 1.4, chargeAt: 12,
       anim: (f, n, c = 0) => ({ // c = 0 … 1 charge held so far (the game passes it; the viewer shows none)
@@ -487,6 +498,7 @@ const LEGO_MOVESET = {
     },
     upSmash: { // tower build: hands pressed down (charging adds layers), then arms up as a column of bricks shoots up out of the
       // floor in front of him, stands a moment, and sinks back
+      name: 'Tower Build',
       input: 'up + heavy (X / K), hold to charge', startup: 14, active: 6, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
       hitbox: { x: 16, y: -52, w: 28, h: 52 }, grow: { y: -30, h: 30 }, bricks: [5, 3], chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => {
@@ -507,6 +519,7 @@ const LEGO_MOVESET = {
     },
     downSmash: { // loose bricks: scoop up a handful (charging adds more) and fling them out ahead. They tumble, land, and lie on the
       // floor for scatter.life seconds; anyone but him who touches one gets hurt by it (then it's gone). Only hits in front
+      name: 'Loose Bricks',
       input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 24, damage: 11, kb: { base: 25, growth: 90, angle: 30 },
       hitbox: { x: 12, y: -26, w: 50, h: 26 }, grow: { w: 30 }, bricks: [5, 4], chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       scatter: { life: 8, damage: 4, kb: { base: 30, growth: 30, angle: 80 } },
@@ -531,6 +544,7 @@ const LEGO_MOVESET = {
       // The game draws the list over his head: ↑ ↓ move the pick, special / light builds it (if he has the studs: each build has a
       // cost), shield / dodge / jump closes it. Stands still on the ground; in the air the pages slow his fall to `fall` px/s. The
       // last pick is remembered. studs: he earns one per % of damage his hits do, up to max, starting each game with start
+      name: 'Instruction Booklet',
       input: 'special (B), then ↑ ↓ to pick, B / light to build', frames: 60, open: 10, fall: 160,
       builds: ['wreckingBall', 'rocket', 'goldBrick', 'mech'], studs: { start: 30, max: 99 }, // enough to build the wrecking ball or rocket straight away
       anim: f => {
@@ -540,6 +554,7 @@ const LEGO_MOVESET = {
     },
     wreckingBall: { // a yellow crane clicks up out of the floor behind him with the ball pulled back; he yanks the lever and the ball
       // swings down through the space in front of him (the hit) and back, then the crane sinks away. His hardest hit
+      name: 'Wrecking Ball',
       input: 'booklet → wrecking ball', label: 'Wrecking ball', cost: 30, startup: 23, active: 5, endlag: 26, landingLag: 12, // the hit: the ball's swing through in front
       damage: 20, kb: { base: 45, growth: 110, angle: 40 }, hitbox: { x: 4, y: -90, w: 100, h: 64 },
       anim: f => {
@@ -553,6 +568,7 @@ const LEGO_MOVESET = {
     rocket: { // clicks a brick rocket together on his shoulder, then fires it straight ahead: it speeds up and bursts on whatever it
       // hits (or the stage, or at the end of its range), hitting everything within blast.r. fire: x, y = where it leaves him ·
       // speed = [start, top] px/s · accel px/s² · life s
+      name: 'Rocket',
       input: 'booklet → rocket', label: 'Rocket', cost: 25, startup: 16, active: 1, endlag: 20, landingLag: 10, build: true,
       fire: { x: 30, y: -50, speed: [300, 1100], accel: 2400, life: 1.2, blast: { r: 60, damage: 16, kb: { base: 40, growth: 100, angle: 45 } } },
       anim: f => ({
@@ -562,6 +578,7 @@ const LEGO_MOVESET = {
     },
     goldBrick: { // reaches up and clicks a gold brick onto his head stud: glowing gold, every hit does power.mult × damage for power.time
       // seconds (building it again restarts the time)
+      name: 'Gold Brick',
       input: 'booklet → gold brick', label: 'Gold brick', cost: 40, startup: 14, active: 1, endlag: 14, landingLag: 8, build: true,
       power: { mult: 1.5, time: 10 },
       anim: f => ({
@@ -571,6 +588,7 @@ const LEGO_MOVESET = {
     },
     mech: { // bricks fly in from every side and click together into a mech suit around him, him in its cockpit: for suit.time seconds
       // he's MECH_K × as big and suit.speed × as fast, and every hit does suit.mult × damage with hitboxes MECH_K × the size
+      name: 'Mech Suit',
       input: 'booklet → mech suit', label: 'Mech suit', cost: 60, startup: 24, active: 1, endlag: 12, landingLag: 10, build: true,
       suit: { time: 8, mult: 1.3, speed: 0.75 },
       anim: f => ({ ...tween(f, [[0, {}], [24, { swing: 0.3 }], [36, {}]]), mech: true, apart: Math.max(0, 1 - f / 24) }),
@@ -579,6 +597,7 @@ const LEGO_MOVESET = {
       // back to wherever he is by then (hitting on the way out and again on the way back), then clicks back on. He fights on
       // headless meanwhile, but can't throw it again until it's back. toss: x, y = where it leaves his hand · speed, decel px/s(²)
       // on the way out · home = [start, top] speed flying back · life = seconds before it gives up and snaps straight back
+      name: 'Head Boomerang',
       input: 'forward / back + special', startup: 10, active: 1, endlag: 18, landingLag: 8,
       toss: { x: 38, y: -48, speed: 700, decel: 1400, home: [300, 1100], life: 3, out: { damage: 7, kb: { base: 25, growth: 70, angle: 40 } }, back: { damage: 4, kb: { base: 20, growth: 50, angle: 40 } } },
       anim: f => ({
@@ -590,6 +609,7 @@ const LEGO_MOVESET = {
       // step ahead of the last (thrust up, drive forward, in px/s). He ends standing on the top step; the stairs stay `step.life`
       // seconds as real platforms. Once until he's back on the stage or a normal platform. The bricks clicking in hit what's below.
       // A stud a step, paid as each one starts: out of studs, the stairs stop at the last step built (none: he can't start)
+      name: 'Staircase',
       input: 'up + special', startup: 4, active: 36, endlag: 0, thrust: 288, drive: 216, hop: 200, landingLag: 8,
       step: { every: 5, w: 26, h: 10, life: 5 },
       damage: 4, kb: { base: 30, growth: 40, angle: 80 }, hitbox: { x: -16, y: -6, w: 32, h: 20 },
@@ -603,6 +623,7 @@ const LEGO_MOVESET = {
       },
     },
     downSpecial: { state: 'counter', // brace, arms up: anything that hits him in the window (the active frames) knocks him apart instead (see reassemble)
+      name: 'Brick Brace',
       input: 'down + special', startup: 4, active: 24, endlag: 16, landingLag: 10, counter: 'reassemble',
       anim: f => ({
         ...tween(f, [[0, {}], [4, { swing: 0.75, kick: 0.25, rot: -0.03 }], [28, { swing: 0.7, kick: 0.25, rot: -0.03 }], [44, {}]]),
@@ -611,6 +632,7 @@ const LEGO_MOVESET = {
     },
     reassemble: { // countered: he flies apart (can't be hurt), the pieces zip over to `reform` px past the attacker, and snap back
       // together facing them, the parts slamming in all around him
+      name: 'Reassemble',
       input: 'a hit during the counter', startup: 18, active: 3, endlag: 16, landingLag: 8, reform: [9, 90], intangible: [0, 21],
       damage: 10, kb: { base: 45, growth: 90, angle: 40 }, hitbox: { x: -44, y: -78, w: 88, h: 80 }, both: true,
       anim: f => ({
@@ -624,6 +646,7 @@ const LEGO_MOVESET = {
   // the held target's bottom-centre sits, from his feet
   grabs: {
     grab: { // the front C-clip snaps out and clicks shut on them; a whiff clicks on nothing
+      name: 'Clip Grab',
       input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 14, y: -52, w: 38, h: 44 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
@@ -635,6 +658,7 @@ const LEGO_MOVESET = {
       ]),
     },
     dashGrab: { // out of a run: dives in clip-first and slides on the momentum
+      name: 'Clip Dive',
       input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 14, y: -52, w: 56, h: 44 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -653,10 +677,12 @@ const LEGO_MOVESET = {
       anim: (f, n = 60) => { const b = Math.sin(f / n * Math.PI * 4); return { ...LHOLD, rot: -0.04 + 0.02 * b, swing: [0.35, 1.2 + 0.03 * b], carry: [46, -4 + b, 0] }; },
     },
     pummel: { // a headbutt into them
+      name: 'Head Knock',
       input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
       anim: f => tween(f, [[0, LHOLD], [4, { ...LHOLD, rot: -0.14 }], [5, { ...LHOLD, x: 3, rot: 0.24, blink: 1, carry: [48, -4, 0.06] }], [16, LHOLD]]),
     },
     forwardThrow: { // discus: turns once on the spot with them at arm's length (flipping round, side-on in between) and hurls them ahead
+      name: 'Discus Throw',
       input: 'forward (holding)', startup: 14, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 30 },
       anim: legoThrow({ at: 14, fly: [14, -3, 0.25], keys: [[0, LHOLD], [14, { ...LHOLD, x: 4, rot: 0.14, swing: [0.4, 1.5], carry: [52, -10, 0.3] }], [18, { x: 4, rot: 0.1, swing: [0.4, 1.5] }], [32, {}]],
         extra: f => { // the turn: the target swings round behind him and back out front
@@ -666,6 +692,7 @@ const LEGO_MOVESET = {
         } }),
     },
     backThrow: { // backflip suplex: springs up and flips over backwards, carrying them up over his head to slam down behind him
+      name: 'Backflip Suplex',
       input: 'back (holding)', startup: 14, active: 1, endlag: 22, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: legoThrow({ at: 14, fly: [-10, -3, -0.2], keys: [
         [0, LHOLD],
@@ -677,6 +704,7 @@ const LEGO_MOVESET = {
       ] }),
     },
     upThrow: { // stud click: hoists them up and clicks them onto his head stud like a hat, then pops his head up and fires them off
+      name: 'Stud Click',
       input: 'up (holding)', startup: 16, active: 1, endlag: 18, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: legoThrow({ at: 16, fly: [0, -14, 0.05], keys: [
         [0, LHOLD],
@@ -689,6 +717,7 @@ const LEGO_MOVESET = {
       ] }),
     },
     downThrow: { // plonk: throws them down flat in front of him, hops up and sits down hard on them; they bounce up out from under him
+      name: 'Plonk',
       input: 'down (holding)', startup: 16, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: legoThrow({ at: 16, fly: [2, -9, 0.1], keys: [
         [0, LHOLD],
@@ -705,6 +734,7 @@ const LEGO_MOVESET = {
   // landingLag = frames stuck on the ground if you land mid-attack · air: -40 floats them in the preview (the game ignores it)
   aerials: {
     neutralAir: { // cartwheel: flings out into an X and turns one full circle, hands and feet hitting all around
+      name: 'Cartwheel',
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -42, y: -78, w: 84, h: 82 }, landingLag: 8,
       anim: f => {
@@ -714,6 +744,7 @@ const LEGO_MOVESET = {
       },
     },
     forwardAir: { // overhead chop: the front arm cocks up behind his head, then comes over the top and down in front
+      name: 'Stud Chop',
       input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
       hitbox: { x: 18, y: -62, w: 30, h: 44 }, landingLag: 10,
       anim: f => ({
@@ -729,6 +760,7 @@ const LEGO_MOVESET = {
       }),
     },
     backAir: { // donkey kick: tip forward and swing the back leg straight out behind
+      name: 'Donkey Kick',
       input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -44, y: -40, w: 32, h: 26 }, landingLag: 9,
       anim: f => ({
@@ -744,6 +776,7 @@ const LEGO_MOVESET = {
       }),
     },
     upAir: { // hooray: both arms thrown straight up past his head
+      name: 'Hooray',
       input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -30, y: -92, w: 60, h: 42 }, landingLag: 7,
       anim: f => ({
@@ -759,6 +792,7 @@ const LEGO_MOVESET = {
       }),
     },
     downAir: { // stomp: legs apart and arms up, then both feet slammed down together. Spikes
+      name: 'Brick Stomp',
       input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -20, y: -8, w: 40, h: 26 }, landingLag: 14,
       anim: f => ({

@@ -144,6 +144,7 @@ const board = $('board'), bctx = board.getContext('2d');
 board.width = BW * dpr; board.height = PH * 2 * dpr;
 const boardPaper = makePaper(BW, PH * 2, dpr);
 const title = k => k.replace(/([A-Z]|\d+)/g, ' $1').replace(/^./, c => c.toUpperCase());
+const moveName = (key, m) => m.name ?? title(key); // a fighter's own move goes by its own name (Muse's forward smash: Llama Kick)
 
 // every fighter: how to draw it, and its moveset. The others move like Claw'd (their draw functions take his pose fields; Grok
 // bounces instead of walking and Duo flies: grok-moveset.js, duo-moveset.js), and get the rest of his move list, all still to do
@@ -236,7 +237,7 @@ function pick(id) {
     for (const [key, m] of keep) {
       const move = m.preview ? { ...m, anim: m.preview } : m; // a move the game plays in parts (Grok's Starship) previews as one run
       const b = document.createElement('button');
-      b.textContent = title(key);
+      b.textContent = moveName(key, m);
       if (learn ? seen.has(id + '/' + key) : move.anim) b.classList.add('done');
       const item = { group, key, move, el: b };
       b.onclick = () => select(list.indexOf(item));
@@ -257,8 +258,8 @@ function select(i) {
   list.forEach(it => it.el.toggleAttribute('aria-current', it === list[cur]));
   if (!learn) el.scrollIntoView({ block: 'nearest' });
   history.replaceState(null, '', `${learn ? location.pathname : '?storybook'}#${fid}/${key}`);
-  $('name').textContent = title(key);
-  $('sub').textContent = `${F.name} · ${title(group)}${move.input ? ' · ' + move.input : ''}`;
+  $('name').textContent = moveName(key, move);
+  $('sub').textContent = `${F.name} · ${title(group)}${move.name ? ' · ' + title(key) : ''}${move.input ? ' · ' + move.input : ''}`;
   const { startup, active, endlag } = move;
   phases = !move.previewFrames && [startup, active, endlag].every(Number.isFinite)
     ? [['startup', startup], ['active', active], ['endlag', endlag]]
@@ -278,12 +279,12 @@ function select(i) {
   seen.add(fid + '/' + key); el.classList.add('done');
   const mine = list.filter(it => it.group === group), done = it => seen.has(fid + '/' + it.key);
   $('stepno').textContent = `${mine.indexOf(list[cur]) + 1}/${mine.length}`;
-  $('lname').textContent = title(key);
+  $('lname').textContent = moveName(key, move);
   $('intro').textContent = CHAPTERS[group]?.[1] ?? '';
   $('how').innerHTML = how(move.input);
   $('stats').innerHTML = facts(move).map(([v, l]) => `<div><b>${v}</b><small>${l}</small></div>`).join('');
   $('dots').replaceChildren(...mine.map(it => {
-    const d = document.createElement('button'); d.title = title(it.key); d.classList.toggle('done', done(it)); d.toggleAttribute('aria-current', it === list[cur]);
+    const d = document.createElement('button'); d.title = moveName(it.key, it.move); d.classList.toggle('done', done(it)); d.toggleAttribute('aria-current', it === list[cur]);
     d.onclick = () => select(list.indexOf(it)); return d;
   }));
   for (const b of $('chapters').children) { b.toggleAttribute('aria-current', b.dataset.g === group); b.classList.toggle('done', list.every(it => it.group !== b.dataset.g || done(it))); }

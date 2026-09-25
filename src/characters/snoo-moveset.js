@@ -37,7 +37,7 @@ const SNOO_MOVESET = {
   },
   groundAttacks: {
     jab1: { // front arm stretches out in a quick straight punch, feet planted
-      input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
+      name: 'Quick Jab', input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 16, y: -30, w: 26, h: 20 },
       anim: f => ({
         ...tween(f, [
@@ -52,7 +52,7 @@ const SNOO_MOVESET = {
       }),
     },
     jab2: { // the back arm follows through across the body: a one-two
-      input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 45 },
+      name: 'One-Two', input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 45 },
       hitbox: { x: 14, y: -32, w: 24, h: 20 },
       anim: f => tween(f, [
         [0, {}],
@@ -64,7 +64,7 @@ const SNOO_MOVESET = {
       ]),
     },
     jab3: { // finisher: rear back, then throw the big head forward in a headbutt, eyes squeezed shut, antenna flung back
-      input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
+      name: 'Headbutt', input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 18, y: -64, w: 32, h: 40 },
       anim: f => ({
         ...tween(f, [
@@ -80,7 +80,7 @@ const SNOO_MOVESET = {
       }),
     },
     dashAttack: { // out of a run: dives headfirst and belly-slides along the floor, antenna leading the way
-      input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
+      name: 'Belly Slide', input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
       hitbox: { x: 14, y: -46, w: 48, h: 44 },
       anim: f => ({
         ...tween(f, [
@@ -96,7 +96,7 @@ const SNOO_MOVESET = {
       }),
     },
     forwardTilt: { // rocks back on its back foot, which swings the front foot up and out in a kick
-      input: 'forward + light', step: 200, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
+      name: 'Snap Kick', input: 'forward + light', step: 200, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 20, y: -32, w: 30, h: 26 },
       anim: f => ({
         ...tween(f, [
@@ -111,7 +111,7 @@ const SNOO_MOVESET = {
       }),
     },
     upTilt: { // springs up tall and whips the antenna over its head, front to back, handing out an upvote
-      input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
+      name: 'Upvote Whip', input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -26, y: -102, w: 66, h: 58 },
       anim: f => ({
         ...tween(f, [
@@ -126,7 +126,7 @@ const SNOO_MOVESET = {
       }),
     },
     downTilt: { // from the crouch: sweeps the front foot out low along the floor, handing out a downvote
-      input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
+      name: 'Downvote Sweep', input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: 16, y: -18, w: 32, h: 18 },
       anim: f => ({
         ...tween(f, [
@@ -143,7 +143,7 @@ const SNOO_MOVESET = {
     },
     getupAttack: { // from flat on its back: rocks, flips over with both feet kicking and lands with both arms flung out wide.
       // Can't be hurt until the hit comes out; knockback goes away from Snoo
-      input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
+      name: 'Wake-Up Flip', input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -60, y: -34, w: 120, h: 34 }, both: true, intangible: [0, 12],
       anim: f => ({
         ...tween(f, [
@@ -163,7 +163,7 @@ const SNOO_MOVESET = {
   smashAttacks: {
     forwardSmash: { // the ban hammer: pulls it out, winds it back over its shoulder (charge holds here, frame 12), then slams it
       // down in front, eyes shut, and stamps BANNED
-      input: 'heavy (X / K), hold to charge', step: 240, startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 102, angle: 40 },
+      name: 'Ban Hammer', input: 'heavy (X / K), hold to charge', step: 240, startup: 16, active: 4, endlag: 30, damage: 15, kb: { base: 32, growth: 102, angle: 40 },
       hitbox: { x: 20, y: -60, w: 60, h: 60 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 12,
       anim: f => ({
         ...tween(f, [
@@ -184,7 +184,7 @@ const SNOO_MOVESET = {
     },
     upSmash: { // front page: crouches low, arms back (charge holds here, frame 8: lower the longer it charges), then springs up tall as
       // a giant upvote bursts up out of the floor behind it, launching whatever's above or beside Snoo
-      input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
+      name: 'Front Page', input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 24, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
       hitbox: { x: -45, y: -160, w: 90, h: 160 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => { // c = 0 … 1 charge held so far (the game passes it; the viewer shows none)
         const p = tween(f, [
@@ -202,7 +202,7 @@ const SNOO_MOVESET = {
     },
     downSmash: { // [removed]: squashes flat (flatter the longer it charges, frame 8), hops and slams back down, and [removed] bursts out
       // along the floor both ways. Hits both sides; knockback goes away from Snoo
-      input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 22, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
+      name: 'Removed', input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 22, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
       hitbox: { x: -90, y: -24, w: 180, h: 24 }, both: true, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => {
         const wide = [[-3, 0], [0, 0], [0, 0], [3, 0]], planted = [[-5, 0], [0, 0], [0, 0], [5, 0]];
@@ -225,7 +225,7 @@ const SNOO_MOVESET = {
   aerials: {
     // drawn with a preview-only air: -40 so they float in the viewer; frame 0 / the last frame = the plain airborne pose
     neutralAir: { // curls up, then spins a full turn with both arms stretched out either way: hits all around
-      input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
+      name: 'Spin Cycle', input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -44, y: -80, w: 88, h: 84 }, landingLag: 8,
       anim: f => {
         const p = tween(f, [[0, AIRBORNE], [3, { sx: 0.92, sy: 1.06, arm: [-4, -4], legs: TUCK }],
@@ -235,7 +235,7 @@ const SNOO_MOVESET = {
       },
     },
     forwardAir: { // raises the front arm behind its head, then stretches it out and chops it down in front
-      input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
+      name: 'Karate Chop', input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
       hitbox: { x: 16, y: -52, w: 36, h: 44 }, landingLag: 10,
       anim: f => ({
         ...tween(f, [
@@ -250,7 +250,7 @@ const SNOO_MOVESET = {
       }),
     },
     backAir: { // tips forward, which swings both feet out behind, and kicks them back
-      input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
+      name: 'Back Kick', input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -46, y: -36, w: 30, h: 30 }, landingLag: 9,
       anim: f => tween(f, [
         [0, { ...AIRBORNE, air: -40 }],
@@ -262,7 +262,7 @@ const SNOO_MOVESET = {
       ]),
     },
     upAir: { // a quick backflip: its feet sweep up over its head, front to back, and it hands out an upvote
-      input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
+      name: 'Upvote Flip', input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -40, y: -92, w: 80, h: 48 }, landingLag: 7,
       anim: f => {
         const p = tween(f, [[0, AIRBORNE], [4, { sx: 1.08, sy: 0.9, arm: [2, 2], legs: TUCK }],
@@ -272,7 +272,7 @@ const SNOO_MOVESET = {
       },
     },
     downAir: { // flips upside down and drives its antenna straight down like a pogo stick, handing out a downvote. Spikes
-      input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
+      name: 'Downvote Spike', input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -18, y: -30, w: 36, h: 34 }, landingLag: 14,
       anim: f => ({
         ...tween(f, [
@@ -299,7 +299,7 @@ const SNOO_MOVESET = {
   specials: {
     neutralSpecial: { // karma blast: points the antenna ahead and gathers an orb of karma on the ball (charge holds here, frame 10:
       // the orb swells), then nods and fires it. The longer the charge, the bigger and harder-hitting the orb
-      input: 'B (V / L), no direction · hold to charge, ground or air', startup: 14, active: 2, endlag: 18, damage: 5, kb: { base: 18, growth: 55, angle: 35 },
+      name: 'Karma Blast', input: 'B (V / L), no direction · hold to charge, ground or air', startup: 14, active: 2, endlag: 18, damage: 5, kb: { base: 18, growth: 55, angle: 35 },
       hitbox: null, landingLag: 10, chargeKey: 'special', chargeAt: 10, chargeFrames: 60, chargeMult: 2.2,
       projectile: { x: 30, y: -50, speed: 620, life: 0.9, r: 8, grow: 1, draw: drawKarma },
       anim: (f, n, c = 0) => {
@@ -318,7 +318,7 @@ const SNOO_MOVESET = {
     },
     sideSpecial: { // orangered mail: pulls out an orange envelope, winds up and sends it off like a paper plane. It glides ahead in a
       // gentle wave, and pings a notification on whatever it reaches
-      input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 2, endlag: 18, damage: 6, kb: { base: 22, growth: 50, angle: 40 },
+      name: 'Orangered Mail', input: 'B (V / L) + ← →, ground or air · turns that way first', startup: 12, active: 2, endlag: 18, damage: 6, kb: { base: 22, growth: 50, angle: 40 },
       hitbox: null, landingLag: 10,
       projectile: { x: 30, y: -32, speed: 420, life: 1.4, r: 10, wave: [14, 0.7], draw: drawMail, hitFx: { draw: snooPing, dur: 0.6 } },
       anim: f => tween(f, [
@@ -332,7 +332,7 @@ const SNOO_MOVESET = {
     },
     upSpecial: { // UFO abduction: antenna beeping, it calls the saucer, which parks overhead and beams Snoo itself up out of danger,
       // hitting anything in the beam. Drops it helpless when the beam cuts out
-      input: 'B (V / L) + ↑, ground or air · falls helpless after', startup: 8, active: 20, endlag: 14, damage: 5, kb: { base: 35, growth: 60, angle: 80 },
+      name: 'UFO Abduction', input: 'B (V / L) + ↑, ground or air · falls helpless after', startup: 8, active: 20, endlag: 14, damage: 5, kb: { base: 35, growth: 60, angle: 80 },
       hitbox: { x: -30, y: -150, w: 60, h: 150 }, landingLag: 16, burst: { vy: -620, frames: 20 }, helpless: true,
       anim: f => {
         const lifted = { swing: [-1.9, 1.9], blink: 0.5, legs: legsAll(0, 3) };
@@ -355,7 +355,7 @@ const SNOO_MOVESET = {
     },
     downSpecial: { // [deleted]: glitches and blinks out into a [deleted] tag that zips off the way it's held (or ahead), then pops back
       // into Snoo there, hitting all around. Can't be hurt while deleted; holds its height in the air, once until it lands
-      input: 'B (V / L) + ↓, ground or air · + ← → picks the way · once until it lands', startup: 18, active: 4, endlag: 16, damage: 7, kb: { base: 35, growth: 55, angle: 50 },
+      name: 'Deleted', input: 'B (V / L) + ↓, ground or air · + ← → picks the way · once until it lands', startup: 18, active: 4, endlag: 16, damage: 7, kb: { base: 35, growth: 55, angle: 50 },
       hitbox: { x: -40, y: -72, w: 80, h: 72 }, both: true, intangible: [6, 18], landingLag: 10,
       burst: { from: 9, vx: 1400, vy: 0, frames: 8, keep: 0 }, oncePerAir: true,
       anim: f => ({
@@ -376,7 +376,7 @@ const SNOO_MOVESET = {
 
   grabs: {
     grab: { // both stretchy arms shoot out in front and clamp; a whiff snaps them back empty
-      input: 'grab (G / I), or shield + light', startup: 7, active: 3, endlag: 22, hitbox: { x: 16, y: -44, w: 48, h: 40 }, grab: true,
+      name: 'Clamp', input: 'grab (G / I), or shield + light', startup: 7, active: 3, endlag: 22, hitbox: { x: 16, y: -44, w: 48, h: 40 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
         [5, { x: -2, sx: 0.96, sy: 1.04, rot: -0.08, reach: [-4, -2], arm: [-2, -2], ant: 0.2 }],
@@ -387,7 +387,7 @@ const SNOO_MOVESET = {
       ]),
     },
     dashGrab: { // out of a run: dives forward with both arms stretched out ahead, sliding on the momentum
-      input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -44, w: 60, h: 40 }, grab: true,
+      name: 'Dive Clamp', input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -44, w: 60, h: 40 }, grab: true,
       anim: f => ({
         ...tween(f, [
           [0, { y: -3, rot: 0.12, swing: -0.9 }], // = run frame 0
@@ -408,7 +408,7 @@ const SNOO_MOVESET = {
       },
     },
     pummel: { // nods and bonks it with the antenna ball
-      input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
+      name: 'Antenna Bonk', input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
       anim: f => tween(f, [
         [0, SNOO_HOLD],
         [4, { ...SNOO_HOLD, rot: -0.14, ant: -0.4 }],
@@ -417,7 +417,7 @@ const SNOO_MOVESET = {
       ]),
     },
     forwardThrow: { // sets it down, pulls out the ban hammer and golf-swings it away
-      input: 'forward (holding)', startup: 12, active: 1, endlag: 20, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
+      name: 'Hammer Toss', input: 'forward (holding)', startup: 12, active: 1, endlag: 20, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
       anim: throwAnim({ at: 12, n: 33, fly: [12, -5, 0.15], keys: [
         [0, { ...SNOO_HOLD, hammer: [-0.6, 0] }],
         [5, { x: -3, rot: -0.2, swing: [-0.6, 2], ant: 0.5, legs: [[3, 0], [0, 0], [0, 0], [-2, 0]], carry: [50, 0, 0], hammer: [-1, 1] }], // let go, hammer back
@@ -429,7 +429,7 @@ const SNOO_MOVESET = {
       ], extra: f => ({ speed: f >= 12 && f < 20 ? 1 - (f - 12) / 8 : 0 }) }),
     },
     backThrow: { // hoists it up over its head and heaves it over backwards
-      input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
+      name: 'Backflip Heave', input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], keys: [
         [0, SNOO_HOLD],
         [6, { rot: -0.1, sx: 0.94, sy: 1.08, swing: [-1.6, 1.6], ant: 0.3, carry: [32, -60, -0.8] }],
@@ -440,7 +440,7 @@ const SNOO_MOVESET = {
       ] }),
     },
     upThrow: { // tosses it up and springs after it, poking it higher with the antenna: an upvote
-      input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
+      name: 'Upvote Toss', input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], keys: [
         [0, SNOO_HOLD],
         [6, { sx: 1.1, sy: 0.9, swing: [-0.4, 0.4], reach: [20, 16], ant: 0.2, carry: [40, -14, 0] }],
@@ -451,7 +451,7 @@ const SNOO_MOVESET = {
       ], extra: f => ({ vote: f >= 14 && f < 34 ? [8, -118, (f - 14) / 20, 1] : null }) }),
     },
     downThrow: { // lifts it and slams it into the floor with a downvote, where it bounces up
-      input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
+      name: 'Downvote Slam', input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], keys: [
         [0, SNOO_HOLD],
         [6, { y: -4, sx: 0.92, sy: 1.1, rot: -0.05, reach: [30, 26], arm: [-10, -10], ant: 0.3, carry: [44, -30, -0.1] }],
@@ -550,7 +550,7 @@ const SNOO_MOVESET = {
 
   defense: {
     shield: { // hold: crouches behind a big green mod shield, eyes squeezed shut (in the game it shrinks and cracks as it wears down)
-      input: 'hold dodge (Shift / Z)', frames: 60,
+      name: 'Mod Shield', input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { sx: 1.05, sy: 0.9, blink: 1, swing: [0.4, 1.3], reach: [0, 6], ant: -0.4, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]], shield: 1 };
         const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
@@ -558,11 +558,11 @@ const SNOO_MOVESET = {
         return { ...p, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // preview wears it out over the hold (the game uses the real shield health)
       },
     },
-    shieldBreak: snooOver(MOVESET.defense.shieldBreak, f => ({ // the mod shield shatters, Snoo pops up flailing and lands dizzy, rate-limited
+    shieldBreak: { ...snooOver(MOVESET.defense.shieldBreak, f => ({ // the mod shield shatters, Snoo pops up flailing and lands dizzy, rate-limited
       ...tween(f, [[0, { swing: [-1.9, 1.9], ant: -0.8 }], [14, { swing: [-1.4, 1.4], ant: -0.4 }], [28, { swing: [-1.7, 1.7] }], [32, { swing: [-0.6, 0.6], ant: 0.5 }]]),
       ...(f >= 32 && f < 144 ? { ant: 0.5 * Math.sin((f - 32) / 6) } : {}), // antenna wobbling with the dizziness
       oopsMsg: ['you are doing that too much', 'try again in 9 minutes'],
-    })),
+    })), name: 'Doing That Too Much' },
     spotDodge: snooOver(MOVESET.defense.spotDodge, f => tween(f, [ // shrinks into the page, arms and antenna pulled in
       [0, {}], [3, { swing: [-0.4, 0.4] }], [6, SNOO_TUCK], [16, SNOO_TUCK], [21, { swing: [-0.3, 0.3], ant: 0.2 }], [26, {}]])),
     rollForward: snooOver(MOVESET.defense.rollForward, f => tween(f, [[0, {}], [5, SNOO_TUCK], [22, SNOO_TUCK], [30, {}]])), // balled up
@@ -585,7 +585,7 @@ const SNOO_MOVESET = {
     getup: snooOver(MOVESET.reactions.getup, f => tween(f, [[0, { swing: [-1.6, 1.6], ant: 1.1 }], [13, { swing: [0.4, -0.4], ant: -0.4 }], [18, { swing: [-1.4, 1.4], ant: 0.3 }], [26, {}]])),
     ko: snooOver(MOVESET.reactions.ko, () => ({ swing: [-1.9, 1.9], ant: -1 })), // arms up, spinning off
     respawn: { // lowered in on the platform, [restored] (the opposite of [removed]) overhead
-      ...MOVESET.reactions.respawn, say: '[restored]',
+      ...MOVESET.reactions.respawn, name: 'Restored', say: '[restored]',
       anim: f => { const p = MOVESET.reactions.respawn.anim(f); return { ...p, swing: [-0.1, 0.1], say: ['[restored]', p.say[1]] }; },
     },
   },

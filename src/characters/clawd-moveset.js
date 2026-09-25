@@ -352,7 +352,7 @@ const MOVESET = {
   },
 
   defense: {
-    shield: { // hold: crouch and hold a little terminal over its head like a roof (in the game it shrinks as the shield wears down)
+    shield: { name: 'Terminal Roof', // hold: crouch and hold a little terminal over its head like a roof (in the game it shrinks as the shield wears down)
       input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { sx: 1.14, sy: 0.72, arm: -14, legs: [[-2, 0], [-1, 0], [1, 0], [2, 0]], shield: 1 };
@@ -361,7 +361,7 @@ const MOVESET = {
         return { ...p, squint: f >= 3 && f < 52, eyeY: 4 * (p.shield || 0), wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // preview wears it out over the hold (the game uses the real shield health) // eyes squeezed shut > < and ducked under the terminal, bracing for the hit
       },
     },
-    shieldBreak: { // the shield ran out: the terminal shatters, Claw'd pops up and lands dizzy (mash any key to shake it off sooner)
+    shieldBreak: { name: 'Context Overflow', // the shield ran out: the terminal shatters, Claw'd pops up and lands dizzy (mash any key to shake it off sooner)
       input: 'shield runs out', frames: 150, pop: 560,
       anim: f => {
         const p = tween(f, [
@@ -485,7 +485,7 @@ const MOVESET = {
         ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, arm: -5, squint: true }
         : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6] }, // rays shoot back the way it came
     },
-    respawn: { // next stock: lowered in on a hovering platform, stands there until any input (or wait frames), then drops, flickering
+    respawn: { name: 'Claude Resume', // next stock: lowered in on a hovering platform, stands there until any input (or wait frames), then drops, flickering
       input: 'after a KO · any key drops', frames: 120, descend: 40, wait: 180, say: '> claude --resume',
       anim: f => { // preview: descend, stand, drop to the floor
         const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
@@ -495,7 +495,7 @@ const MOVESET = {
   },
 
   groundAttacks: {
-    jab1: { // quick front-claw poke: tiny wind-up, snap out on frame 3, feet stay planted
+    jab1: { name: 'Quick Snip', // quick front-claw poke: tiny wind-up, snap out on frame 3, feet stay planted
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 36, y: -34, w: 30, h: 18 },
       anim: f => ({
@@ -510,7 +510,7 @@ const MOVESET = {
         speed: f >= 3 && f < 6 ? 0.4 : 0,
       }),
     },
-    jab2: { // rising swipe: the claw scoops out and up, body stretching tall with it
+    jab2: { name: 'Claw Scoop', // rising swipe: the claw scoops out and up, body stretching tall with it
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
       hitbox: { x: 32, y: -52, w: 28, h: 28 },
       anim: f => tween(f, [
@@ -522,7 +522,7 @@ const MOVESET = {
         [21, {}],
       ]),
     },
-    jab3: { // finisher: coil back, then throw the whole body forward behind a full-length claw
+    jab3: { name: 'Claw Thrust', // finisher: coil back, then throw the whole body forward behind a full-length claw
       input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 30, y: -40, w: 46, h: 34 },
       anim: f => ({
@@ -538,7 +538,7 @@ const MOVESET = {
         dust: f >= 5 && f < 17 ? (f - 5) / 12 : null,
       }),
     },
-    dashAttack: { // claw-first lunge out of a run: hop low and long, slide on the momentum
+    dashAttack: { name: 'Claw Lunge', // claw-first lunge out of a run: hop low and long, slide on the momentum
       input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
       hitbox: { x: 22, y: -40, w: 50, h: 36 },
       anim: f => ({
@@ -554,7 +554,7 @@ const MOVESET = {
         dust: f >= 6 && f < 18 ? (f - 6) / 12 : null,
       }),
     },
-    forwardTilt: { // step in behind a long straight claw: jab's reach and then some
+    forwardTilt: { name: 'Long Claw', // step in behind a long straight claw: jab's reach and then some
       input: 'forward + light', step: 260, startup: 6, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 36, y: -38, w: 42, h: 22 },
       anim: f => ({
@@ -569,7 +569,7 @@ const MOVESET = {
         speed: f >= 6 && f < 10 ? 0.5 : 0,
       }),
     },
-    upTilt: { // dip, then spring tall and throw the claw straight up past the head
+    upTilt: { name: 'Skyward Claw', // dip, then spring tall and throw the claw straight up past the head
       input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: 16, y: -90, w: 40, h: 40 },
       anim: f => tween(f, [
@@ -581,7 +581,7 @@ const MOVESET = {
         [25, {}],
       ]),
     },
-    downTilt: { // from the crouch: a quick low claw poke along the floor, then back down
+    downTilt: { name: 'Low Snip', // from the crouch: a quick low claw poke along the floor, then back down
       input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: 38, y: -20, w: 40, h: 18 },
       anim: f => tween(f, [
@@ -593,7 +593,7 @@ const MOVESET = {
         [20, CROUCH],
       ]),
     },
-    getupAttack: { // from flat on its back: rocks, kicks over and lands spread wide with both claws out, clearing both sides.
+    getupAttack: { name: 'Crab Sweep', // from flat on its back: rocks, kicks over and lands spread wide with both claws out, clearing both sides.
       // Can't be hurt until the hit comes out; knockback goes away from Claw'd
       input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -75, y: -30, w: 150, h: 30 }, both: true, intangible: [0, 12],
@@ -614,7 +614,7 @@ const MOVESET = {
 
   // hold the button to charge; chargeFrames = max hold, chargeMult = damage multiplier at full charge
   smashAttacks: {
-    forwardSmash: { // heavy: rear way back with the claw cocked high (charge holds here, frame 10), then chop forward with the whole body
+    forwardSmash: { name: 'Claw Chop', // heavy: rear way back with the claw cocked high (charge holds here, frame 10), then chop forward with the whole body
       input: 'heavy (X / K), hold to charge', step: 320, startup: 14, active: 4, endlag: 30, damage: 14, kb: { base: 30, growth: 100, angle: 38 },
       hitbox: { x: 34, y: -38, w: 62, h: 38 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 10,
       anim: f => ({
@@ -631,7 +631,7 @@ const MOVESET = {
         dust: f >= 14 && f < 26 ? (f - 14) / 12 : null,
       }),
     },
-    upSmash: { // terminal uppercut: crouch with the terminal held low in front (charge holds here), then spring up and swing it over the head, front to back
+    upSmash: { name: 'Terminal Uppercut', // terminal uppercut: crouch with the terminal held low in front (charge holds here), then spring up and swing it over the head, front to back
       input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 22, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
       hitbox: { x: -50, y: -125, w: 112, h: 85 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: f => ({ // term = [dx, dy from body centre, tilt, size] of the swung terminal
@@ -649,7 +649,7 @@ const MOVESET = {
         puff: f === 12 ? 0 : null,
       }),
     },
-    downSmash: { // /compact: squash down flat as a pancake (flatter the longer it charges), then spring back up and the pressure bursts out along
+    downSmash: { name: 'Compact Burst', // /compact: squash down flat as a pancake (flatter the longer it charges), then spring back up and the pressure bursts out along
       // the floor both ways. Hits both sides; knockback goes away from Claw'd
       input: 'down + heavy (X / K), hold to charge', startup: 12, active: 4, endlag: 22, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
       hitbox: { x: -90, y: -24, w: 180, h: 24 }, both: true, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
@@ -676,7 +676,7 @@ const MOVESET = {
   // landingLag = frames stuck on the ground if you land mid-attack
   aerials: {
     // aerials are drawn with a preview-only air: -40 so they float in the viewer; frame 0 / the last frame = the plain airborne pose
-    neutralAir: { // tuck and spin a full turn with both claws out: hits all around
+    neutralAir: { name: 'Claw Spin', // tuck and spin a full turn with both claws out: hits all around
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -46, y: -56, w: 92, h: 62 }, landingLag: 8,
       anim: f => {
@@ -686,7 +686,7 @@ const MOVESET = {
         return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40 };
       },
     },
-    forwardAir: { // rear back with the claw high, then chop it down in front
+    forwardAir: { name: 'Pincer Chop', // rear back with the claw high, then chop it down in front
       input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
       hitbox: { x: 30, y: -44, w: 46, h: 46 }, landingLag: 10,
       anim: f => ({
@@ -701,7 +701,7 @@ const MOVESET = {
         speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
       }),
     },
-    backAir: { // tip forward and mule-kick both back legs out behind
+    backAir: { name: 'Mule Kick', // tip forward and mule-kick both back legs out behind
       input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -68, y: -36, w: 40, h: 32 }, landingLag: 9,
       anim: f => tween(f, [
@@ -713,7 +713,7 @@ const MOVESET = {
         [24, { ...AIRBORNE, air: -40 }],
       ]),
     },
-    upAir: { // stretch tall and swipe both claws up over the head
+    upAir: { name: 'Rising Claws', // stretch tall and swipe both claws up over the head
       input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -34, y: -98, w: 70, h: 48 }, landingLag: 7,
       anim: f => tween(f, [
@@ -725,7 +725,7 @@ const MOVESET = {
         [24, { ...AIRBORNE, air: -40 }],
       ]),
     },
-    downAir: { // stomp: claws up, all four feet driven straight down. Spikes
+    downAir: { name: 'Claw Stomp', // stomp: claws up, all four feet driven straight down. Spikes
       input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -34, y: -8, w: 68, h: 28 }, landingLag: 14,
       anim: f => ({
@@ -744,7 +744,7 @@ const MOVESET = {
 
   // usable on the ground and in the air
   specials: {
-    neutralSpecial: { // think harder: clench up, eyes squeezed > <, and climb the effort tiers low → medium → high → ultrathink.
+    neutralSpecial: { name: 'Ultrathink', // think harder: clench up, eyes squeezed > <, and climb the effort tiers low → medium → high → ultrathink.
       // Each segment of the bar fills (THINK_FILL), then locks in at a checkpoint for THINK_HOLD frames: Claw'd pops, grows a little,
       // shakes harder and gains an aura shell for every tier reached (pose.aura = tier, pose.burst = the tier-up ring)
       input: 'B (V / L), no direction · hold to charge, ground or air', frames: 380, chargeFrames: thinkFrom(3) - THINK_HOLD, power: THINK_POWER, // frames of holding to reach ultrathink
@@ -764,7 +764,7 @@ const MOVESET = {
         return { ...p, squint: f >= 3 };
       },
     },
-    sideSpecial: { // pull out a Claude spark, wind it up over the head, and hurl it forward spinning
+    sideSpecial: { name: 'Claude Spark', // pull out a Claude spark, wind it up over the head, and hurl it forward spinning
       input: 'B (V / L) + a direction, ground or air · turns that way first', startup: 12, active: 2, endlag: 20, damage: 6, kb: { base: 20, growth: 45, angle: 30 },
       hitbox: null, landingLag: 10, projectile: { x: 52, y: -38, speed: 760, life: 0.75 },
       anim: f => {
@@ -782,7 +782,7 @@ const MOVESET = {
         return p;
       },
     },
-    upSpecial: { // MCP tether: fling a plug on a cord up and ahead. If it catches the stage's lip, Claw'd reels itself straight onto the
+    upSpecial: { name: 'MCP Tether', // MCP tether: fling a plug on a cord up and ahead. If it catches the stage's lip, Claw'd reels itself straight onto the
       // ledge; a miss pulls the cord back and leaves Claw'd falling helpless ("connection refused") until it lands or catches a ledge.
       // Plugging into an enemy connects to it: link.zaps zaps of link.zapDmg through the cord (one every link.every frames, the first
       // on contact), then it's reeled in at link.reel px/s until link.near px from the claw and blasted away (damage / kb), and Claw'd
@@ -804,7 +804,7 @@ const MOVESET = {
       },
       reelPose: { sx: 0.88, sy: 1.16, rot: -0.22, arm: [4, -18], reach: 12, legs: legsAll(-5, 6) }, // plugged in: stretched toward the ledge
     },
-    downSpecial: { // spawn a subagent: claws up, then push a little Claw'd out in front. It runs off on its own (dropped, in the air),
+    downSpecial: { name: 'Spawn Subagent', // spawn a subagent: claws up, then push a little Claw'd out in front. It runs off on its own (dropped, in the air),
       // bonks the first thing it reaches, then reports back with a toast and poofs
       input: 'down + B (V / L), ground or air · one subagent out at a time', startup: 14, active: 2, endlag: 16, damage: 4, kb: { base: 30, growth: 35, angle: 55 },
       hitbox: null, landingLag: 10, sub: { scale: 0.5, x: 40, speed: 380, life: 1.6, report: 0.8 }, // scale of Claw'd · spawn px ahead · run px/s · seconds before it gives up · seconds the toast stays
@@ -826,7 +826,7 @@ const MOVESET = {
   // per % it has). Holding: light pummels, a direction throws. Pummel / throws have no hitbox: their damage goes to whatever's held,
   // on the startup frame (throws let go then). carry = [dx, dy, rot] where the held bag's bottom-center goes, like hitboxes
   grabs: {
-    grab: { // both claws snap out in front and pinch; a whiff clacks them shut on nothing
+    grab: { name: 'Claw Snap', // both claws snap out in front and pinch; a whiff clacks them shut on nothing
       input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 20, y: -44, w: 42, h: 40 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -840,7 +840,7 @@ const MOVESET = {
         squint: f >= 9 && f < 16,
       }),
     },
-    dashGrab: { // out of a run: lunges claws-first and slides on the momentum
+    dashGrab: { name: 'Lunging Grab', // out of a run: lunges claws-first and slides on the momentum
       input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 20, y: -44, w: 60, h: 40 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -861,7 +861,7 @@ const MOVESET = {
         return { ...HOLD, rot: -0.05 + 0.02 * b, sx: 1.02 + 0.01 * b, sy: 0.98 - 0.01 * b, carry: [58, -4 + b, 0] };
       },
     },
-    pummel: { // Read(bag.txt): a hard squeeze
+    pummel: { name: 'Read Squeeze', // Read(bag.txt): a hard squeeze
       input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
       anim: f => ({
         ...tween(f, [
@@ -873,7 +873,7 @@ const MOVESET = {
         squint: f >= 5 && f < 9, say: ['Read(bag.txt)', Math.max(0, Math.min(1, f / 3, (16 - f) / 4))],
       }),
     },
-    forwardThrow: { // git push: rears back and shoves it out ahead
+    forwardThrow: { name: 'Git Push', // git push: rears back and shoves it out ahead
       input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
       anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['> git push', '→ origin/main'], keys: [
         [0, HOLD],
@@ -883,7 +883,7 @@ const MOVESET = {
         [29, {}],
       ], extra: f => ({ speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
     },
-    backThrow: { // git revert: hoists it overhead and heaves it over backwards
+    backThrow: { name: 'Git Revert', // git revert: hoists it overhead and heaves it over backwards
       input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['> git revert', '↶ reverted'], keys: [
         [0, HOLD],
@@ -894,7 +894,7 @@ const MOVESET = {
         [37, {}],
       ] }),
     },
-    upThrow: { // ship it: sets it down and a terminal springs up under it, launching it straight up
+    upThrow: { name: 'Ship It', // ship it: sets it down and a terminal springs up under it, launching it straight up
       input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['> ship it', 'deployed 🚀'], keys: [ // term dy is from body centre: bag bottom + 42
         [0, HOLD],
@@ -906,7 +906,7 @@ const MOVESET = {
         [35, {}],
       ] }),
     },
-    downThrow: { // git commit: lifts it overhead and stamps it into the floor, where it bounces up
+    downThrow: { name: 'Git Commit', // git commit: lifts it overhead and stamps it into the floor, where it bounces up
       input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['> git commit', '✓ committed'], keys: [
         [0, HOLD],

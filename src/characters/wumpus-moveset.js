@@ -54,6 +54,7 @@ const WUMPUS_MOVESET = {
   },
   groundAttacks: {
     jab1: { // ping: a quick poke with the front paw, feet planted
+      name: 'Ping',
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 16, y: -32, w: 30, h: 16 },
       anim: f => ({
@@ -70,6 +71,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     jab2: { // ping ping: the back paw follows it up, a little higher
+      name: 'Ping Ping',
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 50 },
       hitbox: { x: 16, y: -38, w: 30, h: 18 },
       anim: f => ({ arms: [0.15, ease(f, [[0, 0.15], [3, 0.7], [12, 0.4], [21, 0.15]])], ...tween(f, [
@@ -82,6 +84,7 @@ const WUMPUS_MOVESET = {
       ]) }),
     },
     jab3: { // @everyone: rear back and throw the whole big head forward, ears flying
+      name: '@everyone',
       input: 'light (after jab2)', step: 220, startup: 6, active: 3, endlag: 24, damage: 5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 14, y: -70, w: 38, h: 40 },
       anim: f => ({
@@ -100,6 +103,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     dashAttack: { // sliding into your DMs: hop and belly flop, skidding along on the run's momentum
+      name: 'Sliding Into DMs',
       input: 'light while running', startup: 7, active: 10, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
       hitbox: { x: 0, y: -42, w: 54, h: 40 },
       anim: f => ({
@@ -118,6 +122,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     forwardTilt: { // /slap: step in and whip the front ear round like a wet noodle
+      name: '/slap',
       input: 'forward + light', step: 200, startup: 7, active: 3, endlag: 18, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 26, y: -70, w: 34, h: 28 },
       anim: f => ({
@@ -135,6 +140,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     upTilt: { // raise hand: dip, then spring up tall with both ears shot straight up overhead
+      name: 'Raise Hand',
       input: 'up + light', startup: 6, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -32, y: -98, w: 64, h: 38 },
       anim: f => ({ arms: ease(f, [[0, 0.15], [5, 0.1], [6, 1.7], [10, 1.7], [16, 0.8], [26, 0.15]]), ...tween(f, [
@@ -147,6 +153,7 @@ const WUMPUS_MOVESET = {
       ]) }),
     },
     downTilt: { // *boop*: from the crouch, a quick low snoot poke along the floor
+      name: 'Boop',
       input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: 18, y: -36, w: 32, h: 24 },
       anim: f => ({
@@ -164,6 +171,7 @@ const WUMPUS_MOVESET = {
     },
     getupAttack: { // reconnecting…: from flat on its back, kick over and spin up with both ears flung out, clearing both sides.
       // Can't be hurt until the hit comes out; knockback goes away from Wumpus
+      name: 'Reconnecting',
       input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -62, y: -66, w: 124, h: 30 }, both: true, intangible: [0, 12],
       anim: f => ({
@@ -185,6 +193,7 @@ const WUMPUS_MOVESET = {
   smashAttacks: { // hold heavy to charge: the pose freezes at chargeAt and c = 0 … 1 is how much charge is held so far (the viewer shows none)
     forwardSmash: { // Super Reaction: pop a big emoji (a random one of EMOJIS) out overhead and hold it up in the ears (it swells with the charge), then slam it
       // down in front, where it bursts into the super-reaction sparkle ring
+      name: 'Super Reaction',
       input: 'heavy (X / K), hold to charge', step: 200, startup: 15, active: 4, endlag: 30, damage: 14, kb: { base: 30, growth: 100, angle: 38 },
       hitbox: { x: 26, y: -50, w: 48, h: 50 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 11,
       anim: (f, n, c = 0) => {
@@ -207,6 +216,7 @@ const WUMPUS_MOVESET = {
     },
     upSmash: { // Speaking: breathe in deep (puffing up fuller with the charge), then shout: green rings of voice (Discord's speaking
       // green) pulse up off its head
+      name: 'Speaking',
       input: 'up + heavy (X / K), hold to charge', startup: 12, active: 6, endlag: 22, damage: 13, kb: { base: 32, growth: 98, angle: 90 },
       hitbox: { x: -44, y: -150, w: 88, h: 100 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
       anim: (f, n, c = 0) => {
@@ -227,6 +237,7 @@ const WUMPUS_MOVESET = {
     downSmash: { // Pin Message: rear up tall with a giant pushpin raised point-down (bigger with the charge), then drive it into the floor
       // just in front. One close hit that pops the target up weakly, leaving it nearby. Charged at all, it pins the target to the floor
       // first: stuck in place (any hit frees it) for up to pin seconds, a quarter of that barely charged, then the pop
+      name: 'Pin Message',
       input: 'down + heavy (X / K), hold to charge', startup: 13, active: 3, endlag: 24, damage: 13, kb: { base: 40, growth: 25, angle: 88 },
       hitbox: { x: 22, y: -44, w: 30, h: 46 }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 9, pin: 1,
       anim: (f, n, c = 0) => {
@@ -252,6 +263,7 @@ const WUMPUS_MOVESET = {
     // frames turns into (the hit does nothing). Things it hands to the world are only in the pose until they're let go
     neutralSpecial: { // Airhorn (Discord's old soundboard bot): pull out an air horn, brace, and blast a cone of sound ahead. Point blank
       // (sweet) it launches; farther out it's just a shove
+      name: 'Airhorn',
       input: 'special', startup: 12, active: 6, endlag: 24, damage: 3, kb: { base: 45, growth: 20, angle: 20 }, landingLag: 14,
       hitbox: { x: 26, y: -86, w: 120, h: 76 }, sweet: { x: 26, y: -72, w: 42, h: 50, damage: 10, kb: { base: 38, growth: 95, angle: 35 } },
       anim: f => {
@@ -270,6 +282,7 @@ const WUMPUS_MOVESET = {
     },
     sideSpecial: { // Slowmode: set Nelly the snail down in front. She crawls ahead on her own (dropped, in the air) and the first thing she
       // touches takes a little hit and goes into slowmode: half speed, knockback and all, for slow seconds (one Nelly out at a time)
+      name: 'Slowmode',
       input: 'special + ← →', startup: 12, active: 1, endlag: 16, landingLag: 10,
       nelly: { x: 34, speed: 70, life: 5, damage: 3, kb: { base: 12, growth: 10, angle: 50 }, slow: 5 },
       anim: f => ({
@@ -286,6 +299,7 @@ const WUMPUS_MOVESET = {
     },
     upSpecial: { // Nitro: a Nitro tank on its back fires and launches it straight up in a stream of pink sparkles (steer with ← →), hitting anything on the way.
       // Helpless once it burns out
+      name: 'Nitro',
       input: 'special + ↑', startup: 6, active: 16, endlag: 18, damage: 8, kb: { base: 35, growth: 70, angle: 80 }, landingLag: 14,
       hitbox: { x: -26, y: -76, w: 52, h: 84 }, launch: 1150, helpless: true,
       anim: f => ({
@@ -302,6 +316,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     downSpecial: { // Deafen: clamp on the headphones. A hit while they're on does nothing: it turns straight into downSpecialHit
+      name: 'Deafen',
       input: 'special + ↓', startup: 4, active: 24, endlag: 18, landingLag: 10, counter: 'downSpecialHit',
       anim: f => tween(f, [
         [0, {}],
@@ -312,6 +327,7 @@ const WUMPUS_MOVESET = {
       ]),
     },
     downSpecialHit: { // …undeafened: tears the headphones off and the hit comes back out as a blast of sound, both ways
+      name: 'Undeafened',
       input: 'hit during Deafen', startup: 4, active: 4, endlag: 18, damage: 10, kb: { base: 40, growth: 90, angle: 45 },
       hitbox: { x: -80, y: -96, w: 160, h: 104 }, both: true, intangible: [0, 12], landingLag: 10,
       anim: f => ({
@@ -329,6 +345,7 @@ const WUMPUS_MOVESET = {
   },
   grabs: { // like Claw'd's (carry = where the held one's bottom-centre goes; throws let go on their startup frame)
     grab: { // Friend Request: paws out and the front ear flops over it in a hug; a whiff hugs thin air
+      name: 'Friend Request',
       input: 'grab (G / I), or shield + light', startup: 6, active: 3, endlag: 22, hitbox: { x: 18, y: -50, w: 42, h: 46 }, grab: true,
       anim: f => tween(f, [
         [0, {}],
@@ -340,6 +357,7 @@ const WUMPUS_MOVESET = {
       ]),
     },
     dashGrab: { // out of a run: dives in for the hug and slides on the momentum
+      name: 'Diving Hug',
       input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 18, y: -50, w: 58, h: 46 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -361,6 +379,7 @@ const WUMPUS_MOVESET = {
       },
     },
     pummel: { // ping: a squeeze, and a red unread badge on it counts up (the game draws that: badge)
+      name: 'Unread Badge',
       input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5, badge: true,
       anim: f => tween(f, [
         [0, WHOLD],
@@ -370,6 +389,7 @@ const WUMPUS_MOVESET = {
       ]),
     },
     forwardThrow: { // Move to AFK: rear back and shove it off into the AFK channel
+      name: 'Move to AFK',
       input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
       anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['moving to AFK…', '💤 moved to AFK'], keys: [
         [0, WHOLD],
@@ -380,6 +400,7 @@ const WUMPUS_MOVESET = {
       ] }),
     },
     backThrow: { // Leave Server: hoist it overhead in the ears and heave it out the door behind
+      name: 'Leave Server',
       input: 'back (holding)', startup: 16, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: throwAnim({ at: 16, n: 37, fly: [-12, -4, -0.15], say: ['showing them out…', '👋 left the server'], keys: [
         [0, WHOLD],
@@ -391,6 +412,7 @@ const WUMPUS_MOVESET = {
       ] }),
     },
     upThrow: { // Stage: lift it up overhead in the ears and fling it up onto the stage
+      name: 'Stage',
       input: 'up (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: throwAnim({ at: 14, n: 35, fly: [0, -14, 0.05], say: ['inviting to stage…', '🎙️ invited to speak'], keys: [
         [0, WHOLD],
@@ -402,6 +424,7 @@ const WUMPUS_MOVESET = {
       ] }),
     },
     downThrow: { // Mute: plonk it down, hop up and sit right on its head (muted mic overhead), then it pops out from under
+      name: 'Mute',
       input: 'down (holding)', startup: 14, active: 1, endlag: 22, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: throwAnim({ at: 14, n: 37, fly: [2, -9, 0.1], say: ['muting…', '🔇 muted'], extra: f => ({ muted: f >= 9 && f < 32 ? Math.min(1, (f - 9) / 3, (32 - f) / 6) : 0 }), keys: [
         [0, WHOLD],
@@ -416,6 +439,7 @@ const WUMPUS_MOVESET = {
   },
   defense: {
     shield: { // hold: hunker down behind a big red Do Not Disturb disc (his status flips to DND). The game shrinks, cracks and greys it as it wears
+      name: 'Do Not Disturb',
       input: 'hold dodge (Shift / Z)', frames: 60,
       anim: f => {
         const brace = { x: -3, sx: 1.1, sy: 0.84, rot: 0.06, ears: 0.1, arms: 1.4, legs: [[-2, 0], [0, 0], [0, 0], [2, 0]], dnd: 1 };
@@ -424,7 +448,8 @@ const WUMPUS_MOVESET = {
         return { ...p, squint: f >= 3 && f < 52, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // the preview wears it out over the hold
       },
     },
-    shieldBreak: { ...MOVESET.defense.shieldBreak, // the disc shatters, it pops up and lands dizzy with one of these over its head
+    shieldBreak: { // the disc shatters, it pops up and lands dizzy with one of these over its head
+      ...MOVESET.defense.shieldBreak, name: 'Connection Lost',
       oops: [['Message failed to send', 'you are being rate limited'], ['RTC connecting…', 'no route'], ['Discord is having issues', 'try again later']],
       anim: f => {
         const p = tween(f, [
@@ -619,7 +644,8 @@ const WUMPUS_MOVESET = {
         ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, ears: 1.6, arms: 1.5, squint: true }
         : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, WUMPUS, false] },
     },
-    respawn: { ...MOVESET.reactions.respawn, say: 'A wild Wumpus appeared.', // Discord's join message, over the respawn platform
+    respawn: { // Discord's join message, over the respawn platform
+      ...MOVESET.reactions.respawn, name: 'Wild Wumpus', say: 'A wild Wumpus appeared.',
       anim: f => { // preview: descend, stand, drop to the floor
         const e = 1 - (1 - Math.min(1, f / 40)) ** 3, d = Math.max(0, (f - 100) / 20);
         return { ...WUMPUS_MOVESET.movement.idle.anim(f % 120, 120), air: -170 + 110 * e + 60 * d * d, pad: +(f < 100), say: ['A wild Wumpus appeared.', f < 100 ? Math.min(1, f / 10) : 0] };
@@ -628,6 +654,7 @@ const WUMPUS_MOVESET = {
   },
   aerials: { // like Claw'd's: preview-only air: -40, frame 0 / the last frame = the plain airborne pose (arms 1, as the jumps and falls leave them)
     neutralAir: { // loading spinner: fling both ears out and spin a full turn, hitting all around
+      name: 'Loading Spinner',
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -50, y: -80, w: 100, h: 80 }, landingLag: 8,
       anim: f => {
@@ -638,6 +665,7 @@ const WUMPUS_MOVESET = {
       },
     },
     forwardAir: { // @here: rear the big head back, then nod it down hard in front
+      name: '@here',
       input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 35 },
       hitbox: { x: 14, y: -66, w: 42, h: 54 }, landingLag: 10,
       anim: f => ({
@@ -655,6 +683,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     backAir: { // /kick: tip right over forward and shove both feet out behind
+      name: '/kick',
       input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -56, y: -36, w: 36, h: 32 }, landingLag: 9,
       anim: f => ({
@@ -672,6 +701,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     upAir: { // stretch tall and scissor both ears up over the head
+      name: 'Ear Scissor',
       input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -34, y: -100, w: 68, h: 44 }, landingLag: 7,
       anim: f => ({
@@ -687,6 +717,7 @@ const WUMPUS_MOVESET = {
       }),
     },
     downAir: { // stomp: ears flung up, both feet driven straight down. Spikes
+      name: 'Stomp',
       input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -24, y: -8, w: 48, h: 28 }, landingLag: 14,
       anim: f => ({

@@ -148,13 +148,13 @@ const ANDROID_MOVESET = {
   },
 
   defense: {
-    shield: { ...CLAWD_SET.defense.shield, anim: f => { // hold: crouch inside a battery bubble (the game drains it with the real shield health)
+    shield: { ...CLAWD_SET.defense.shield, name: 'Battery Bubble', anim: f => { // hold: crouch inside a battery bubble (the game drains it with the real shield health)
       const brace = { sx: 1.1, sy: 0.82, swing: [0.7, 0.7], reach: [4, -4], head: [0, 3], legs: [[-2, 0], [-1, 0], [1, 0], [2, 0]] };
       const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
       if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing
       return { ...p, bubble: f < 4 ? f / 4 : f < 50 ? 1 : Math.max(0, 1 - (f - 50) / 7), wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // wear: the viewer's run-down
     } },
-    shieldBreak: { ...CLAWD_SET.defense.shieldBreak, anim: f => { // the bubble pops, it bounces up and lands dizzy: "Unfortunately, Android has stopped."
+    shieldBreak: { ...CLAWD_SET.defense.shieldBreak, name: 'Has Stopped', anim: f => { // the bubble pops, it bounces up and lands dizzy: "Unfortunately, Android has stopped."
       const p = tween(f, [
         [0, { sx: 0.9, sy: 1.12, swing: [2.4, 2.4], head: [0, -6], blink: 1, legs: legsAll(0, 2) }],
         [14, { sx: 0.96, sy: 1.05, swing: [1.6, 1.6], head: [0, -3], blink: 1, legs: TUCK }],
@@ -223,11 +223,11 @@ const ANDROID_MOVESET = {
     ko: { ...CLAWD_SET.reactions.ko, anim: f => f < 20 // spins off shrinking, its head popping clean off, then a green burst at the edge round the spinning head
       ? { x: 7 * f, air: -5 * f, rot: -f / 4, sx: 1 - f / 40, sy: 1 - f / 40, swing: [-1.2, 1.2], head: [0.8 * f, -1.2 * f], blink: 1 }
       : { x: 140, air: -100, blast: [(f - 20) / 60, Math.PI - 0.6, ANDROID, drawAndroidHead] } },
-    respawn: { ...CLAWD_SET.reactions.respawn, say: '> adb reboot', anim: f => ({ ...CLAWD_SET.reactions.respawn.anim(f), say: ['> adb reboot', f < 100 ? Math.min(1, f / 10) : 0] }) },
+    respawn: { ...CLAWD_SET.reactions.respawn, name: 'ADB Reboot', say: '> adb reboot', anim: f => ({ ...CLAWD_SET.reactions.respawn.anim(f), say: ['> adb reboot', f < 100 ? Math.min(1, f / 10) : 0] }) },
   },
 
   groundAttacks: {
-    jab1: { // front fist straight out: a tiny cock back, snapped out on frame 3, feet planted
+    jab1: { name: 'Straight Punch', // front fist straight out: a tiny cock back, snapped out on frame 3, feet planted
       input: 'light', startup: 3, active: 2, endlag: 14, damage: 2.5, kb: { base: 8, growth: 25, angle: 40 },
       hitbox: { x: 30, y: -50, w: 30, h: 18 },
       anim: f => tween(f, [
@@ -239,7 +239,7 @@ const ANDROID_MOVESET = {
         [19, {}],
       ]),
     },
-    jab2: { // the back fist crosses over in front of the body while the front one pulls back: a one-two
+    jab2: { name: 'Double Tap', // the back fist crosses over in front of the body while the front one pulls back: a one-two
       input: 'light (after jab1)', startup: 3, active: 2, endlag: 16, damage: 2, kb: { base: 10, growth: 25, angle: 45 },
       hitbox: { x: 28, y: -52, w: 30, h: 20 },
       anim: f => tween(f, [
@@ -251,7 +251,7 @@ const ANDROID_MOVESET = {
         [21, {}],
       ]),
     },
-    jab3: { // finisher: arms swept back, the head pops off the body and headbutts, antennae crackling
+    jab3: { name: 'Flying Headbutt', // finisher: arms swept back, the head pops off the body and headbutts, antennae crackling
       input: 'light (after jab2)', step: 220, startup: 5, active: 3, endlag: 24, damage: 4.5, kb: { base: 40, growth: 80, angle: 40 },
       hitbox: { x: 16, y: -64, w: 40, h: 30 },
       anim: f => ({
@@ -267,7 +267,7 @@ const ANDROID_MOVESET = {
         dust: f >= 5 && f < 17 ? (f - 5) / 12 : null,
       }),
     },
-    dashAttack: { // dive out of a run: throws itself flat forward behind both fists, legs kicked up behind, and slides on the momentum
+    dashAttack: { name: 'Fist Dive', // dive out of a run: throws itself flat forward behind both fists, legs kicked up behind, and slides on the momentum
       input: 'light while running', startup: 6, active: 8, endlag: 20, damage: 7, kb: { base: 35, growth: 60, angle: 55 },
       hitbox: { x: 20, y: -52, w: 52, h: 38 },
       anim: f => ({
@@ -283,7 +283,7 @@ const ANDROID_MOVESET = {
         dust: f >= 6 && f < 18 ? (f - 6) / 12 : null,
       }),
     },
-    forwardTilt: { // rocket fist: the front arm levels out and flies clean off its shoulder, then floats back
+    forwardTilt: { name: 'Rocket Fist', // rocket fist: the front arm levels out and flies clean off its shoulder, then floats back
       input: 'forward + light', startup: 7, active: 3, endlag: 17, damage: 8, kb: { base: 20, growth: 70, angle: 35 },
       hitbox: { x: 46, y: -52, w: 40, h: 22 },
       anim: f => tween(f, [
@@ -295,7 +295,7 @@ const ANDROID_MOVESET = {
         [27, {}],
       ]),
     },
-    upTilt: { // dip, then spring tall with both arms flung up and a bolt arcing between the antennae overhead
+    upTilt: { name: 'Antenna Spark', // dip, then spring tall with both arms flung up and a bolt arcing between the antennae overhead
       input: 'up + light', startup: 5, active: 4, endlag: 16, damage: 6, kb: { base: 25, growth: 80, angle: 88 },
       hitbox: { x: -28, y: -100, w: 56, h: 42 },
       anim: f => tween(f, [
@@ -307,7 +307,7 @@ const ANDROID_MOVESET = {
         [25, {}],
       ]),
     },
-    downTilt: { // from the crouch: leaning back, the front leg swings out straight along the floor in a quick sweep, then tucks back under
+    downTilt: { name: 'Leg Sweep', // from the crouch: leaning back, the front leg swings out straight along the floor in a quick sweep, then tucks back under
       input: 'down + light', startup: 5, active: 3, endlag: 12, damage: 5, kb: { base: 15, growth: 50, angle: 20 },
       hitbox: { x: 12, y: -18, w: 34, h: 18 },
       anim: f => tween(f, [
@@ -319,7 +319,7 @@ const ANDROID_MOVESET = {
         [20, CROUCH],
       ]),
     },
-    getupAttack: { // from flat on its back: rocks, flips over and lands with both arms flung straight out and a crackle, clearing both sides.
+    getupAttack: { name: 'Static Burst', // from flat on its back: rocks, flips over and lands with both arms flung straight out and a crackle, clearing both sides.
       // Can't be hurt until the hit comes out; knockback goes away from Android
       input: 'light / heavy (from knockdown)', startup: 12, active: 4, endlag: 16, damage: 6, kb: { base: 50, growth: 40, angle: 30 },
       hitbox: { x: -62, y: -48, w: 124, h: 30 }, both: true, intangible: [0, 12],
@@ -341,13 +341,13 @@ const ANDROID_MOVESET = {
   // hold heavy to charge; chargeFrames = max hold, chargeMult = damage multiplier at full charge. Their hitboxes change over the move:
   // hitbox(frame, charge 0 … 1) => box. anim gets the charge too; the viewer (which has none) shows them at full charge
   smashAttacks: {
-    forwardSmash: { // search bar chop: the front arm goes up and a Google search bar generates above the head, leaning back over it and
+    forwardSmash: { name: 'Search Bar Chop', // search bar chop: the front arm goes up and a Google search bar generates above the head, leaning back over it and
       // typing its query the longer it charges (longer bar, longer reach). Then it swings down in front, from overhead to the floor
       input: 'heavy (X / K), hold to charge', step: 220, startup: 16, active: 5, endlag: 27, damage: 13, kb: { base: 30, growth: 100, angle: 38 },
       hitbox: (f, c = 1) => lanceBox(f, c), chargeFrames: 60, chargeMult: 1.4, chargeAt: 10,
       anim: (f, n, c = 1) => lanceAnim(f, c),
     },
-    upSmash: { // Chrome dino: crouch and hold (charge), then spring up and the offline T-rex hops out from behind the head, up and over
+    upSmash: { name: 'Chrome Dino', // Chrome dino: crouch and hold (charge), then spring up and the offline T-rex hops out from behind the head, up and over
       // to the front. Only the dino hits, all along its jump
       input: 'up + heavy (X / K), hold to charge', startup: 12, active: 10, endlag: 20, damage: 13, kb: { base: 32, growth: 98, angle: 80 },
       hitbox: f => { const [x, y] = dinoAt(f); return { x: x - 17, y: y - 36, w: 34, h: 36 }; }, chargeFrames: 60, chargeMult: 1.4, chargeAt: 8,
@@ -365,7 +365,7 @@ const ANDROID_MOVESET = {
         puff: f === 12 ? 0 : null,
       }),
     },
-    downSmash: { // Google Earth stomp: up on its toes with the arms high (charge), then slam flat; a shockwave spreads along the floor throwing up map tiles
+    downSmash: { name: 'Earth Stomp', // Google Earth stomp: up on its toes with the arms high (charge), then slam flat; a shockwave spreads along the floor throwing up map tiles
       // both ways and the hitbox spreads with it: the closer the target, the sooner and harder it's hit. Knockback goes away from Android
       input: 'down + heavy (X / K), hold to charge', startup: 12, active: 10, endlag: 20, damage: 13, kb: { base: 30, growth: 95, angle: 20 },
       hitbox: f => { const t = Math.min(1, Math.max(0, (f - 12) / 10)), r = 26 + 110 * t; return { x: -r, y: -22, w: 2 * r, h: 24, mult: 1.15 - 0.4 * t }; },
@@ -388,7 +388,7 @@ const ANDROID_MOVESET = {
   // B (V / L). Neutral and side are ordinary attacks, ground or air; up is a warp (the engine's warpUp / warpStep); down is a held
   // charge on the ground (the engine fills P.batt while B is held and spends it on the next hit)
   specials: {
-    neutralSpecial: { // I'm Feeling Lucky: a search bar pops off the front fist, a random Google app (LUCKY) jumps out of it, and Android
+    neutralSpecial: { name: "I'm Feeling Lucky", // I'm Feeling Lucky: a search bar pops off the front fist, a random Google app (LUCKY) jumps out of it, and Android
       // winds up and throws it over the top. Each one flies its own way
       input: 'B (V / L), no direction, ground or air · a random app each time', startup: 18, active: 2, endlag: 18, damage: 6, kb: { base: 20, growth: 45, angle: 30 },
       hitbox: null, landingLag: 10, projectile: { x: 30, y: -66, pick: LUCKY },
@@ -412,7 +412,7 @@ const ANDROID_MOVESET = {
         return { ...p, say: f < 8 ? ["> I'm Feeling Lucky", Math.min(1, f / 3)] : f < 34 ? ['✓ ' + LUCKY[pick].name, Math.min(1, (34 - f) / 6)] : null };
       },
     },
-    sideSpecial: { // Chrome roll: curl up into a spinning Chrome ball and roll forward, bowling over what's in the way. On the ground
+    sideSpecial: { name: 'Chrome Roll', // Chrome roll: curl up into a spinning Chrome ball and roll forward, bowling over what's in the way. On the ground
       // holding B keeps it rolling (up to chargeFrames more); in the air it's a sideways recovery, once per airtime (not helpless).
       // dash = rolling frames [from, to), px/s, max fall speed in the air, px/s pop up on an air roll
       input: 'B (V / L) + a direction, ground or air · hold on the ground to roll farther', startup: 8, active: 20, endlag: 14, damage: 8, kb: { base: 30, growth: 55, angle: 40 },
@@ -432,7 +432,7 @@ const ANDROID_MOVESET = {
         return p;
       },
     },
-    upSpecial: { // Maps pin warp: point up and a Maps pin drops where Android's headed (reach px up, or up and ahead along aim with
+    upSpecial: { name: 'Maps Warp', // Maps pin warp: point up and a Maps pin drops where Android's headed (reach px up, or up and ahead along aim with
       // ← →), then it thins out to nothing (can't be hurt), reappears at the pin on blink with a pop that hits all round, and falls helpless
       input: 'up + B (V / L), ground or air · + ← → warps up and ahead', warp: true, startup: 14, active: 4, endlag: 12, blink: 12,
       damage: 6, kb: { base: 40, growth: 50, angle: 80 }, hitbox: { x: -38, y: -74, w: 76, h: 82 }, intangible: [8, 15],
@@ -449,7 +449,7 @@ const ANDROID_MOVESET = {
         vanish: f < 9 ? 0 : f < 12 ? (f - 9) / 3 : f < 15 ? 1 - (f - 12) / 3 : 0,
       }),
     },
-    downSpecial: { // fast charge: squat and plug a USB-C cable into its back; the battery over its head fills charge per frame from
+    downSpecial: { name: 'Fast Charge', // fast charge: squat and plug a USB-C cable into its back; the battery over its head fills charge per frame from
       // plugAt while B is held, on the ground. Let go (or fill it) to stop. The charge is kept, and the next hit that lands spends it
       // all: damage × (1 + power × charge)
       input: 'down + B (V / L), hold · ground only', charge: 1 / 90, plugAt: 10, power: 0.6, frames: 110,
@@ -468,7 +468,7 @@ const ANDROID_MOVESET = {
   // grabs (G / I), laid out like Claw'd's: a grab that connects holds the target (carry = [dx, dy, rot] of its bottom-centre) until it
   // breaks free; light pummels, a direction throws, letting go on the startup frame
   grabs: {
-    grab: { // Circle to Search: the front hand loops a glowing scribble round whatever's just ahead, and it's caught
+    grab: { name: 'Circle To Search', // Circle to Search: the front hand loops a glowing scribble round whatever's just ahead, and it's caught
       input: 'grab (G / I), or shield + light', startup: 7, active: 4, endlag: 22, hitbox: { x: 16, y: -68, w: 60, h: 64 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -482,7 +482,7 @@ const ANDROID_MOVESET = {
         circle: [46, -36, 30, Math.min(1, Math.max(0, (f - 2) / 5)), f < 11 ? 1 : Math.max(0, 1 - (f - 11) / 8)],
       }),
     },
-    dashGrab: { // out of a run: lunges in circling as it goes, sliding on the momentum
+    dashGrab: { name: 'Circle Lunge', // out of a run: lunges in circling as it goes, sliding on the momentum
       input: 'grab while running', startup: 9, active: 3, endlag: 28, hitbox: { x: 16, y: -68, w: 74, h: 64 }, grab: true,
       anim: f => ({
         ...tween(f, [
@@ -504,7 +504,7 @@ const ANDROID_MOVESET = {
         return { ...A_HOLD, rot: -0.04 + 0.02 * b, sy: 1 - 0.012 * b, carry: [56, -4 + b, 0] };
       },
     },
-    pummel: { // reCAPTCHA: the front hand comes down and stamps an "I'm not a robot" box onto it, ticked
+    pummel: { name: 'reCAPTCHA', // reCAPTCHA: the front hand comes down and stamps an "I'm not a robot" box onto it, ticked
       input: 'light (holding)', startup: 5, active: 1, endlag: 10, damage: 1.5,
       anim: f => ({
         ...tween(f, [
@@ -516,7 +516,7 @@ const ANDROID_MOVESET = {
         captcha: [56, -46, f < 5 ? 0 : Math.min(1, (f - 5) / 3), Math.max(0, Math.min(1, f / 2, (16 - f) / 4)), f < 5 ? 1.35 - 0.07 * f : 1],
       }),
     },
-    forwardThrow: { // next tab: a Chrome tab strip pops up over it, and a forward swipe flicks it on into the next tab
+    forwardThrow: { name: 'Next Tab', // next tab: a Chrome tab strip pops up over it, and a forward swipe flicks it on into the next tab
       input: 'forward (holding)', startup: 10, active: 1, endlag: 18, damage: 7, kb: { base: 55, growth: 55, angle: 35 },
       anim: throwAnim({ at: 10, n: 29, fly: [12, -6, 0.1], say: ['Ctrl+Tab', '→ next tab'], keys: [
         [0, A_HOLD],
@@ -526,7 +526,7 @@ const ANDROID_MOVESET = {
         [29, {}],
       ], extra: f => ({ tabs: [56, -114, Math.min(1, Math.max(0, (f - 7) / 5)), Math.max(0, Math.min(1, f / 3, (26 - f) / 6))], speed: f >= 10 && f < 18 ? 1 - (f - 10) / 8 : 0 }) }),
     },
-    backThrow: { // previous tab: hoists it overhead and swipes it back over into the tab behind
+    backThrow: { name: 'Previous Tab', // previous tab: hoists it overhead and swipes it back over into the tab behind
       input: 'back (holding)', startup: 14, active: 1, endlag: 20, damage: 9, kb: { base: 60, growth: 62, angle: 42 },
       anim: throwAnim({ at: 14, n: 35, fly: [-12, -4, -0.15], say: ['Ctrl+Shift+Tab', '← previous tab'], keys: [
         [0, A_HOLD],
@@ -537,7 +537,7 @@ const ANDROID_MOVESET = {
         [35, {}],
       ], extra: f => ({ tabs: [0, -174, -Math.min(1, Math.max(0, (f - 8) / 6)), Math.max(0, Math.min(1, f / 3, (30 - f) / 6))] }) }),
     },
-    upThrow: { // Drive upload: hoists it overhead under a Drive cloud, the upload bar fills, and it's backed up straight into the sky
+    upThrow: { name: 'Drive Upload', // Drive upload: hoists it overhead under a Drive cloud, the upload bar fills, and it's backed up straight into the sky
       input: 'up (holding)', startup: 18, active: 1, endlag: 18, damage: 6, kb: { base: 70, growth: 45, angle: 90 },
       anim: throwAnim({ at: 18, n: 37, fly: [0, -14, 0.05], say: ['Backing up…', '✓ Backed up'], keys: [
         [0, A_HOLD],
@@ -548,7 +548,7 @@ const ANDROID_MOVESET = {
         [37, {}],
       ], extra: f => ({ cloud: [0, -204, Math.min(1, Math.max(0, (f - 6) / 12)), Math.max(0, Math.min(1, (f - 2) / 4, (34 - f) / 6))] }) }),
     },
-    downThrow: { // Uninstall: a trash can pops up in front, Android lifts it high and slams it in, and it bounces back out
+    downThrow: { name: 'Uninstall', // Uninstall: a trash can pops up in front, Android lifts it high and slams it in, and it bounces back out
       input: 'down (holding)', startup: 14, active: 1, endlag: 20, damage: 6, kb: { base: 45, growth: 50, angle: 80 },
       anim: throwAnim({ at: 14, n: 35, fly: [2, -9, 0.1], say: ['Uninstall?', '🗑 Uninstalled'], keys: [
         [0, A_HOLD],
@@ -566,7 +566,7 @@ const ANDROID_MOVESET = {
 
   // aerials are drawn with a preview-only air: -40 so they float in the viewer; frame 0 / the last frame = the plain airborne pose
   aerials: {
-    neutralAir: { // arms flung straight out both ways and a full spin, antennae crackling: hits all around
+    neutralAir: { name: 'Static Spin', // arms flung straight out both ways and a full spin, antennae crackling: hits all around
       input: 'light (airborne)', startup: 4, active: 8, endlag: 14, damage: 6, kb: { base: 20, growth: 60, angle: 45 },
       hitbox: { x: -48, y: -78, w: 96, h: 86 }, landingLag: 8,
       anim: f => {
@@ -577,7 +577,7 @@ const ANDROID_MOVESET = {
         return { ...p, rot: f < 4 ? p.rot : -0.25 + (Math.PI * 2 + 0.25) * e, air: -40 };
       },
     },
-    forwardAir: { // hammer: both fists raised high over the head, then brought down together in front
+    forwardAir: { name: 'Hammer Fist', // hammer: both fists raised high over the head, then brought down together in front
       input: 'forward + light (airborne)', startup: 7, active: 4, endlag: 16, damage: 9, kb: { base: 25, growth: 80, angle: 40 },
       hitbox: { x: 14, y: -54, w: 46, h: 50 }, landingLag: 10,
       anim: f => ({
@@ -592,7 +592,7 @@ const ANDROID_MOVESET = {
         speed: f >= 7 && f < 11 ? 0.5 : 0, air: -40,
       }),
     },
-    backAir: { // dropkick: tip forward and shoot both legs straight out behind
+    backAir: { name: 'Dropkick', // dropkick: tip forward and shoot both legs straight out behind
       input: 'back + light (airborne)', startup: 6, active: 4, endlag: 14, damage: 10, kb: { base: 30, growth: 85, angle: 145 },
       hitbox: { x: -54, y: -36, w: 40, h: 30 }, landingLag: 9,
       anim: f => tween(f, [
@@ -604,7 +604,7 @@ const ANDROID_MOVESET = {
         [24, { ...AIRBORNE, air: -40 }],
       ]),
     },
-    upAir: { // stretch tall and fire the head straight up off the body, sparks arcing between the antennae
+    upAir: { name: 'Rocket Head', // stretch tall and fire the head straight up off the body, sparks arcing between the antennae
       input: 'up + light (airborne)', startup: 5, active: 5, endlag: 14, damage: 7, kb: { base: 22, growth: 80, angle: 90 },
       hitbox: { x: -30, y: -106, w: 60, h: 46 }, landingLag: 7,
       anim: f => tween(f, [
@@ -616,7 +616,7 @@ const ANDROID_MOVESET = {
         [24, { ...AIRBORNE, air: -40 }],
       ]),
     },
-    downAir: { // stomp: arms thrown up, both legs driven straight down. Spikes
+    downAir: { name: 'Double Stomp', // stomp: arms thrown up, both legs driven straight down. Spikes
       input: 'down + light (airborne)', startup: 8, active: 6, endlag: 18, damage: 11, kb: { base: 20, growth: 70, angle: 285 },
       hitbox: { x: -22, y: -8, w: 44, h: 26 }, landingLag: 14,
       anim: f => ({
