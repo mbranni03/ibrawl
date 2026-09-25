@@ -624,7 +624,7 @@ const GROK_MOVESET = {
     },
   },
 
-  // Grok's own specials run as their own states (state: …; bindMoves in index.html), clear of Claw'd's hard-wired ones
+  // Grok's own specials run as their own states (state: …; loadMoves in index.html), clear of Claw'd's hard-wired ones
   specials: {
     neutralSpecial: { // Grok Imagine: hold B and a card overhead counts up as it generates (a sparkle beside it); let go (or hit 100%)
       // and it flings the picture, a polaroid of some AI slip-up (six fingers, three eyes, a melting clock). The longer the charge, the
