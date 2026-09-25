@@ -20,7 +20,8 @@
 //   ring = 0 … 1 a flash ring bursting off the body (tech) · pad = 0 … 1 the respawn platform hovering under its feet (padMark = (x, y, r) =>
 //   draws the mark on its front instead of the Claude spark) · blastDraw = (x, y, t, ang) => draws the KO burst instead of Claw'd's
 //   blast = [0 … 1, angle] KO'd: Claw'd is gone, only a burst of rays shooting toward angle is left where it was
-//   body = () => draws another fighter in place of Claw'd's body, legs and eyes (every effect above still drawn around it)
+//   body = () => draws another fighter in place of Claw'd's body, legs and eyes (every effect above still drawn around it, except
+//   the terminal shield and its shatter: a fighter with its own shield draws it)
 const CLAWD = '#d97757';
 const CU = 5, CV = 10; // one grid cell, px (terminal half-cells are twice as tall as wide)
 
@@ -110,7 +111,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
     }
   }
   if (pose.spark) drawSpark(mx + face * pose.spark[0], bottom + (pose.y || 0) + pose.spark[1], SPARK_R, face * pose.spark[2]);
-  if (pose.shield > 0.05) drawTerminal(mx, oy - 14 * pose.shield, pose.shield, pose.wear || 0); // held low over its head like a roof, overlapping the top of the body
+  if (pose.shield > 0.05 && !pose.body) drawTerminal(mx, oy - 14 * pose.shield, pose.shield, pose.wear || 0); // held low over its head like a roof, overlapping the top of the body
   ctx.restore();
 
   if (pose.ring != null) { ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.globalAlpha *= 1 - pose.ring; ellipse(mx, my, 9 * U * (1 + pose.ring), 3 * V * (1 + pose.ring), 1); ctx.restore(); }
@@ -135,7 +136,7 @@ function drawClawd(cx, bottom, pose = {}, face = 1) {
     ctx.fillText(pose.say[0], mx, Math.min(bottom - 78, over)); ctx.restore();
   }
   if (pose.tether) { const [hx, hy] = clawdHand(pose, face), [l, a] = pose.tether; drawTether(cx + hx, bottom + hy, cx + hx + face * Math.cos(a) * l, bottom + hy - Math.sin(a) * l, pose.plugged, pose.flow); }
-  if (pose.shatter != null) { // terminal shards burst up and out from where it was held, tumble and fade
+  if (pose.shatter != null && !pose.body) { // terminal shards burst up and out from where it was held, tumble and fade
     const t = pose.shatter; ctx.save(); ctx.globalAlpha *= 1 - t; ctx.fillStyle = INK; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
     for (const [dx, dy, vx, vy, r] of SHARDS) {
       const px = mx + dx + vx * t, py = oy - 14 + dy - vy * t + 140 * t * t, a = r * (1 + 6 * t);

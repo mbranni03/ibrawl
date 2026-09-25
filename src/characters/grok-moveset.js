@@ -352,8 +352,39 @@ const GROK_MOVESET = {
     },
   },
 
-  // dodges (no shield yet). Frame data, intangibility and air dodge physics as Claw'd's
+  // shield and dodges. Frame data, shield health, intangibility and air dodge physics as Claw'd's
   defense: {
+    shield: { // a verified bubble pops up round it, ✓ badge up front; it hunkers down inside, eyes squeezed (the game shrinks, fades and
+      // cracks the bubble as the shield wears down)
+      ...MOVESET.defense.shield,
+      anim: f => {
+        const brace = { sx: 1.08, sy: 0.9, shield: 1 };
+        const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4);
+        return { ...p, squint: f >= 3 && f < 52, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // the preview wears it out over the hold
+      },
+    },
+    shieldBreak: { // the bubble pops: Grok's flung up, lands dizzy with a "rate limit exceeded"-style toast (mash to shake it off sooner)
+      ...MOVESET.defense.shieldBreak,
+      oops: [['rate limit exceeded', '429 · too many requests'], ['verification revoked', '✓ removed · subscription lapsed'], ['grok is at capacity', 'try again in a few minutes']],
+      anim: f => {
+        const p = tween(f, [
+          [0, { sx: 0.86, sy: 1.16, blink: 1 }],
+          [14, { sx: 0.96, sy: 1.05, blink: 1 }],
+          [28, { sx: 0.92, sy: 1.1 }],
+          [32, { sx: 1.22, sy: 0.8 }],
+          [40, { sx: 1.04, sy: 0.95 }],
+          [140, { sx: 1.04, sy: 0.95 }],
+          [150, {}],
+        ]);
+        const dizzy = f >= 32 && f < 144;
+        return {
+          ...p, air: f < 28 ? -60 * Math.sin(Math.PI * f / 28) : 0, rot: dizzy ? 0.12 * Math.sin((f - 32) / 9) : 0, dizzy: dizzy ? 0.01 + (f - 32) / 40 : 0,
+          shatter: f < 24 ? f / 24 : null, puff: f >= 28 && f < 34 ? (f - 28) / 6 : null,
+          oops: Math.min(1, Math.max(0, Math.min((f - 32) / 6, (110 - f) / 10))), oopsMsg: ['rate limit exceeded', '429 · too many requests'],
+        };
+      },
+    },
     spotDodge: { // flattens into a pancake on the floor, eyes shut, and everything goes over it; then springs back
       ...MOVESET.defense.spotDodge,
       anim: f => tween(f, [

@@ -16,6 +16,8 @@
 //   beam = 0 … 2 how wide a tractor beam out of its eyes is (0 = off), reaching beamTo = [dx, dy] from bottom-centre (grabs)
 //   repost / blocked / hearts = [t 0 … 1, dx, dy] throw effects centred dx, dy from bottom-centre: a green repost arrow circling,
 //   a block sign stamped on, hearts and a likes count shooting up
+//   shield = 0 … 1 size of a verified bubble round it (a blue ✓ badge on it) · wear = 0 … 1 cracks + fading · shatter = 0 … 1 it popping
+//   dizzy = orbit phase: spiral eyes (the stars overhead come with the game's effects)
 //   glow = 0 … 1 eyes lit Neuralink blue (down special)
 const GROK = '#fbf9f4';
 const GR_R = 28; // body radius; it sits on the floor
@@ -47,7 +49,12 @@ function drawGrok(cx, bottom, pose = {}, face = 1) {
   // eyes: pills leaning back at the top; blink shortens them, squint thins them and tips them toward flat
   const sq = pose.squint ? 1 : 0, l = GR_R * 0.44 * (1 - 0.8 * (pose.blink || 0)), w = GR_R * 0.2 * (1 - 0.45 * sq);
   const glow = pose.glow || 0;
-  for (const [ex, ey] of GR_EYES) {
+  if (pose.dizzy) for (const [i, [ex, ey]] of GR_EYES.entries()) { // spiral eyes, winding opposite ways
+    const sp = i ? -1 : 1, r0 = GR_R * 0.16; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let a = 0; a <= 4 * Math.PI; a += 0.35) { const r = r0 * a / (4 * Math.PI), q = sp * (a + pose.dizzy * 6.28); ctx.lineTo(ex * GR_R + Math.cos(q) * r, ey * GR_R + Math.sin(q) * r); }
+    ctx.stroke();
+  }
+  else for (const [ex, ey] of GR_EYES) {
     ctx.save(); ctx.translate(ex * GR_R + j(0.4), ey * GR_R + j(0.4)); ctx.rotate(-0.42 - 0.75 * sq);
     if (glow) { ctx.fillStyle = `rgba(62,197,255,${0.3 * glow})`; ctx.beginPath(); ctx.ellipse(0, 0, w * 1.6, l * 0.8, 0, 0, 6.28); ctx.fill(); }
     ctx.fillStyle = glow > 0.5 ? '#3ec5ff' : INK; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, w / 2); ctx.fill();
@@ -55,6 +62,8 @@ function drawGrok(cx, bottom, pose = {}, face = 1) {
     ctx.restore();
   }
   ctx.restore();
+  if (pose.shield > 0.05) drawBubble(bx, by - GR_R * (pose.sy ?? 1), pose.shield, pose.wear || 0, face);
+  if (pose.shatter != null) drawBubblePop(bx, by - GR_R, pose.shatter);
   if (pose.debris != null) drawDebris(cx, bottom, pose.debris);
   if (pose.gen != null) drawImagining(bx, by - 2 * GR_R * (pose.sy ?? 1) - 26, pose.gen);
   if (pose.boom != null) drawBoom(bx, by - GR_R, pose.boom);
@@ -383,5 +392,34 @@ function drawXMark(x, y, r) {
   ctx.save(); ctx.strokeStyle = INK; ctx.lineCap = 'round';
   ctx.lineWidth = r * 0.45; line(x - r, y - r, x + r, y + r, 0.3, 1);
   ctx.lineWidth = r * 0.2; line(x + r, y - r, x - r, y + r, 0.3, 1);
+  ctx.restore();
+}
+
+// the shield: a verified bubble round the ball, a blue ✓ badge up front. Worn (0 … 1) it shrinks (the game scales k), fades and cracks
+function drawBubble(x, y, k, wear, face) {
+  const r = 42 * k;
+  ctx.save(); ctx.translate(x, y); ctx.lineCap = ctx.lineJoin = 'round'; ctx.globalAlpha *= 1 - 0.45 * wear;
+  ctx.fillStyle = 'rgba(29,155,240,0.16)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.28); ctx.fill();
+  ctx.strokeStyle = 'rgba(29,120,200,0.8)'; ctx.lineWidth = 2.2; ellipse(0, 0, r, r, 0.6);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r - 6, -2.5, -1.7); ctx.stroke(); // shine
+  ctx.strokeStyle = 'rgba(20,80,140,0.8)'; ctx.lineWidth = 1.3; // cracks spreading as it wears
+  for (const [a, from] of [[-0.6, 0.15], [2.2, 0.35], [1.1, 0.55], [-2.4, 0.75]]) {
+    const u = Math.min(1, Math.max(0, (wear - from) / 0.25)); if (!u) continue;
+    const pts = [[Math.cos(a) * r, Math.sin(a) * r]]; for (let i = 1; i <= 3; i++) pts.push([Math.cos(a + 0.3 * (i % 2 ? 1 : -1)) * r * (1 - 0.18 * i * u), Math.sin(a + 0.3 * (i % 2 ? 1 : -1)) * r * (1 - 0.18 * i * u)]);
+    ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.stroke();
+  }
+  // the verified badge: a scalloped blue rosette with a white tick, up on the front of the bubble
+  ctx.translate(face * r * 0.62, -r * 0.62); const b = 9 * Math.max(0.6, k);
+  ctx.fillStyle = '#1d9bf0'; ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath();
+  for (let i = 0; i <= 16; i++) { const a = i / 16 * 6.28, rr = i % 2 ? b * 0.82 : b; i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(rr, 0); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-b * 0.4, 0); ctx.lineTo(-b * 0.1, b * 0.32); ctx.lineTo(b * 0.45, -b * 0.3); ctx.stroke();
+  ctx.restore();
+}
+// the bubble popping: arcs of it flying off and fading, and the badge spinning away up (t 0 … 1)
+function drawBubblePop(x, y, t) {
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha *= 1 - t; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(29,120,200,0.9)'; ctx.lineWidth = 2.4;
+  for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28 + 0.3, d = 42 + 70 * t; ctx.beginPath(); ctx.arc(Math.cos(a) * d, Math.sin(a) * d + 40 * t * t, 12, a - 1.9, a - 1.2); ctx.stroke(); }
+  ctx.translate(20 * t, -30 - 90 * t); ctx.rotate(t * 9); ctx.fillStyle = '#1d9bf0'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, 6.28); ctx.fill();
   ctx.restore();
 }

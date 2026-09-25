@@ -341,7 +341,7 @@ function linkStep(T, ax, ay, dt) {
 // the shield ran out: the terminal shatters, Claw'd pops up and is left dizzy for SB.frames (each key press shakes off 3 frames)
 function breakShield() {
   P.shield = 0; P.vy = -SB.pop; P.ground = false; P.on = null; hitstop = 10; setState('shieldBreak');
-  P.oopsMsg = Math.floor(Math.random() * OOPS.length); // which error toast pops up over its head
+  const msgs = SB.oops || OOPS; P.oopsMsg = msgs[Math.floor(Math.random() * msgs.length)]; // which error toast pops up over its head (the fighter's own, or Claw'd's)
 }
 
 // holding a target: light pummels, a direction throws; once P.holdT runs out it wriggles free and they're pushed apart
