@@ -244,15 +244,15 @@ function drawSack(x, y, rot = 0) {
 }
 
 // KO blast: a fan of thick ink / orange rays shooting out toward ang and a big Claude spark, all fading out as t goes 0 → 1
-function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = the rays between the ink ones · mark = what bursts in the middle (x, y, r, spin), false = nothing
+function drawBlast(x, y, t, ang, color = CLAWD, mark = drawSpark) { // color = the rays between the ink ones (an array: cycle through those instead) · mark = what bursts in the middle (x, y, r, spin, e = 0 … 1 how far out, t), false = nothing
   const e = 1 - (1 - Math.min(1, t * 3)) ** 2; // shoots out fast
   ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha *= Math.min(1, (1 - t) * 2.5);
   for (let k = 0; k < 11; k++) {
     const a = ang + (k - 5) * 0.13, l = (120 + 160 * (k * 0.618 % 1)) * e;
-    ctx.strokeStyle = k % 2 ? color : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
+    ctx.strokeStyle = Array.isArray(color) ? color[k % color.length] : k % 2 ? color : INK; ctx.lineWidth = 2 + 8 * (1 - Math.abs(k - 5) / 6);
     line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 1.5, 1);
   }
-  if (mark) mark(x, y, SPARK_R * (1 + 2 * e), t * 3);
+  if (mark) mark(x, y, SPARK_R * (1 + 2 * e), t * 3, e, t);
   ctx.restore();
 }
 

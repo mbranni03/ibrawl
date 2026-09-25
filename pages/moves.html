@@ -81,6 +81,7 @@
 <script src="../src/characters/snoo.js"></script>
 <script src="../src/characters/snoo-moveset.js"></script>
 <script src="../src/characters/lego.js"></script>
+<script src="../src/characters/lego-moveset.js"></script>
 <script>
 const VW = 480, VH = 270, SCALE = 2, GROUND = 200;
 const cv = document.getElementById('c'); ctx = cv.getContext('2d');
@@ -107,7 +108,7 @@ const FIGHTERS = {
   duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: withTodo(SNOO_MOVESET), draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
-  lego: { name: 'Lego Man', moves: basic, draw: drawLego, fx: drawClawdFx },
+  lego: { name: 'Lego Man', moves: withTodo(LEGO_MOVESET), draw: drawLego, fx: drawClawdFx, hurt: (p = {}) => ({ x: (p.x || 0) - 22 * (p.sx ?? 1), y: (p.y || 0) - 72 * (p.sy ?? 1), w: 44 * (p.sx ?? 1), h: 72 * (p.sy ?? 1) }) },
 };
 for (const F of Object.values(FIGHTERS)) if (F.draw !== drawClawd) { // as in the game: the others drawn inside Claw'd's effects (captions, speed lines…)
   const art = F.draw; F.draw = (x, y, p, face) => drawClawd(x, y, { ...p, body: () => art(x, y, p, face) }, face);
@@ -186,6 +187,7 @@ function select(i) {
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
 const panelFrames = () => Array.from({ length: Math.min(12, total) }, (_, i) => Math.floor(i * total / Math.min(12, total)));
 
+const halfBox = () => F.hurt ? F.hurt().w / 2 : 0;
 function drawRect(b, stroke, fill) {
   ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.fillStyle = fill;
   ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -204,10 +206,18 @@ function drawFigure(fr) {
   }
   if (F.fx) F.fx(0, 0, pose);
   if (pose.carry) drawSack(pose.carry[0], air + pose.carry[1], pose.carry[2]); // grabbed bag, behind the claws
+  if (move.step) { const S = move.step, n = Math.floor(Math.max(0, fr - move.startup) / S.every), dx = move.drive * S.every / 60; for (let k = 1; k <= Math.min(n, move.active / S.every); k++) drawLegoPlate({ x: 6 - S.w / 2 - (n - k) * dx, y: move.anim(move.startup + k * S.every).air, w: S.w, h: S.h, col: k % 4 }); } // the staircase so far
   F.draw(0, air, pose);
   const pr = move.projectile && { ...move.projectile, ...move.projectile.pick?.[0] }, st = (fr - move.startup) / 60; // thrown thing (a picked one: the first), flying from the release frame
   const wy = pr?.wave ? pr.wave[0] * Math.sin(2 * Math.PI * st / pr.wave[1]) : 0; // a projectile that bobs as it flies
   if (pr && st >= 0) move.shotArt ? move.shotArt(pr.x + pr.speed * st, air + pr.y, Math.min(1, st / 0.1), 1) : (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
+  if (move.toss && st >= 0) { const T = move.toss, tb = T.speed / T.decel, u = Math.min(st, 2 * tb); if (st < 2 * tb) drawLegoHead({ x: T.x + T.speed * u - T.decel * u * u / 2, y: air + T.y, rot: st * 22, face: 1 }); } // out and (preview: straight) back
+  if (move.builds) drawLegoBooklet(0, air - 84, move.builds.map(k => LEGO_MOVESET.specials[k]), Math.floor(fr / 20) % move.builds.length, Math.min(1, fr / move.open), 45); // Lego Man's pick list (with 45 studs), the pick stepping down
+  if (move.fire && st >= 0) { const L = move.fire, v = Math.min(L.speed[1], L.speed[0] + L.accel * st), tt = (v - L.speed[0]) / L.accel; drawLegoRocket({ x: L.x + L.speed[0] * tt + L.accel * tt * tt / 2 + v * (st - tt), y: air + L.y, dir: 1 }); } // flying off (no target to burst on here)
+  if (move.scatter && st >= 0) for (let k = 0; k < move.scatter.count; k++) { // loose bricks (uncharged): arc out, land, slide to a stop
+    const [vx, vy] = scatterVel(k, 0), g = 2300, tl = (-vy + Math.sqrt(vy * vy + 2 * g * 19)) / g, ts = Math.max(0, Math.min(st - tl, vx / 1800)), t = Math.min(st, tl);
+    drawLooseBrick({ x: 14 + vx * t + vx * ts - 900 * ts * ts, y: Math.min(-7, -26 + vy * t + g * t * t / 2), w: 12, h: 7, rot: st < tl ? (8 + 5 * (k % 3)) * st : 0, col: k % 4 });
+  }
   if (!$('boxes').checked || !F.hurt) return;
   const rad = pr?.r ?? SPARK_R;
   if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - rad, y: air + pr.y + wy - rad, w: 2 * rad, h: 2 * rad }, BOX, 'rgba(224,82,58,0.18)');
@@ -238,7 +248,7 @@ function renderBoard() {
     ctx.strokeStyle = now ? BOX : INK; ctx.lineWidth = now ? 2.4 : 1.2;
     poly([[6, 6], [PW - 6, 6], [PW - 6, PH - 6], [6, PH - 6]], 0.8);
     ctx.save(); ctx.beginPath(); ctx.rect(7, 7, PW - 14, PH - 14); ctx.clip();
-    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(group === 'ledge' ? ox : 22, floorY, PW - 22, floorY, 0.6, 1);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; line(group === 'ledge' ? ox - halfBox() * s : 22, floorY, PW - 22, floorY, 0.6, 1);
     ctx.translate(ox, floorY); ctx.scale(s, s); drawFigure(fr); ctx.restore();
     ctx.font = '600 18px Caveat, cursive'; ctx.fillStyle = INK; ctx.textAlign = 'left';
     ctx.fillText(`f${fr + 1}`, 14, 26);
@@ -260,8 +270,8 @@ function render(t) {
   ctx.setTransform(dpr * SCALE, 0, 0, dpr * SCALE, 0, 0);
   ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = INK;
 
-  // little floor; for ledge moves it stops at the lip Claw'd hangs from
-  const { move, group } = list[cur], lip = group === 'ledge' ? VW / 2 : null;
+  // little floor; for ledge moves it stops at the lip Claw'd hangs from (x = 0 stands him half his box in from it, as in the game)
+  const { move, group } = list[cur], lip = group === 'ledge' ? VW / 2 - halfBox() : null;
   hatch([[lip ?? 100, GROUND], [380, GROUND], [365, GROUND + 20], [lip ?? 115, GROUND + 20]], 8, 0.3);
   ctx.lineWidth = 2; line(lip ?? 92, GROUND, 388, GROUND, 1.2);
 

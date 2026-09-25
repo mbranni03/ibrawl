@@ -26,6 +26,7 @@
 <script src="src/characters/grok-moveset.js"></script>
 <script src="src/characters/duo-moveset.js"></script>
 <script src="src/characters/wumpus-moveset.js"></script>
+<script src="src/characters/lego-moveset.js"></script>
 <script src="src/characters/android-moveset.js"></script>
 <script src="src/characters/snoo-moveset.js"></script>
 <script>
@@ -70,14 +71,14 @@ function loadMoves(set) {
   DOWN_B = SP.downSpecial; // the subagent (sub), if it has one
   ATK = { ...S('groundAttacks'), ...S('smashAttacks'), grab: GR.grab, dashGrab: GR.dashGrab }; AIR = { ...S('aerials') }; // attack states are named after their move
   // specials are usable on the ground and in the air, so they live in both maps, as their own states (m.state, else the move's name,
-  // e.g. Grok's extra neuralZap). Not Claw'd's held think or MCP tether (no startup / a reach: wired in by hand), nor ones with their
+  // e.g. Grok's extra neuralZap, Lego Man's booklet builds). Not Claw'd's held think or MCP tether (no startup / a reach: wired in by hand), nor ones with their
   // own step: flights (they steer themselves), warps (Android's Maps pin, off P.warp), held charges (Android's fast charge, off P.batt)
   FLY = {}; const own = {};
   for (const [k, m] of Object.entries(SP)) {
     const st = m.state || k;
     if (m.flight) FLY[st] = FLY[st + 'Charge'] = own[st] = m;
-    else if (m.warp || m.charge) own[st] = m;
-    else if (m.startup != null && m.reach == null) ATK[st] = AIR[st] = m;
+    else if (m.warp || m.charge || (m.startup == null && m.state)) own[st] = m; // (+ Lego Man's booklet: it runs itself, bookletStep)
+    else if (m.startup != null && m.reach == null) { AIR[st] = m; if (!m.thrust) ATK[st] = m; } // a climb (Lego Man's staircase) is air-only: it hops off first
   }
   MOVES = { ...ATK, ...AIR, ...own, ledgeAttack: L.ledgeAttack, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
   if (!(NEUTRAL_B.state || 'neutralSpecial' in MOVES)) MOVES.neutralSpecial = NEUTRAL_B; // Claw'd's think: animated, no hitbox
@@ -99,10 +100,13 @@ const shots = []; // thrown sparks in flight: { x, y, vx, t, m }
 let nelly = null; // Wumpus's side special: Nelly the snail { x, y, w, h, vx, vy, face, t, ground, on, N = her move data }
 let wreck = null; // a rocket-style up special's ship once the rider's off it: { x, y (its middle), vx, vy, t, m, boom = 0 … 1 once it's blowing up }
 let cart = null; // a ride special's vehicle (Grok's Cybertruck), Steve minecart style: { x, y, w, h, vx, vy, face, t, ground, on, m = the move, dist = px driven, bag = target scooped into it, bagT, done }
+let thrown = null; // Lego Man's head while it's off, flying (side special): { x, y, vx, dir, back, sp, t, rot, face, hit, T }
+const rockets = [], booms = []; // Lego Man's rockets in flight { x, y, v, dir, t, L } and their blasts { x, y, t, r }
+const bricks = []; // Lego Man's loose bricks: boxes that tumble out and lie on the floor, hurting whoever touches one: { x, y, w, h, vx, vy, rot, spin, col, dir, t, m }
 let sub = null; // the down special's subagent: a half-size Claw'd box { x, y, w, h, vx, vy, face, t, ground, on, done = seconds since it reported back }
 // every fighter: name, collision box [w, h], art = its draw function (bottom-centre x, y, pose, facing), set = its moveset: a group it
 // doesn't have yet (attacks, specials, grabs, defense, ledge) is simply off for it · jumps = air jumps · flap = air jump speed ·
-// glide = max fall speed holding jump. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
+// glide = max fall speed holding jump · pad = draws its own respawn platform (pose.pad) · controls = its own descriptions for rows of the controls screen, by keys. draw = standing, idling (t = seconds): dummies, portraits, the select and vs screens
 const FIGHTER = {
   clawd: { name: "Claw'd", box: [60, 50], art: drawClawd, set: MOVESET },
   grok: { name: 'Grok Bot', box: [52, 56], art: drawGrok, set: GROK_MOVESET },
@@ -110,7 +114,9 @@ const FIGHTER = {
   android: { name: 'Android', box: [50, 64], art: drawAndroid, set: ANDROID_MOVESET },
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: SNOO_MOVESET },
-  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: { movement: MOVESET.movement } },
+  lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: LEGO_MOVESET, pad: true, controls: { // his rows on the controls screen, where they differ
+    'X / K': 'heavy, hold for more bricks: brick hammer · + ↑: tower · + ↓: loose bricks · in the air: same aerials as light',
+    'V / L': 'special · booklet: ↑ ↓ pick a build, special: buy it with studs · + ← →: head boomerang · + ↑: staircase · + ↓: fall-apart counter' } },
   bag: { name: 'Training Bag', box: [44, 76], draw: (x, y, p) => drawSack(x, y, p.rot || 0) },
   random: { name: 'Random', box: [60, 60], draw: (x, y, p, f, t) => { ctx.save(); ctx.translate(x, y - 32); drawQuestion(48, t); ctx.restore(); } }, // a pick not rolled yet
 };
@@ -157,8 +163,11 @@ function setPaused(on) {
 function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['restart', 'quit']; }
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
-  stocks = STOCKS; fx.length = shots.length = 0; sub = cart = wreck = nelly = null; makeTargets();
-  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
+  stocks = STOCKS; fx.length = shots.length = bricks.length = rockets.length = booms.length = 0; sub = cart = wreck = nelly = thrown = null; makeTargets();
+  for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); // Lego Man's stairs
+  [P.w, P.h] = fighter.box; // out of the mech
+  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null,
+    studs: NEUTRAL_B.studs?.start ?? 0, gold: 0, mech: 0, stairs: false, warn: null }); // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
@@ -166,7 +175,9 @@ const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTE
 function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; loadMoves(fighter.set); [P.w, P.h] = fighter.box; }
 // B pressed: the special for the held direction. Claw'd's tether and think and Android's warp are wired in by hand; anything else is its
 // own move, usable on the ground and in the air. oncePerAir moves (and rolls, dash) can't be used again until it lands; a held charge
-// (charge) is ground only; a ride waits until the last one is gone; a zap (Grok's Neuralink) goes off instead while its chip is planted
+// (charge) is ground only; a ride waits until the last one is gone; a zap (Grok's Neuralink) goes off instead while its chip is planted.
+// Lego Man's: the head boomerang waits for his head (toss); the staircase
+// (step) and booklet (builds) need studs
 function special(dir) {
   specialQ = 0;
   const k = keys.up ? 'upSpecial' : keys.down ? 'downSpecial' : dir ? 'sideSpecial' : 'neutralSpecial', m = SP[k];
@@ -174,13 +185,46 @@ function special(dir) {
   if (!P.ground) (P.usedB ||= {})[k] = true;
   if (k === 'upSpecial' && m.warp) return warpUp(dir); // Android's Maps pin
   if (k === 'upSpecial' && m.reach != null) return tetherUp(dir); // Claw'd's MCP tether
+  if (m.toss && thrown) return; // one head: not again till it's back
+  if (m.step) { if (P.studs < 1) return warn('no studs!'); if (P.stairs) return; } // the staircase: once, till he's back on the stage or a normal platform
+  if (m.builds && P.studs < Math.min(...m.builds.map(b => MOVES[b].cost))) return warn('not enough studs'); // can't afford any build: the booklet stays shut
   if (dir) P.face = dir; P.held = true; P.chg = 0; // held: a charge / a roll (B) keeps going while B is held (see chargeKey)
   P.roll = m.projectile?.pick ? Math.floor(Math.random() * m.projectile.pick.length) : null; // a random outcome: I'm Feeling Lucky's app
   if (m.dash && !P.ground) P.vy = Math.min(P.vy, -m.dash.pop); // an air roll pops up a little
-  if (k === 'neutralSpecial' && (m.hearts || m.startup == null)) return think(); // Claw'd's held think / Duo's heart zap
+  if (k === 'neutralSpecial' && (m.hearts || (m.startup == null && !m.state))) return think(); // Claw'd's held think / Duo's heart zap
+  if (m.step) { // the first step's stud; the new staircase replaces the old
+    P.stairs = true; P.studs--; for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego === 'step') plats.splice(i, 1);
+    Object.assign(P, { ground: false, on: null, fastFall: false, vy: Math.min(P.vy, -m.hop) });
+  }
+  if (m.builds) P.bk = { i: P.bk?.i || 0, u: !!keys.up, d: !!keys.down }; // the last pick is remembered
   if (m.flight) { P.fastFall = false; P.aim = 0; return setState(m.state + 'Charge'); }
   setState(m.zap && targets.some(b => b.sticker?.chip) ? m.zap : m.state || k);
 }
+// Lego Man's brick moves spend a stud per brick they build, as many as he has: m.bricks = [least, more at full charge]. P.nb = the
+// bricks this one builds, counted while it charges and fixed once it comes out. sizeOf = how big a charged move comes out (0 … 1;
+// for his brick moves, by the bricks he could afford)
+const bricksOf = m => Math.max(0, Math.min(m.bricks[0] + Math.round(m.bricks[1] * P.chg / m.chargeFrames), P.studs));
+const sizeOf = m => m.bricks ? (P.nb - m.bricks[0]) / m.bricks[1] : m.chargeFrames ? P.chg / m.chargeFrames : 0;
+// Lego Man tried to build without the studs: the move doesn't happen, a warning pops up over his head for WARN_T seconds instead
+const WARN_T = 1.2, warn = text => { P.warn = { text, t: 0 }; };
+// the booklet's open: ↑ ↓ move the pick (a fresh press each), special / light builds it if he has the studs (else it shuts, with a
+// warning), shield / dodge / jump puts it away
+function bookletStep() {
+  const B = MOVES.booklet, k = P.bk, n = B.builds.length;
+  k.i = (k.i + n + (keys.down && !k.d ? 1 : 0) - (keys.up && !k.u ? 1 : 0)) % n; k.u = !!keys.up; k.d = !!keys.down;
+  if (!P.ground) P.vy = Math.min(P.vy, B.fall); // pages slow the fall
+  if (P.f >= B.open && (specialQ || attackQ)) { specialQ = attackQ = 0; const b = MOVES[B.builds[k.i]]; if (P.studs >= b.cost) { P.studs -= b.cost; setState(B.builds[k.i]); } else { warn('not enough studs'); setState(P.ground ? 'idle' : 'air'); } }
+  else if (dodgeQ || jumpQ || keys.shield) { dodgeQ = jumpQ = 0; setState(P.ground ? 'idle' : 'air'); }
+}
+// the booklet's builds, on their release frame: fire the rocket, or switch on the gold brick / the mech suit (the wrecking ball is just a hit)
+function legoBuild(m) {
+  if (m.fire) { const L = m.fire; rockets.push({ x: P.x + P.w / 2 + P.face * L.x, y: P.y + P.h + L.y, v: L.speed[0], dir: P.face, t: 0, L }); }
+  if (m.power) P.gold = m.power.time;
+  if (m.suit) { P.mech = m.suit.time; mechFit(true); }
+}
+// in the mech suit his box is MECH_K times his own, grown round his feet; back to his own size when it pops off in a shower of bricks
+function mechFit(on) { const [w, h] = fighter.box, k = on ? MECH_K : 1; P.x += (P.w - w * k) / 2; P.y += P.h - h * k; P.w = w * k; P.h = h * k; }
+function popMech() { P.mech = 0; mechFit(false); booms.push({ x: P.x + P.w / 2, y: P.y + P.h / 2, t: 0, r: 50 }); puff(); }
 function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
@@ -269,11 +313,11 @@ function land(surface, wasGround) {
     else if (P.state === 'hitstun') {} // flinches through the landing
     else if (P.state === 'upSpecial' && US.warp) {} // warped onto the floor: finishes the pop there
     else if ((P.state in AIR && !AIR[P.state].keepOnLand) || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? AD : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
-    else if (P.state === 'neutralSpecial' || AIR[P.state]?.keepOnLand || (FLY[P.state] && P.state !== FLY[P.state].state)) {} // keeps thinking (charging) through the landing
+    else if (P.state === 'neutralSpecial' || P.state === 'booklet' || AIR[P.state]?.keepOnLand || (FLY[P.state] && P.state !== FLY[P.state].state)) {} // keeps thinking (charging) through the landing
     else if (FLY[P.state]) { const m = FLY[P.state]; blowWreck(P.x + P.w / 2, P.y + P.h - m.wreck.mid, m); P.lag = m.landingLag; setState('landLag'); } // flew into the floor
     else if (P.vy > 300) { setState('land'); puff(); } else setState('idle');
   }
-  P.vy = 0; P.ground = true; P.on = surface; P.jumps = 2; P.airDodged = false; P.usedB = null;
+  P.vy = 0; P.ground = true; P.on = surface; P.jumps = 2; P.airDodged = false; P.usedB = null; if (surface.lego !== 'step') P.stairs = false; // back on solid ground: stairs again
 }
 
 // ledges: falling past a stage corner (not holding down) catches it. While on it, the ledge moves' x / air place Claw'd
@@ -283,6 +327,7 @@ function grabLedge() {
   for (const side of [-1, 1]) {
     const lx = side < 0 ? stage.x : stage.x + stage.w, gap = side < 0 ? lx - (P.x + P.w) : P.x - lx;
     if (gap >= 0 && gap < 24 && P.y > stage.y - 40 && P.y < stage.y + 16) {
+      if (P.mech > 0) popMech(); // too big to hang on: he climbs out and the suit falls apart
       Object.assign(P, { ledge: side, face: -side, fastFall: false, jumps: AIR_JUMPS(), airDodged: false }); // catching refreshes the double jump
       return setState('ledgeGrab');
     }
@@ -402,7 +447,7 @@ function throwStep() { // lets go on the startup frame
   const m = GR[P.state], b = heldBag();
   if (P.f === m.startup && b) {
     const k = P.ratio?.ratiod ? GR.hold.ratio.mult : 1; // ratio'd: the throw hits harder, and the stamp stays on them a moment
-    b.held = false; hitBag(b, m.damage * k, { ...m.kb, base: m.kb.base * k, growth: m.kb.growth * k }, P.state === 'backThrow' ? -P.face : P.face);
+    b.held = false; b.y = Math.min(b.y, P.y + P.h - b.h); hitBag(b, m.damage * k, { ...m.kb, base: m.kb.base * k, growth: m.kb.growth * k }, P.state === 'backThrow' ? -P.face : P.face);
     if (k > 1) b.sticker = { t: 0, ...GR.hold.ratio.stamp };
     P.ratio = null;
   }
@@ -411,7 +456,7 @@ function throwStep() { // lets go on the startup frame
 
 // every hit on Claw'd: damage, a freeze, then launched away from the hit; knockback picks a flinch (hitstun) or a tumble
 function hitClawd(dmg, kb, dir) {
-  const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { setState(c.counter); hitstop = 8; return; } // countered: the hit does nothing
+  const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return; } // countered: the hit does nothing
   hurt(dmg); hitstop = Math.round(3 + dmg / 4);
   const k = kb.base + kb.growth * P.dmg / 100, a = kb.angle * Math.PI / 180;
   P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
@@ -421,11 +466,12 @@ function hitClawd(dmg, kb, dir) {
 // crossed the blast zone: freeze, and leave a blast at the screen edge where it went out, pointing back in (the respawn follows)
 function ko() {
   const x = Math.min(W - 30, Math.max(30, P.x + P.w / 2)), y = Math.min(H - 30, Math.max(30, P.y + P.h / 2));
-  P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; for (const b of targets) b.held = b.pinned = false; P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
+  P.ko = [x, y, Math.atan2(H / 2 - y, W / 2 - x)]; P.ledge = 0; thrown = null; for (const b of targets) b.held = b.pinned = false; P.vx = P.vy = 0; P.state = 'ko'; P.f = 0; hitstop = 8;
 }
 function respawn() {
   if (--stocks <= 0) return gameOver();
-  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
+  [P.w, P.h] = fighter.box; // out of the mech
+  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, stairs: false, gold: 0, mech: 0 });
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -489,6 +535,7 @@ function stepPlayer(dt) {
   else if (P.ledge) ledgeInput(dir);
   else if (P.ground) {
     if (s in ATK || FLY[s]) {}
+    else if (s === 'booklet') bookletStep();
     else if (s === 'shieldBreak') { if (P.f >= SB.frames) { P.shield = Math.max(P.shield, SHIELD_MIN); setState('idle'); } } // dizzy: no control
     else if (s === 'landLag') { if (P.f >= P.lag) setState('idle'); }
     else if (s === 'hitstun') { if (!stunned) setState('idle'); }
@@ -518,7 +565,11 @@ function stepPlayer(dt) {
     else if (dodgeQ && has('defense') && ATTACK_FROM.includes(s) && s !== 'shield' && !(s === 'land' && P.f < 4)) { // dodge: + ← → = roll that way, else spot dodge
       dodgeQ = 0; setState(dir && !keys.down ? (dir === P.face ? 'rollForward' : 'rollBack') : 'spotDodge');
     }
-    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { if (dir) P.face = dir; heavyQ = 0; P.held = true; P.chg = 0; P.roll = null; const sm = fighter.set.smashAttacks; setState(keys.up && sm.upSmash ? 'upSmash' : keys.down && sm.downSmash ? 'downSmash' : 'forwardSmash'); } // a smash it doesn't have yet: its side smash instead
+    else if (heavyQ && has('smashAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) { // a smash it doesn't have yet: its side smash instead
+      const sm = fighter.set.smashAttacks, k = keys.up && sm.upSmash ? 'upSmash' : keys.down && sm.downSmash ? 'downSmash' : 'forwardSmash'; heavyQ = 0;
+      if (ATK[k].bricks && P.studs < 1) warn('no studs!'); // Lego Man can't build it
+      else { if (dir) P.face = dir; P.held = true; P.chg = 0; P.roll = null; setState(k); }
+    }
     else if (specialQ && has('specials') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) special(dir);
     else if (attackQ && has('groundAttacks') && ATTACK_FROM.includes(s) && !(s === 'land' && P.f < 4)) {
       // light: up / down pick the tilt, moving fast = dash attack, a direction = forward tilt, else jab
@@ -556,8 +607,10 @@ function stepPlayer(dt) {
     if (s in AIR) { // aerial: drift freely the whole time; free once it ends, or early like ground attacks
       const m = AIR[s], done = m.startup + m.active, rec = m.endlag * (P.landed ? HIT_REC : 1), end = done + rec;
       if (m.helpless) { if (P.f >= end) { setState('specialFall'); s = 'specialFall'; } } // spent: falls helpless
-      else if (P.f >= end || (P.f >= end - rec * CANCEL && (jumpQ || attackQ)) || (P.landed && P.f >= done && jumpQ)) { setState('air'); s = 'air'; }
+      else if (P.f >= end || (P.f >= end - rec * CANCEL && (jumpQ || attackQ)) || (P.landed && P.f >= done && jumpQ)) { if (m.thrust) P.vx = P.vy = 0; setState('air'); s = 'air'; } // stairs: stop on the top step
+      else if (m.thrust && P.f >= m.startup) P.vy = -m.thrust; // climbing: the move carries him (drive, below)
     }
+    if (s === 'booklet') { bookletStep(); s = P.state; }
     if (s === 'neutralSpecial' && !keys.special && !(s in AIR)) { setState('air'); s = 'air'; } // let go: stop charging
     if (s === 'hitstun' && !stunned) { setState('air'); s = 'air'; }
     if (s === 'upSpecial') US.warp ? warpStep() : US.reach != null && tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
@@ -573,7 +626,7 @@ function stepPlayer(dt) {
     }
     else if (s === 'airDodge') { if (P.f >= AD.frames) setState('air'); }
     else if (jumpQ && P.jumps > 0 && !(s in AIR) && !stunned && !FLY[s] && !['shieldBreak', 'upSpecial', 'specialFall'].includes(s)) { jumpQ = 0; P.vy = -(fighter.flap || AIRJUMP); P.jumps--; P.fastFall = false; P.state = 'djump'; P.f = 0; } // restarts: a flyer flaps again
-    if (ffQ && P.vy > -150 && !stunned && !FLY[P.state] && !['airDodge', 'shieldBreak', 'upSpecial'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
+    if (ffQ && P.vy > -150 && !stunned && !FLY[P.state] && !AIR[P.state]?.thrust && !['airDodge', 'shieldBreak', 'upSpecial', 'booklet'].includes(P.state)) P.fastFall = true; // double-tap down near the peak or after
     if ((P.state === 'djump' && P.f >= 25) || (P.state === 'drop' && P.f >= 20) || (P.state === 'ledgeDrop' && P.f >= 16)) setState('air');
   }
   downQ = dropQ = ffQ = dashQ = sideQ = false; techQ = Math.max(0, techQ - 1); techLock = Math.max(0, techLock - 1);
@@ -581,7 +634,7 @@ function stepPlayer(dt) {
   jumpQ = Math.max(0, jumpQ - 1); attackQ = Math.max(0, attackQ - 1); heavyQ = Math.max(0, heavyQ - 1); specialQ = Math.max(0, specialQ - 1); dodgeQ = Math.max(0, dodgeQ - 1); grabQ = Math.max(0, grabQ - 1);
 
   // horizontal: ground speed comes from the state, air speed from the stick
-  let target = 0, accel; const pw = THINK_POWER[P.think]; // effort tier speeds up walking, running and air drift
+  let target = 0, accel; const pw = THINK_POWER[P.think] * (P.mech > 0 ? MOVES.mech.suit.speed : 1); // effort tier speeds up walking, running and air drift; the mech suit slows it
   if (P.ground) {
     if (['walk', 'dash', 'run', 'crouchWalk'].includes(P.state)) target = P.face * pw * { walk: WALK, dash: DASH, run: RUN, crouchWalk: CRAWL }[P.state];
     const atk = ATK[P.state], dg = DODGES.includes(P.state) && D[P.state].anim;
@@ -591,6 +644,7 @@ function stepPlayer(dt) {
   } else { target = P.state === 'shieldBreak' || stunned || (P.state === 'upSpecial' && US.warp) ? 0 : dir * RUN * pw * (P.state === 'specialFall' ? 0.6 : 1); accel = dir && target ? 2300 : 700; } // helpless drifts slower
   const dv = target - P.vx;
   P.vx += Math.sign(dv) * Math.min(Math.abs(dv), accel * dt);
+  const cl = AIR[P.state]; if (cl?.drive && P.f >= cl.startup) P.vx = P.face * cl.drive; // climbing the stairs: steadily ahead, no steering
   if ((P.state === 'run' && P.f % 12 === 0) || (P.state === 'dash' && P.f === 5) || (P.state in ATK && ATK[P.state].anim(P.f).dust === 0)) dust(-P.face * 34, -P.face); // steps / dash launch
   if ((P.state in ATK || THROWS.includes(P.state)) && MOVES[P.state].anim(P.f).puff === 0) puff(); // both ways (smash landings, /compact)
   if (P.state.startsWith('roll') && P.f === 4) { const d = P.state === 'rollForward' ? -P.face : P.face; dust(d * 34, d); } // kicked up opposite the roll
@@ -617,6 +671,9 @@ function stepPlayer(dt) {
   const wasGround = P.ground;
   P.drop = Math.max(0, P.drop - dt);
   P.inv = Math.max(0, P.inv - dt);
+  P.gold = Math.max(0, (P.gold || 0) - dt);
+  if (P.warn && (P.warn.t += dt) > WARN_T) P.warn = null;
+  if (P.mech > 0 && (P.mech -= dt) <= 0) popMech();
   P.hitT = Math.max(0, P.hitT - dt);
   P.regrab = Math.max(0, P.regrab - dt);
   P.shield = Math.max(0, Math.min(1, (P.shield ?? 1) + (P.state === 'shield' ? -SHIELD_DRAIN : SHIELD_REGEN)));
@@ -628,9 +685,13 @@ function stepPlayer(dt) {
 
   // attack hitboxes vs the targets: one hit on each per attack, knockback grows with its damage (and a smash's charge)
   const m = MOVES[P.state], cx = P.x + P.w / 2;
-  if (m?.hitbox && !(m.hearts && !P.roll)) { // out of hearts: the zap fizzles
-    const hb = typeof m.hitbox === 'function' ? m.hitbox(P.f, m.chargeFrames ? P.chg / m.chargeFrames : 0) : m.hitbox; // a function = it moves or grows: (frame, charge 0 … 1) => box
-    const ox = P.ledge ? 0 : clawdPose().x || 0; // on the ledge, ledgePlace already moved P by the pose's x
+  if (m?.bricks && P.f <= m.startup) P.nb = bricksOf(m);
+  if (m?.bricks && P.f === m.startup) P.studs -= P.nb; // pays for the bricks as it comes out
+  if (m?.hitbox && !(m.hearts && !P.roll) && !(m.bricks && !P.nb)) { // out of hearts: the zap fizzles · no bricks built: nothing to hit with
+    const hb0 = typeof m.hitbox === 'function' ? m.hitbox(P.f, m.chargeFrames ? P.chg / m.chargeFrames : 0) : m.hitbox; // a function = it moves or grows: (frame, charge 0 … 1) => box
+    const c = sizeOf(m), K = P.mech > 0 ? MECH_K : 1; // charging can grow it (grow); the mech suit scales it (and the lean) with him
+    const hb = { ...hb0, ...Object.fromEntries(['x', 'y', 'w', 'h'].map(k => [k, (hb0[k] + (m.grow?.[k] || 0) * c) * K])) };
+    const ox = (P.ledge ? 0 : clawdPose().x || 0) * K; // on the ledge, ledgePlace already moved P by the pose's x
     const inWorld = r => ({ x: P.face > 0 ? cx + ox + r.x : cx - ox - r.x - r.w, y: P.y + P.h + r.y, w: r.w, h: r.h });
     const box = inWorld(hb), sweet = m.sweet && inWorld(m.sweet); // sweet = a stronger spot inside the hitbox, with its own damage / kb
     // multi-hit (every = frames between hits): each hit is its own, and the last one is the finisher's damage / kb if it has one
@@ -653,6 +714,22 @@ function stepPlayer(dt) {
   if (hb) { // in the claws, where the pose carries it; let go if the pose stops carrying it (Claw'd got hit)
     const c = clawdPose().carry;
     if (c) Object.assign(hb, { x: P.x + P.w / 2 + P.face * c[0] - hb.w / 2, y: P.y + P.h + c[1] - hb.h, vx: 0, vy: 0, rot: P.face * c[2] }); else hb.held = false;
+  }
+  if (m?.build && P.f === m.startup) legoBuild(m);
+  if (m?.step && P.f > m.startup && (P.f - m.startup) % m.step.every === 0) { // a step clicks in under his feet; then the next one's stud, or stop here
+    const S = m.step, k = (P.f - m.startup) / S.every; plats.push({ x: cx + P.face * 6 - S.w / 2, y: P.y + P.h, w: S.w, h: S.h, lego: 'step', col: k % 4, t: 0, life: S.life });
+    if (k < Math.floor(m.active / S.every)) { if (P.studs >= 1) P.studs--; else { P.vx = P.vy = 0; setState('air'); } }
+  }
+  if (m?.toss && P.f === m.startup) { const T = m.toss; thrown = { x: cx + P.face * T.x, y: P.y + P.h + T.y, vx: P.face * T.speed, dir: P.face, back: false, sp: T.home[0], t: 0, rot: 0, face: P.face, hit: new Set(), T }; }
+  if (m?.reform && P.f === m.reform[0]) { P.x -= P.counterDir * m.reform[1]; P.vx = 0; P.face = P.counterDir; } // reassembling: past the attacker, facing them
+  if (m?.scatter && P.f === m.startup) { // fling the bricks it built out ahead (charged: more, thrown further). One set at a time: a new
+    // one clears the old (each old brick poofs where it lay)
+    const c = P.chg / m.chargeFrames;
+    if (P.nb) { for (const k of bricks) fx.push({ x: k.x + k.w / 2, y: k.y + k.h, dir: k.dir, t: 0 }); bricks.length = 0; }
+    for (let k = 0; k < P.nb; k++) {
+      const [vx, vy] = scatterVel(k, c);
+      bricks.push({ x: cx + P.face * 20 - 6, y: P.y + P.h - 26, w: 12, h: 7, vx: P.face * vx, vy, rot: 0, spin: P.face * (8 + 5 * (k % 3)), col: k % 4, dir: P.face, t: 0, m: m.scatter });
+    }
   }
   if (m?.nelly && P.f === m.startup) nelly = { x: cx + P.face * m.nelly.x - 16, y: P.y + P.h - 20, w: 32, h: 20, vx: 0, vy: 0, face: P.face, t: 0, ground: P.ground, on: P.on, N: m.nelly };
   if (P.state === 'downSpecial' && DOWN_B.sub && P.f === DOWN_B.startup && !sub) { // push the subagent (Duo: its plush) out: runs on the ground, dropped in the air
@@ -763,6 +840,31 @@ function stepWorld(dt) {
     else if ((hit && sh.hits <= 0) || wall || sh.t > pr.life) shots.splice(i, 1);
   }
 
+  for (let i = bricks.length - 1; i >= 0; i--) { // loose bricks: tumble, settle flat, then lie in wait. Only targets can step on them
+    const k = bricks[i]; k.t += dt;
+    k.vy = Math.min(k.vy + G * dt, 950);
+    if (k.ground) k.vx -= Math.sign(k.vx) * Math.min(Math.abs(k.vx), 1800 * dt);
+    move(k, dt, s => { k.vy = 0; k.ground = true; k.on = s; });
+    k.rot = k.ground ? k.rot * 0.6 : k.rot + k.spin * dt;
+    const hit = k.ground && targets.find(b => overlaps(k, b));
+    if (hit) hitBag(hit, k.m.damage, k.m.kb, Math.sign(hit.x + hit.w / 2 - k.x - k.w / 2) || k.dir); // ouch: hops off it
+    if (hit || out(k) || k.t > k.m.life) bricks.splice(i, 1);
+  }
+
+  for (let i = rockets.length - 1; i >= 0; i--) { // rockets: speed up along their line, burst on a target, the stage, or at the end of their range
+    const r = rockets[i], L = r.L; r.t += dt; r.v = Math.min(L.speed[1], r.v + L.accel * dt); r.x += r.dir * r.v * dt;
+    const box = { x: r.x - 16, y: r.y - 6, w: 32, h: 12 };
+    if (!(targets.some(b => overlaps(box, b)) || overlaps(box, stage) || r.t > L.life || out(box))) continue;
+    const B = L.blast; rockets.splice(i, 1); booms.push({ x: r.x, y: r.y, t: 0, r: B.r });
+    for (const b of targets) { // everything the blast reaches (the nearest point of its box within r), thrown away from the middle
+      const nx = Math.max(b.x, Math.min(r.x, b.x + b.w)), ny = Math.max(b.y, Math.min(r.y, b.y + b.h));
+      if (Math.hypot(nx - r.x, ny - r.y) <= B.r) hitBag(b, B.damage, B.kb, Math.sign(b.x + b.w / 2 - r.x) || r.dir);
+    }
+  }
+  for (let i = booms.length - 1; i >= 0; i--) if ((booms[i].t += dt / 0.45) >= 1) booms.splice(i, 1);
+  for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego && (plats[i].t += dt) > plats[i].life) plats.splice(i, 1); // the stairs run out
+
+  if (thrown) stepThrown(dt);
   if (sub) stepSub(dt);
   if (nelly) stepNelly(dt);
   if (cart) stepCart(dt);
@@ -794,6 +896,21 @@ function stepNelly(dt) {
   move(n, dt, s => { n.vy = 0; n.ground = true; n.on = s; });
   const b = targets.find(b => !b.held && overlaps(n, b));
   if (b) { hitBag(b, N.damage, N.kb, n.face); b.slowT = N.slow; fx.push({ x: n.x + n.w / 2, y: n.y + n.h, dir: n.face, t: 0 }); nelly = null; }
+}
+
+// Lego Man's thrown head: out along its line, slowing, then back to his neck wherever he's got to (speeding up), where it clicks
+// back on; gives up and snaps straight back after T.life. Hits each target once going out and once coming back
+function stepThrown(dt) {
+  const h = thrown, T = h.T, nx = P.x + P.w / 2, ny = P.y + P.h - 61;
+  h.t += dt; h.rot += h.dir * 22 * dt;
+  if (!h.back) { h.vx -= h.dir * T.decel * dt; h.x += h.vx * dt; if (h.vx * h.dir <= 0) { h.back = true; h.hit = new Set(); } }
+  else {
+    const dx = nx - h.x, dy = ny - h.y, d = Math.hypot(dx, dy), step = (h.sp = Math.min(T.home[1], h.sp + 1600 * dt)) * dt;
+    if (d <= step + 10 || h.t > T.life) return thrown = null;
+    h.x += dx / d * step; h.y += dy / d * step; h.vx = dx / d * h.sp;
+  }
+  const box = { x: h.x - 10, y: h.y - 10, w: 20, h: 20 };
+  for (const b of targets) if (!h.hit.has(b) && overlaps(box, b)) { h.hit.add(b); const H = h.back ? T.back : T.out; hitBag(b, H.damage, H.kb, Math.sign(h.vx) || h.dir); }
 }
 
 // the subagent runs straight ahead (falls if it's in the air), bonks a target once and reports back, or gives up after a while
@@ -851,7 +968,9 @@ function poofCart() {
 
 // damage + knockback on a target, growing with its damage; bigger hits freeze longer
 function hitBag(b, dmg, kb, dir) {
-  dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt); P.batt = 0; // only the player hits targets: its effort tier scales every hit, a stored fast charge just this one
+  dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt) * (P.gold > 0 ? MOVES.goldBrick.power.mult : 1) * (P.mech > 0 ? MOVES.mech.suit.mult : 1); P.batt = 0; // (+ Lego Man's gold brick / mech suit)
+  const ST = NEUTRAL_B.studs; if (ST) P.studs = Math.min(ST.max, P.studs + Math.round(dmg)); // Lego Man earns a stud per %
+   // only the player hits targets: its effort tier scales every hit, a stored fast charge just this one
   b.dmg += dmg; b.hitT = 0.3; b.pinT = 0; // a hit knocks it off a pin
   hitstop = Math.round(3 + dmg / 4);
   const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
@@ -887,7 +1006,7 @@ function move(b, dt, onLand) {
 function clawdPose() {
   const f = P.f, atk = MOVES[P.state], fly = FLY[P.state];
   if (fly && P.state !== fly.state) return { ...fly.chargeAnim(f, P.chg / fly.chargeFrames), tilt: P.aim }; // charging a flight (c runs past 1 into the overheat), aimed
-  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0, P.roll); if (P.held && f === atk.chargeAt && atk.chargeMult) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging a smash · P.roll = a random outcome (Duo's quiz, Android's app)
+  if (atk) { const p = atk.anim(f, undefined, sizeOf(atk), P.roll); if (P.held && f === atk.chargeAt && atk.chargeMult) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging a smash · P.roll = a random outcome (Duo's quiz, Android's app)
   switch (P.state) {
     case 'idle': return M.idle.anim(f % 120, 120);
     case 'walk': return M.walk.anim(f % 40, 40);
@@ -968,6 +1087,7 @@ function render(t) {
 
   // platforms
   for (const pl of plats) {
+    if (pl.lego) { if (pl.life - pl.t > 1.5 || Math.floor(pl.t * 10) % 2) drawLegoPlate(pl); continue; } // blinks before it goes
     const r = [[pl.x, pl.y], [pl.x + pl.w, pl.y], [pl.x + pl.w - 8, pl.y + 12], [pl.x + 8, pl.y + 12]];
     ctx.fillStyle = '#e3d9c6'; path(r); ctx.fill();
     hatch(r, 9, 0.35);
@@ -986,6 +1106,10 @@ function render(t) {
 
   drawTargets(t);
   if (sub) drawSub();
+  for (const k of bricks) if (k.m.life - k.t > 1.5 || Math.floor(k.t * 10) % 2) drawLooseBrick(k); // blinks before it goes
+  for (const r of rockets) drawLegoRocket(r);
+  for (const b of booms) drawLegoBoom(b.x, b.y, b.t, b.r);
+  if (thrown) drawLegoHead(thrown);
   if (nelly) drawNelly(nelly.x + nelly.w / 2, nelly.y + nelly.h, nelly.t, nelly.face);
   if (wreck) wreck.m.wreck.draw(wreck.x, wreck.y, Math.atan2(wreck.vx, -wreck.vy), wreck.boom);
   if (cart && !cart.done) { const c = cart, air = c.ground ? 0 : Math.max(-0.25, Math.min(0.3, c.vy / 2500)); // noses down as it falls, a wheelie as it sets off
@@ -997,7 +1121,9 @@ function render(t) {
   for (const d of fx) d.draw ? d.draw(d.x, d.y, d.t) : drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
   if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (P.state !== 'ride' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}) }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  else if (P.state !== 'ride' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
+  if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
 
   // hud
   drawHealth(t);
@@ -1006,7 +1132,7 @@ function render(t) {
 
 // the fighter in play; anyone but Claw'd is drawn inside his effects (speed lines, dizzy stars, respawn pad…), stretched to its height,
 // minus his terminal shield and its shards: shield / wear / shatter are theirs to draw
-const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawClawd ? p : { ...p, shield: 0, shatter: null, sy: (p.sy ?? 1) * fighter.box[1] / 50, body: () => fighter.art(cx, b, p, face) }, face);
+const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawClawd ? p : { ...p, shield: 0, shatter: null, pad: fighter.pad ? 0 : p.pad, sy: (p.sy ?? 1) * fighter.box[1] / 50, body: () => fighter.art(cx, b, p, face) }, face);
 
 // the up special's toasts ("connection refused" on a miss, "mcp connected" plugging into the bag): stay up TOAST frames whatever
 // Claw'd does next (landing, getting up…). P.toastMsg = OOPS index or [headline, detail], P.toastOk = success style
@@ -1053,6 +1179,7 @@ function drawTargets(t) {
 function drawHealth(t) {
   const portrait = (F, face) => () => { const h = F.box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
   badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1), stocks);
+  if (NEUTRAL_B.studs) drawLegoStuds(W - 66, 44, P.studs); // Lego Man's studs, by his badge
   foes.forEach((b, i) => {
     ctx.globalAlpha = b.lives ? 1 : 0.35; // faded once out
     badge(W - 120 - (foes.length - i) * 150, b.dmg, b.hitT, portrait(FIGHTER[b.id], -1), b.lives);
@@ -1294,7 +1421,8 @@ function drawControls(fg) {
     for (const [head, rows] of col) {
       ctx.globalAlpha = 1; ctx.fillStyle = ctx.strokeStyle = fg; ctx.textAlign = 'left'; ctx.font = '700 30px Caveat, cursive';
       ctx.fillText(head, x, y); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.35; line(x, y + 8, x + 480, y + 8, 1, 1); y += 38;
-      for (const [k, d] of rows) {
+      for (const [k, d0] of rows) {
+        const d = fighter.controls?.[k] ?? d0; // a fighter's own description for the row
         ctx.globalAlpha = 1; ctx.fillStyle = CLAWD; ctx.textAlign = 'right'; ctx.font = '700 24px Caveat, cursive'; ctx.fillText(k, x + 118, y);
         ctx.globalAlpha = 0.8; ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.font = '600 23px Caveat, cursive';
         for (const l of wrap(d, 350)) { ctx.fillText(l, x + 132, y); y += 26; }
