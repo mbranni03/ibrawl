@@ -25,6 +25,7 @@
 <script src="src/characters/clawd-moveset.js"></script>
 <script src="src/characters/grok-moveset.js"></script>
 <script src="src/characters/duo-moveset.js"></script>
+<script src="src/characters/android-moveset.js"></script>
 <script src="src/characters/snoo-moveset.js"></script>
 <script>
 const W = 1280, H = 720, STEP = 1 / 60;
@@ -68,11 +69,13 @@ function loadMoves(set) {
   DOWN_B = SP.downSpecial; // the subagent (sub), if it has one
   ATK = { ...S('groundAttacks'), ...S('smashAttacks'), grab: GR.grab, dashGrab: GR.dashGrab }; AIR = { ...S('aerials') }; // attack states are named after their move
   // specials are usable on the ground and in the air, so they live in both maps, as their own states (m.state, else the move's name,
-  // e.g. Grok's extra neuralZap). Not Claw'd's held think or MCP tether (no startup / a reach: wired in by hand), nor flights (they steer themselves)
+  // e.g. Grok's extra neuralZap). Not Claw'd's held think or MCP tether (no startup / a reach: wired in by hand), nor ones with their
+  // own step: flights (they steer themselves), warps (Android's Maps pin, off P.warp), held charges (Android's fast charge, off P.batt)
   FLY = {}; const own = {};
   for (const [k, m] of Object.entries(SP)) {
     const st = m.state || k;
     if (m.flight) FLY[st] = FLY[st + 'Charge'] = own[st] = m;
+    else if (m.warp || m.charge) own[st] = m;
     else if (m.startup != null && m.reach == null) ATK[st] = AIR[st] = m;
   }
   MOVES = { ...ATK, ...AIR, ...own, ledgeAttack: L.ledgeAttack, pummel: GR.pummel, ...Object.fromEntries(THROWS.map(k => [k, GR[k]])) };
@@ -87,7 +90,7 @@ const RESPAWN_Y = 100; // respawn platform: where it stops (top of Claw'd's box)
 // dodges and the ledge roll list intangible = [first, last) frames where nothing can hurt Claw'd
 const intangible = () => { if (P.state === 'tunnel') return true; const it = (L[P.state] || D[P.state] || R[P.state] || MOVES[P.state])?.intangible; return !!it && P.f >= it[0] && P.f < it[1]; };
 // collision box = Claw'd's body + legs (the arm nubs overhang it)
-const P = { x: 610, y: 380, w: 60, h: 50, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, think: 0 }; // think = neutral special effort tier reached (0 … 3), kept until KO
+const P = { x: 610, y: 380, w: 60, h: 50, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, think: 0, batt: 0 }; // batt = Android's stored fast charge 0 … 1 (spent on its next hit) · think = neutral special effort tier reached (0 … 3), kept until KO
 const GROUNDED = ['idle', 'walk', 'dash', 'run', 'skid', 'crouch', 'crouchWalk', 'crouchUp', 'squat', 'land', 'landLag', 'shield', 'shieldDrop', 'knockdown', 'getup', 'tech', 'hold', 'pummel', ...THROWS, ...DODGES, ...Object.keys(ATK).filter(k => !(k in AIR))];
 const STOCKS = 3; let stocks = STOCKS;
 const fx = []; // dust clouds left in the world: { x, y, dir, t }
@@ -102,7 +105,7 @@ const FIGHTER = {
   clawd: { name: "Claw'd", box: [60, 50], art: drawClawd, set: MOVESET },
   grok: { name: 'Grok Bot', box: [52, 56], art: drawGrok, set: GROK_MOVESET },
   wumpus: { name: 'Wumpus', box: [50, 64], art: drawWumpus, set: { movement: MOVESET.movement } },
-  android: { name: 'Android', box: [50, 64], art: drawAndroid, set: { movement: MOVESET.movement } },
+  android: { name: 'Android', box: [50, 64], art: drawAndroid, set: ANDROID_MOVESET },
   duo: { name: 'Duo', box: [60, 61], art: drawDuo, set: DUO_MOVESET, jumps: 5, flap: 620, glide: 170 }, // flies like Kirby / Meta Knight
   snoo: { name: 'Snoo', box: [46, 76], art: drawSnoo, set: SNOO_MOVESET },
   lego: { name: 'Lego Man', box: [44, 72], art: drawLego, set: { movement: MOVESET.movement } },
@@ -153,22 +156,25 @@ function gameOver(won) { setPaused(true); over = won ? 'win' : 'lose'; menu = ['
 function goHome() { restart(); setPaused(true); home = true; menu = HOME_MENU; }
 function restart() {
   stocks = STOCKS; fx.length = shots.length = 0; sub = cart = wreck = null; makeTargets();
-  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
+  Object.assign(P, { x: 610, y: 380, vx: 0, vy: 0, ground: false, on: null, jumps: 1, face: 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
 }
 function fight() { restart(); setPaused(false); } // leaves the vs screen
 // character picked: the vs screen, then the fight. Random picks are rolled here, so the select screen never shows who they'll be
 const rollPick = id => id === 'random' ? ROSTER[Math.floor(Math.random() * ROSTER.length)] : id;
 function versus() { picking = false; vsT = performance.now(); fighter = FIGHTER[rollPick(p1)]; rolled = cpus.map(rollPick); M = fighter.set.movement; loadMoves(fighter.set); [P.w, P.h] = fighter.box; }
-// B pressed: the special for the held direction. Claw'd's tether and think are wired in by hand; anything else is its own move, usable on
-// the ground and in the air. oncePerAir moves can't be used again until it lands; a ride waits until the last one is gone; a zap
-// (Grok's Neuralink) goes off instead while its chip is planted in someone
+// B pressed: the special for the held direction. Claw'd's tether and think and Android's warp are wired in by hand; anything else is its
+// own move, usable on the ground and in the air. oncePerAir moves (and rolls, dash) can't be used again until it lands; a held charge
+// (charge) is ground only; a ride waits until the last one is gone; a zap (Grok's Neuralink) goes off instead while its chip is planted
 function special(dir) {
   specialQ = 0;
   const k = keys.up ? 'upSpecial' : keys.down ? 'downSpecial' : dir ? 'sideSpecial' : 'neutralSpecial', m = SP[k];
-  if ((m.ride && cart) || (m.oncePerAir && !P.ground && P.usedB?.[k])) return;
+  if ((m.ride && cart) || (m.charge && !P.ground) || ((m.oncePerAir || m.dash) && !P.ground && P.usedB?.[k])) return;
   if (!P.ground) (P.usedB ||= {})[k] = true;
+  if (k === 'upSpecial' && m.warp) return warpUp(dir); // Android's Maps pin
   if (k === 'upSpecial' && m.reach != null) return tetherUp(dir); // Claw'd's MCP tether
-  if (dir) P.face = dir; P.held = true; P.chg = 0; P.roll = null;
+  if (dir) P.face = dir; P.held = true; P.chg = 0; // held: a charge / a roll (B) keeps going while B is held (see chargeKey)
+  P.roll = m.projectile?.pick ? Math.floor(Math.random() * m.projectile.pick.length) : null; // a random outcome: I'm Feeling Lucky's app
+  if (m.dash && !P.ground) P.vy = Math.min(P.vy, -m.dash.pop); // an air roll pops up a little
   if (k === 'neutralSpecial' && (m.hearts || m.startup == null)) return think(); // Claw'd's held think / Duo's heart zap
   if (m.flight) { P.fastFall = false; P.aim = 0; return setState(m.state + 'Charge'); }
   setState(m.zap && targets.some(b => b.sticker?.chip) ? m.zap : m.state || k);
@@ -259,6 +265,7 @@ function land(surface, wasGround) {
       puff();
     }
     else if (P.state === 'hitstun') {} // flinches through the landing
+    else if (P.state === 'upSpecial' && US.warp) {} // warped onto the floor: finishes the pop there
     else if ((P.state in AIR && !AIR[P.state].keepOnLand) || ['airDodge', 'upSpecial', 'specialFall'].includes(P.state)) { P.lag = (AIR[P.state] || (P.state === 'airDodge' ? AD : US)).landingLag; setState('landLag'); puff(); } // landed mid-aerial / mid-dodge / helpless (keeps its slide)
     else if (P.state === 'neutralSpecial' || AIR[P.state]?.keepOnLand || (FLY[P.state] && P.state !== FLY[P.state].state)) {} // keeps thinking (charging) through the landing
     else if (FLY[P.state]) { const m = FLY[P.state]; blowWreck(P.x + P.w / 2, P.y + P.h - m.wreck.mid, m); P.lag = m.landingLag; setState('landLag'); } // flew into the floor
@@ -298,6 +305,21 @@ function ledgeInput(dir) {
 function ledgePlace() {
   const p = clawdPose(), lx = P.ledge < 0 ? stage.x : stage.x + stage.w;
   P.x = lx + P.face * (P.w / 2 + (p.x || 0)) - P.w / 2; P.y = stage.y + (p.air || 0) - P.h; P.vx = P.vy = 0;
+}
+
+// up special, warp (Android): drop a pin reach px up (up and ahead with ← →), blink to it on US.blink, pop, then helpless.
+// P.warp = [x, feet y] of the pin; one inside the stage goes up onto its top
+function warpUp(dir) {
+  if (dir) P.face = dir;
+  const [ax, ay] = dir ? [US.aim[0] * dir, US.aim[1]] : [0, -1], x = P.x + P.w / 2 + ax * US.reach;
+  let y = P.y + P.h + ay * US.reach;
+  if (x > stage.x - P.w / 2 && x < stage.x + stage.w + P.w / 2 && y > stage.y && y < stage.y + stage.h) y = stage.y;
+  P.warp = [x, y]; P.vx = P.vy = 0; P.fastFall = false; setState('upSpecial');
+}
+function warpStep() {
+  if (!P.ground) P.vy = 0; // hangs there (US.gravity just keeps it pressed to the floor if it's on one)
+  if (P.f === US.blink) Object.assign(P, { x: P.warp[0] - P.w / 2, y: P.warp[1] - P.h, vx: 0, vy: 0, ground: false, on: null });
+  if (P.f >= US.startup + US.active + US.endlag) { if (P.ground) { P.lag = US.landingLag; setState('landLag'); } else setState('specialFall'); }
 }
 
 // up special: fling the MCP cord. P.teth = { len px out, ang above level, side = ledge it's plugged into (0 = not yet), miss, hit }
@@ -400,7 +422,7 @@ function ko() {
 }
 function respawn() {
   if (--stocks <= 0) return gameOver();
-  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
+  Object.assign(P, { x: W / 2 - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null });
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -478,6 +500,8 @@ function stepPlayer(dt) {
     }
     else if (DODGES.includes(s)) { if (P.f >= D[s].frames) setState('idle'); }
     else if (s === 'neutralSpecial') { if (!keys.special) setState('idle'); } // charges while held
+    else if (s === 'downSpecial' && DOWN_B.charge) { if (P.f >= DOWN_B.plugAt) P.batt = Math.min(1, P.batt + DOWN_B.charge); if (!keys.special || P.batt >= 1) setState('idle'); } // fast charge: fills while B is held
+    else if (s === 'upSpecial') warpStep(); // only a warp is ever on the ground
     else if (s === 'shield' && P.shield <= 0) breakShield();
     else if (s === 'shield' && !(attackQ || heavyQ || specialQ || jumpQ || grabQ)) { // holding up the terminal; attacks / jump come straight out of it below
       if (downQ || (dodgeQ && !dir)) { dodgeQ = 0; setState('spotDodge'); }
@@ -533,7 +557,7 @@ function stepPlayer(dt) {
     }
     if (s === 'neutralSpecial' && !keys.special && !(s in AIR)) { setState('air'); s = 'air'; } // let go: stop charging
     if (s === 'hitstun' && !stunned) { setState('air'); s = 'air'; }
-    if (s === 'upSpecial' && US.reach != null) tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
+    if (s === 'upSpecial') US.warp ? warpStep() : US.reach != null && tetherStep(dt); // specialFall: helpless, only drifts (and fast falls) until it lands or catches a ledge
     const free = ['air', 'djump', 'drop', 'ledgeDrop'].includes(s) || (s === 'tumble' && !stunned); // tumble: acts once the hitstun runs out
     if ((attackQ || heavyQ) && free && has('aerials')) { // aerial picked by the held direction (back = away from facing); heavy does the same in the air
       attackQ = heavyQ = 0; setState(keys.up ? 'upAir' : keys.down ? 'downAir' : dir === P.face ? 'forwardAir' : dir ? 'backAir' : 'neutralAir');
@@ -561,7 +585,7 @@ function stepPlayer(dt) {
     if (dg) target = P.vx = P.face * ((dg(P.f + 1).x || 0) - (dg(P.f).x || 0)) / dt; // rolls move exactly as their animation's x
     if (atk?.step && P.f === atk.startup) P.vx = P.face * Math.max(P.face * P.vx, atk.step); // the move's lunge
     accel = target ? 4200 : P.state === 'skid' ? (P.turn ? 1800 * TURN_SPEED : 1800) : P.state === 'dashAttack' ? 800 : atk || P.state === 'landLag' ? ATK_FRICTION : 3600; // attacks keep momentum
-  } else { target = P.state === 'shieldBreak' || stunned ? 0 : dir * RUN * pw * (P.state === 'specialFall' ? 0.6 : 1); accel = dir && target ? 2300 : 700; } // helpless drifts slower
+  } else { target = P.state === 'shieldBreak' || stunned || (P.state === 'upSpecial' && US.warp) ? 0 : dir * RUN * pw * (P.state === 'specialFall' ? 0.6 : 1); accel = dir && target ? 2300 : 700; } // helpless drifts slower
   const dv = target - P.vx;
   P.vx += Math.sign(dv) * Math.min(Math.abs(dv), accel * dt);
   if ((P.state === 'run' && P.f % 12 === 0) || (P.state === 'dash' && P.f === 5) || (P.state in ATK && ATK[P.state].anim(P.f).dust === 0)) dust(-P.face * 34, -P.face); // steps / dash launch
@@ -573,6 +597,8 @@ function stepPlayer(dt) {
   P.glide = fighter.glide && keys.jump && P.vy > 0 && !P.fastFall && ['air', 'djump'].includes(P.state); // holding jump on the way down
   if (P.glide) P.vy = Math.min(P.vy, fighter.glide);
   if (P.fastFall) P.vy = Math.max(P.vy, 1100);
+  const dm = MOVES[P.state]?.dash; // a roll: pushed along at dash.speed through its rolling frames, sinking slowly in the air
+  if (dm && P.f >= dm.from && P.f < dm.to) { P.vx = P.face * dm.speed; if (!P.ground) P.vy = Math.min(P.vy, dm.fall); }
   const bm = MOVES[P.state], bu = bm?.burst, b0 = bu?.from ?? bm?.startup; // a special's burst: set speed for its frames from b0 (vx along
   if (bu && P.f >= b0 && P.f < b0 + bu.frames) { if (bu.vx != null) P.vx = P.face * bu.vx; if (bu.vy < 0) { P.ground = false; P.on = null; } if (!P.ground) P.vy = bu.vy; } // facing; none = free drift; vy only off the ground),
   else if (bu && P.f === b0 + bu.frames) P.vx *= bu.keep ?? 1; // then only keep that much of it
@@ -591,14 +617,15 @@ function stepPlayer(dt) {
   P.shield = Math.max(0, Math.min(1, (P.shield ?? 1) + (P.state === 'shield' ? -SHIELD_DRAIN : SHIELD_REGEN)));
 
   if (P.ledge) ledgePlace();
-  else if ((P.state === 'upSpecial' && US.reach != null && P.teth.side) || P.state === 'respawn') {} // reeling / on the platform: already placed
+  else if ((P.state === 'upSpecial' && US.reach != null && !US.warp && P.teth.side) || P.state === 'respawn') {} // reeling / on the platform: already placed
   else { move(P, dt, s => land(s, wasGround)); grabLedge(); }
   if (MOVES[P.state]?.flight && P.fly.want && ((P.fly.want[0] && !P.vx) || (P.fly.want[1] < 0 && !P.vy))) crashFlight(MOVES[P.state]); // into a wall / the underside
 
   // attack hitboxes vs the targets: one hit on each per attack, knockback grows with its damage (and a smash's charge)
   const m = MOVES[P.state], cx = P.x + P.w / 2;
   if (m?.hitbox && !(m.hearts && !P.roll)) { // out of hearts: the zap fizzles
-    const hb = m.hitbox, ox = P.ledge ? 0 : clawdPose().x || 0; // on the ledge, ledgePlace already moved P by the pose's x
+    const hb = typeof m.hitbox === 'function' ? m.hitbox(P.f, m.chargeFrames ? P.chg / m.chargeFrames : 0) : m.hitbox; // a function = it moves or grows: (frame, charge 0 … 1) => box
+    const ox = P.ledge ? 0 : clawdPose().x || 0; // on the ledge, ledgePlace already moved P by the pose's x
     const box = { x: P.face > 0 ? cx + ox + hb.x : cx - ox - hb.x - hb.w, y: P.y + P.h + hb.y, w: hb.w, h: hb.h };
     // multi-hit (every = frames between hits): each hit is its own, and the last one is the finisher's damage / kb if it has one
     const n = m.every ? Math.floor((P.f - m.startup) / m.every) : 0, key = P.state + n, h = m.finisher && n === Math.ceil(m.active / m.every) - 1 ? m.finisher : m;
@@ -607,12 +634,12 @@ function stepPlayer(dt) {
       b.hit = key; P.landed = true;
       if (m.grab) { grabBag(b); break; } // one in the claws at a time
       const miss = P.roll === false && m.missKb; // a gamble that came up wrong hits softer
-      hitBag(b, (miss ? m.missDamage : h.damage) * charged(m) * (m.hearts ? 1 + 0.3 * (m.hearts - P.roll) : 1), miss ? m.missKb : h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
+      hitBag(b, (miss ? m.missDamage : h.damage) * (hb.mult ?? 1) * charged(m) * (m.hearts ? 1 + 0.3 * (m.hearts - P.roll) : 1), miss ? m.missKb : h.kb, m.both ? Math.sign(b.x + b.w / 2 - cx) || P.face : P.face); // both-sided moves send it away
       if (m.sticker) b.sticker = { t: 0, ...m.sticker }; // e.g. a community note stuck on it
     }
   }
   if (!m || P.f < m.startup) { for (const b of targets) b.hit = null; P.landed = false; }
-  for (const b of targets) if (b.pinned && !(P.state === 'upSpecial' && P.teth.link != null)) b.pinned = false; // Claw'd got hit / landed: the cord's gone
+  for (const b of targets) if (b.pinned && !(P.state === 'upSpecial' && P.teth?.link != null)) b.pinned = false; // Claw'd got hit / landed: the cord's gone
   const hb = heldBag();
   if (hb) { // in the claws, where the pose carries it; let go if the pose stops carrying it (Claw'd got hit)
     const c = clawdPose().carry;
@@ -628,9 +655,10 @@ function stepPlayer(dt) {
     cart = { x: cx - rd.w / 2, y: P.y + P.h - rd.h, w: rd.w, h: rd.h, vx: P.face * rd.speed[0], vy: P.ground ? 0 : Math.max(0, P.vy), face: P.face, t: 0, ground: P.ground, on: P.on, m, dist: 0, bag: null, bagT: 0, done: 0 };
     setState('ride'); return;
   }
-  if (m?.projectile && P.f === m.startup && !(m.projectile.homing && shots.some(sh => sh.m === m))) { // r = its size (grows with a charge), k = damage multiplier from the charge; one homing shot out at a time · pic = which picture (Grok Imagine)
-    const c = m.chargeAt != null ? P.chg / m.chargeFrames : 0, pr = m.projectile;
-    shots.push({ x: cx + P.face * pr.x, y: P.y + P.h + pr.y, y0: P.y + P.h + pr.y, vx: P.face * pr.speed, vy: 0, t: 0, m, r: (pr.r ?? SPARK_R) * (1 + (pr.grow || 0) * c), k: charged(m), pic: Math.floor(Math.random() * 3) });
+  if (m?.projectile && P.f === m.startup && !(m.projectile.homing && shots.some(sh => sh.m === m))) { // pr = how it flies: the move's projectile, with a picked item's (I'm Feeling Lucky) over it · r = its size (grows with a charge),
+    // k = damage multiplier from the charge; one homing shot out at a time · pic = which picture (Grok Imagine) · hits = hits before it's used up
+    const c = m.chargeAt != null ? P.chg / m.chargeFrames : 0, pr = m.projectile.pick ? { ...m.projectile, ...m.projectile.pick[P.roll ?? 0] } : m.projectile;
+    shots.push({ x: cx + P.face * pr.x, y: P.y + P.h + pr.y, y0: P.y + P.h + pr.y, vx: P.face * pr.speed, vy: pr.vy || 0, t: 0, m, pr, hits: pr.hits || 1, cool: 0, r: (pr.r ?? SPARK_R) * (1 + (pr.grow || 0) * c), k: charged(m), pic: Math.floor(Math.random() * 3) });
   }
   if (m?.detonate && P.f === m.startup) for (const b of targets) if (b.sticker?.chip) { // set off whatever it planted (Neuralink)
     hitBag(b, m.damage, m.kb, Math.sign(b.x + b.w / 2 - cx) || P.face); b.sticker = { t: 0, ...m.detonate }; P.landed = true;
@@ -698,21 +726,31 @@ function tunnelStep(dir, dt) {
 }
 
 function stepWorld(dt) {
-  // sparks fly straight until they hit a target or the stage, or run out of range. A homing one (Duo's reminder) turns toward the
-  // nearest target at up to homing rad/s and drifts through the stage
+  // thrown things fly until they hit a target or the stage, or run out of range. pr (see the spawn): speed, vy + gravity (× G) to arc,
+  // bounce = how much of its fall speed it keeps bouncing off the stage's top, hits = hits before it's used up (every s apart; it slows
+  // right down to grind in, and only the last one knocks back), damage / kb over the move's, draw (default: Claw'd's spark). A homing
+  // one (Duo's reminder) turns toward the nearest target at up to homing rad/s and drifts through the stage
   for (let i = shots.length - 1; i >= 0; i--) {
-    const sh = shots[i], pr = sh.m.projectile;
+    const sh = shots[i], pr = sh.pr;
     const near = pr.homing && targets.reduce((a, b) => !a || Math.hypot(b.x + b.w / 2 - sh.x, b.y + b.h / 2 - sh.y) < Math.hypot(a.x + a.w / 2 - sh.x, a.y + a.h / 2 - sh.y) ? b : a, null);
     if (near) {
       const a = Math.atan2(sh.vy, sh.vx), d = Math.atan2(near.y + near.h / 2 - sh.y, near.x + near.w / 2 - sh.x) - a, turn = Math.atan2(Math.sin(d), Math.cos(d));
       const na = a + Math.max(-pr.homing * dt, Math.min(pr.homing * dt, turn));
       sh.vx = Math.cos(na) * pr.speed; sh.vy = Math.sin(na) * pr.speed;
     }
-    sh.x += sh.vx * dt; sh.y += sh.vy * dt; sh.t += dt;
+    sh.vy += (pr.gravity || 0) * G * dt; sh.x += sh.vx * dt; sh.y += sh.vy * dt; sh.t += dt; sh.cool -= dt;
     if (pr.wave) sh.y = sh.y0 + pr.wave[0] * Math.sin(2 * Math.PI * sh.t / pr.wave[1]); // [px up and down, s per wave]
-    const box = { x: sh.x - sh.r, y: sh.y - sh.r, w: 2 * sh.r, h: 2 * sh.r }, hit = targets.find(b => overlaps(box, b));
-    if (hit) { hitBag(hit, sh.m.damage * sh.k, sh.m.kb, Math.sign(sh.vx) || P.face); if (pr.hitFx) fx.push({ x: sh.x, y: sh.y, t: 0, ...pr.hitFx }); if (sh.m.plant) hit.sticker = { t: 0, ...sh.m.plant }; } // hitFx = { draw(x, y, t), dur s } · plant = a sticker it leaves
-    if (hit || (!pr.homing && overlaps(box, stage)) || sh.t > pr.life) shots.splice(i, 1);
+    const r = sh.r, box = { x: sh.x - r, y: sh.y - r, w: 2 * r, h: 2 * r }, hit = sh.cool <= 0 && targets.find(b => overlaps(box, b));
+    if (hit) {
+      const last = --sh.hits <= 0;
+      hitBag(hit, (pr.damage ?? sh.m.damage) * sh.k, last ? pr.kb || sh.m.kb : NO_KB, Math.sign(sh.vx) || P.face);
+      if (!last) { sh.cool = pr.every; sh.vx *= 0.15; }
+      if (pr.hitFx) fx.push({ x: sh.x, y: sh.y, t: 0, ...pr.hitFx }); // hitFx = { draw(x, y, t), dur s }
+      if (sh.m.plant) hit.sticker = { t: 0, ...sh.m.plant }; // plant = a sticker it leaves
+    }
+    const wall = !pr.homing && overlaps(box, stage);
+    if (wall && pr.bounce && sh.vy > 0 && sh.y - sh.vy * dt + r <= stage.y + 2) { sh.y = stage.y - r; sh.vy *= -pr.bounce; } // landed on top: bounce
+    else if ((hit && sh.hits <= 0) || wall || sh.t > pr.life) shots.splice(i, 1);
   }
 
   if (sub) stepSub(dt);
@@ -789,7 +827,7 @@ function poofCart() {
 
 // damage + knockback on a target, growing with its damage; bigger hits freeze longer
 function hitBag(b, dmg, kb, dir) {
-  dmg *= THINK_POWER[P.think]; // only Claw'd hits targets, so its effort tier scales every hit
+  dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt); P.batt = 0; // only the player hits targets: its effort tier scales every hit, a stored fast charge just this one
   b.dmg += dmg; b.hitT = 0.3;
   hitstop = Math.round(3 + dmg / 4);
   const s = (kb.base + kb.growth * b.dmg / 100) * KB, a = kb.angle * Math.PI / 180;
@@ -825,7 +863,7 @@ function move(b, dt, onLand) {
 function clawdPose() {
   const f = P.f, atk = MOVES[P.state], fly = FLY[P.state];
   if (fly && P.state !== fly.state) return { ...fly.chargeAnim(f, P.chg / fly.chargeFrames), tilt: P.aim }; // charging a flight (c runs past 1 into the overheat), aimed
-  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0, P.roll); if (P.held && f === atk.chargeAt) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging
+  if (atk) { const p = atk.anim(f, undefined, atk.chargeFrames ? P.chg / atk.chargeFrames : 0, P.roll); if (P.held && f === atk.chargeAt && atk.chargeMult) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging a smash · P.roll = a random outcome (Duo's quiz, Android's app)
   switch (P.state) {
     case 'idle': return M.idle.anim(f % 120, 120);
     case 'walk': return M.walk.anim(f % 40, 40);
@@ -927,13 +965,14 @@ function render(t) {
   if (wreck) wreck.m.wreck.draw(wreck.x, wreck.y, Math.atan2(wreck.vx, -wreck.vy), wreck.boom);
   if (cart && !cart.done) { const c = cart, air = c.ground ? 0 : Math.max(-0.25, Math.min(0.3, c.vy / 2500)); // noses down as it falls, a wheelie as it sets off
     fighter.art(c.x + c.w / 2, c.y + c.h, { car: 1, empty: P.state !== 'ride', squint: true, wheel: c.dist / 11, rot: air - 0.1 * Math.max(0, 1 - c.t / 0.15) }, c.face); }
-  for (const sh of shots) { const k = Math.min(1, (sh.m.projectile.life - sh.t) / 0.1); sh.m.shotArt ? sh.m.shotArt(sh.x, sh.y, Math.min(k, sh.t / 0.1), Math.sign(sh.vx) || 1) : (sh.m.projectile.draw || drawSpark)(sh.x, sh.y, sh.r * k, sh.t * 14 * Math.sign(sh.vx), sh); } // shrinks away at max range
+  for (const sh of shots) { const k = Math.min(1, (sh.pr.life - sh.t) / 0.1); sh.m.shotArt ? sh.m.shotArt(sh.x, sh.y, Math.min(k, sh.t / 0.1), Math.sign(sh.vx) || 1) : (sh.pr.draw || drawSpark)(sh.x, sh.y, sh.r * k, sh.t * 14 * Math.sign(sh.vx), sh); } // shrinks away at max range
+  if (P.state === 'upSpecial' && US.warp) US.marker(P.warp[0], P.warp[1], P.f); // where the warp's headed
 
   // player (flickers after respawn)
   for (const d of fx) d.draw ? d.draw(d.x, d.y, d.t) : drawDust(d.x, d.y, d.t, d.dir);
   // x / air in poses are preview-only root motion; here physics moves Claw'd
   if (P.state === 'ko') { const p = R.ko.anim(R.ko.blastAt + P.f); p.blast[1] = P.ko[2]; drawClawd(P.ko[0], P.ko[1] + 2.5 * CV, p); }
-  else if (P.state !== 'ride' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast() }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+  else if (P.state !== 'ride' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}) }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
 
   // hud
   drawHealth(t);

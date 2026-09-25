@@ -74,6 +74,7 @@
 <script src="../src/characters/grok-moveset.js"></script>
 <script src="../src/characters/wumpus.js"></script>
 <script src="../src/characters/android.js"></script>
+<script src="../src/characters/android-moveset.js"></script>
 <script src="../src/characters/duo.js"></script>
 <script src="../src/characters/duo-moveset.js"></script>
 <script src="../src/characters/snoo.js"></script>
@@ -101,7 +102,7 @@ const FIGHTERS = {
   clawd: { name: "Claw'd", moves: MOVESET, draw: drawClawd, fx: drawClawdFx, hurt: clawdHurtbox },
   grok: { name: 'Grok Bot', moves: withTodo(GROK_MOVESET), draw: drawGrok, fx: drawClawdFx, hurt: grokHurtbox },
   wumpus: { name: 'Wumpus', moves: basic, draw: drawWumpus, fx: drawClawdFx },
-  android: { name: 'Android', moves: basic, draw: drawAndroid, fx: drawClawdFx },
+  android: { name: 'Android', moves: withTodo(ANDROID_MOVESET), draw: drawAndroid, fx: drawClawdFx, hurt: androidHurtbox },
   duo: { name: 'Duo', moves: withTodo(DUO_MOVESET), draw: drawDuo, fx: drawClawdFx },
   snoo: { name: 'Snoo', moves: withTodo(SNOO_MOVESET), draw: drawSnoo, fx: (x, y, p) => { drawClawdFx(x, y, p); if (p.oops > 0) drawOops(x, y - 100, p.oops, p.oopsMsg); }, // + its shield break toast
     hurt: (p = {}) => { const w = 46 * (p.sx ?? 1), h = 76 * (p.sy ?? 1); return { x: (p.x || 0) - w / 2, y: (p.y || 0) - h, w, h }; } },
@@ -178,7 +179,7 @@ function select(i) {
 
   const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'function' ? 'ƒ' : typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
   $('data').innerHTML = Object.entries(move).filter(([k]) => k !== 'input').map(([k, v]) =>
-    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? 'ƒ animation' : typeof v === 'object' ? show(v) : v}</dd>`).join('');
+    `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? (k === 'anim' ? 'ƒ animation' : 'ƒ changes over the move') : typeof v === 'object' ? show(v) : v}</dd>`).join('');
 }
 
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
@@ -203,7 +204,7 @@ function drawFigure(fr) {
   if (F.fx) F.fx(0, 0, pose);
   if (pose.carry) drawSack(pose.carry[0], air + pose.carry[1], pose.carry[2]); // grabbed bag, behind the claws
   F.draw(0, air, pose);
-  const pr = move.projectile, st = (fr - move.startup) / 60; // thrown spark, flying from the release frame
+  const pr = move.projectile && { ...move.projectile, ...move.projectile.pick?.[0] }, st = (fr - move.startup) / 60; // thrown thing (a picked one: the first), flying from the release frame
   const wy = pr?.wave ? pr.wave[0] * Math.sin(2 * Math.PI * st / pr.wave[1]) : 0; // a projectile that bobs as it flies
   if (pr && st >= 0) move.shotArt ? move.shotArt(pr.x + pr.speed * st, air + pr.y, Math.min(1, st / 0.1), 1) : (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
   if (!$('boxes').checked || !F.hurt) return;
@@ -212,7 +213,7 @@ function drawFigure(fr) {
   const hurt = F.hurt(pose); hurt.y += air;
   drawRect(hurt, '#c9a227', 'rgba(230,190,60,0.22)');
   if (phaseAt(fr) === 'active' && move.hitbox) { // hitbox is relative to the fighter's bottom-center, facing right
-    const hb = move.hitbox;
+    const hb = typeof move.hitbox === 'function' ? move.hitbox(fr) : move.hitbox; // moving / growing ones: at this frame, full charge
     drawRect({ x: x + hb.x, y: y + hb.y, w: hb.w, h: hb.h }, BOX, 'rgba(224,82,58,0.18)');
   }
 }
