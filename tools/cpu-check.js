@@ -1,6 +1,6 @@
 // headless check of the CPUs: `node tools/cpu-check.js`. Loads the game with a stand-in canvas (that throws where a real one would, e.g. on
 // a negative radius), then plays CPU vs CPU (a brain on P1 too): every fighter against every fighter, hard vs medium and AI trained vs hard, each side once,
-// plus random 1–3 CPU brawls drawn every few frames. Fails on any error, if a level stops beating the one below it, or if the CPUs self-destruct
+// plus random 1–3 CPU brawls drawn every few frames (teams, sides picked at random, and free-for-alls). Fails on any error, if a level stops beating the one below it, or if the CPUs self-destruct
 // (KO'd with no hit taken in the 4 s before) more than now and then
 const fs = require('fs'), path = require('path'), root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -16,8 +16,8 @@ let hardWins = 0, trainedWins = 0, games = 0, kos = 0, sds = 0, errors = [];
 const lastHit = new Map(), _hitBag = hitBag, _ko = ko;
 hitBag = function (b, ...a) { const r = _hitBag(b, ...a); if (r && b.c) lastHit.set(b.c, tick); return r; };
 ko = function () { kos++; if (tick - (lastHit.get(cur) ?? -1e9) > 240) sds++; return _ko(); };
-function play(p1, p1Level, cpus, levels, draw) {
-  fighter = FIGHTER[p1]; rolled = cpus; lvls = levels; restart(); setPaused(false); human.brain = cpuBrain(p1Level);
+function play(p1, p1Level, cpus, levels, draw, m = 'teams', s = []) {
+  fighter = FIGHTER[p1]; rolled = cpus; lvls = levels; mode = m; sides = s; restart(); setPaused(false); human.brain = cpuBrain(p1Level);
   try { for (let i = 0; i < 60 * 60 * 4 && !paused; i++) { update(STEP); if (draw && i % 7 === 0) render(i / 60); } }
   catch (e) { errors.push(p1 + ' vs ' + cpus.join('+') + ': ' + e.message); }
   return over; // 'win' = P1's side won
@@ -27,7 +27,7 @@ for (const a of ROSTER) for (const b of ROSTER) {
   trainedWins += play(a, 6, [b], [5]) === 'win'; trainedWins += play(a, 5, [b], [6]) === 'lose'; games += 2;
 }
 const pick = list => list[Math.floor(Math.random() * list.length)];
-for (let i = 0; i < 60; i++) { const n = 1 + i % 3; play(pick(ROSTER), i % LVL.length, Array.from({ length: n }, () => pick(ROSTER)), Array.from({ length: n }, () => Math.floor(Math.random() * LVL.length)), true); }
+for (let i = 0; i < 60; i++) { const n = 1 + i % 3; play(pick(ROSTER), i % LVL.length, Array.from({ length: n }, () => pick(ROSTER)), Array.from({ length: n }, () => Math.floor(Math.random() * LVL.length)), true, i % 3 ? 'teams' : 'ffa', Array.from({ length: n }, () => Math.round(Math.random()))); } // teams with random sides, and free-for-alls
 console.log('hard beat medium in ' + hardWins + ' / ' + games + ' · AI trained beat hard in ' + trainedWins + ' / ' + games + ' · self-destructs ' + sds + ' / ' + kos + ' KOs · errors ' + errors.length);
 for (const e of errors.slice(0, 5)) console.log('  ' + e);
 if (errors.length || hardWins < games * 0.8 || trainedWins < games * 0.8 || sds > kos * 0.02) { console.log('FAIL'); process.exitCode = 1; } else console.log('ok');

@@ -47,26 +47,73 @@
   dt { color: var(--muted); } dd { margin: 0; } .empty { color: var(--muted); }
   #boardwrap h2 { font: 700 26px Caveat, cursive; margin: 0 0 6px; }
   #board { aspect-ratio: 960 / 260; cursor: pointer; margin-bottom: 22px; }
+  /* learn mode (the default): a lesson card per move, chapter by chapter, with a training bag to hit · advanced = the storybook breakdown */
+  body.learn .adv, body:not(.learn) .lrn { display: none !important; }
+  #exit { position: sticky; top: 0; z-index: 3; display: inline-block; margin: 0 0 12px; padding: 3px 12px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: 0 0 0 10px var(--paper); color: inherit; text-decoration: none; white-space: nowrap; }
+  #exit:hover { background: var(--ink); color: var(--paper); }
+  #mode { display: flex; margin-top: 10px; border: 1.5px solid var(--ink); border-radius: 4px; overflow: hidden; }
+  #mode button { flex: 1; padding: 4px 0; border: 0; background: var(--paper); font: inherit; color: inherit; cursor: pointer; }
+  #mode button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  body.learn { flex-direction: column; }
+  body.learn nav { width: auto; display: flex; align-items: center; gap: 16px; padding: 10px 24px; overflow: visible; border: 0; border-bottom: 1.5px solid var(--line); }
+  body.learn #nav { display: none; } body.learn .who { width: 250px; } body.learn #mode { width: 220px; margin: 0 0 0 auto; } body.learn #exit { margin: 0; }
+  body.learn main { padding: 22px 24px 40px; }
+  #lesson { max-width: 860px; margin: 0 auto; }
+  #chapters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  #chapters button { font: 700 19px Caveat, cursive; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
+  #chapters button.done { border-color: var(--ink); color: var(--ink); }
+  #chapters button[aria-current] { border-color: var(--box); background: var(--box); color: #fff; }
+  .card { padding: 20px 24px 22px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); box-shadow: 5px 6px 0 var(--ink); }
+  .card header { display: flex; align-items: center; gap: 16px; }
+  #stepno { flex: none; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: var(--ink); color: var(--paper); font: 700 22px Caveat, cursive; }
+  #lname { margin: 0; font: 700 40px/1 Caveat, cursive; }
+  #intro { margin: 4px 0 0; color: var(--muted); }
+  .press { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 16px 0 14px; padding: 10px 14px; border: 1.5px dashed var(--muted); border-radius: 8px; font-size: 16px; }
+  .press b { font: 700 22px Caveat, cursive; color: var(--box); }
+  kbd { display: inline-block; min-width: 1.7em; padding: 1px 7px; border: 1.5px solid var(--ink); border-bottom-width: 3px; border-radius: 4px; background: #fff; font: 700 15px ui-monospace, Menlo, monospace; text-align: center; }
+  #stage { position: relative; } #stage canvas { max-width: none; border: 1.5px solid var(--line); box-shadow: none; }
+  #slow { position: absolute; top: 10px; right: 10px; padding: 2px 10px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--paper); font: inherit; font-size: 12px; color: inherit; cursor: pointer; }
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; } #stats:empty { display: none; }
+  #stats div { padding: 8px 12px; border-radius: 8px; background: #e9e2d3; } #stats b { display: block; font: 700 24px/1.1 Caveat, cursive; } #stats small { color: var(--muted); }
+  .steps { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+  .steps button { font: 700 22px Caveat, cursive; padding: 2px 18px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--paper); color: inherit; cursor: pointer; }
+  .steps button:disabled { opacity: .35; cursor: default; } .steps #fwd { background: var(--ink); color: var(--paper); }
+  #dots { flex: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  #dots button { width: 12px; height: 12px; padding: 0; border: 1.5px solid var(--ink); border-radius: 50%; background: none; cursor: pointer; }
+  #dots button.done { background: var(--line); } #dots button[aria-current] { border-color: var(--box); background: var(--box); transform: scale(1.35); }
+  .keys { margin: 18px 0 0; text-align: center; font-size: 12px; color: var(--muted); } .keys kbd { font-size: 11px; }
 </style>
 </head>
 <body>
-<nav><div class="who"><button id="who" aria-haspopup="listbox" aria-expanded="false" aria-label="character"></button><ul id="whoList" role="listbox" hidden></ul></div><div id="nav"></div></nav>
+<nav><a id="exit" href="../index.html" title="Esc">← back to game</a><div class="who"><button id="who" aria-haspopup="listbox" aria-expanded="false" aria-label="character"></button><ul id="whoList" role="listbox" hidden></ul></div>
+<div id="mode"><button id="learnBtn">learn</button><button id="storyBtn">advanced</button></div><div id="nav"></div></nav>
 <main>
-  <h1 id="name"></h1>
-  <div class="sub" id="sub"></div>
-  <canvas id="c"></canvas>
-  <div class="bar" id="bar"></div>
-  <div class="controls">
+  <section id="lesson" class="lrn">
+    <div id="chapters"></div>
+    <article class="card">
+      <header><span id="stepno"></span><div><h2 id="lname"></h2><p id="intro"></p></div></header>
+      <div class="press"><b>how</b><span id="how"></span></div>
+      <div id="stage"><button id="slow">slow-mo</button></div>
+      <div id="stats"></div>
+    </article>
+    <div class="steps"><button id="back">← back</button><div id="dots"></div><button id="fwd">next →</button></div>
+    <p class="keys"><kbd>←</kbd> <kbd>→</kbd> back / next · <kbd>Space</kbd> pause · <kbd>Esc</kbd> back to game · in game: arrows + <kbd>C</kbd> light <kbd>X</kbd> heavy <kbd>V</kbd> special <kbd>G</kbd> grab, or WASD + <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> <kbd>I</kbd> · dodge <kbd>Shift</kbd> / <kbd>Z</kbd></p>
+  </section>
+  <h1 id="name" class="adv"></h1>
+  <div class="sub adv" id="sub"></div>
+  <div id="slot" class="adv"><canvas id="c"></canvas></div>
+  <div class="bar adv" id="bar"></div>
+  <div class="controls adv">
     <button id="play">pause</button>
     <button id="prev" aria-label="previous frame">◀</button>
     <button id="next" aria-label="next frame">▶</button>
     <select id="speed"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select>
     <span id="frame"></span>
     <label><input type="checkbox" id="boxes"> boxes <i class="sw hurt"></i>hurt <i class="sw hit"></i>hit</label>
-    <span>↑↓ move · space play/pause · ←→ step · H boxes</span>
+    <span>↑↓ move · space play/pause · ←→ step · H boxes · Esc back to game</span>
   </div>
-  <section id="boardwrap"><h2>Storyboard</h2><canvas id="board" title="click a panel to jump to that frame"></canvas></section>
-  <dl id="data"></dl>
+  <section id="boardwrap" class="adv"><h2>Storyboard</h2><canvas id="board" title="click a panel to jump to that frame"></canvas></section>
+  <dl id="data" class="adv"></dl>
 </main>
 <script src="../src/sketch.js"></script>
 <script src="../src/characters/clawd.js"></script>
@@ -139,37 +186,75 @@ function choose(id) { openList(false); $('who').blur(); if (id !== fid) { pick(i
 $('who').onclick = () => openList($('whoList').hidden);
 addEventListener('mousedown', e => { if (!e.target.closest('.who')) openList(false); });
 
+// learn mode (the default; ?storybook = advanced): the fighter's moves as lessons, in this order, one chapter per group. A group not
+// listed goes last under its own name; moves with no animation yet, or nothing to press (idle, falling), are left out
+const CHAPTERS = {
+  movement: ['Getting around', 'Walk, run and jump. Everything else starts from here.'],
+  groundAttacks: ['Light attacks', 'Quick hits on the ground: tap light, and hold a direction for a different one.'],
+  aerials: ['Air attacks', 'Light in the air. The direction you hold picks which one comes out.'],
+  smashAttacks: ['Heavy attacks', 'Slow but strong. Hold heavy to charge. These are what KO.'],
+  specials: ['Specials', 'The moves only this fighter has.'],
+  defense: ['Defense', 'Shield, dodge and roll out of trouble.'],
+  grabs: ['Grabs & throws', "A grab goes right through a shield. Then pummel, or throw them where you want."],
+  ledge: ['Ledges', 'Knocked off the stage? Catch the edge and get back on safely.'],
+  reactions: ['Getting hit', 'What happens when you take a hit, and how to get back up.'],
+};
+const ORDER = Object.keys(CHAPTERS), rank = g => ORDER.includes(g) ? ORDER.indexOf(g) : ORDER.length;
+let learn = !location.search.includes('storybook'), seen = new Set(); // seen = fighter/move lessons opened, ticked off in the list
+// the move's input with its buttons as keycaps (the arrow-key set; the hint under the controls gives the WASD one)
+const KEYS = { light: 'C', heavy: 'X', special: 'V', B: 'V', grab: 'G', dodge: 'Shift', shield: 'Shift', jump: 'Space', up: '↑', down: '↓', forward: '→', back: '←', 'left/right': '← →' };
+const how = s => s.replace(/ \((X \/ K|V \/ L|Shift \/ Z|G \/ I)\)/g, '')
+  .replace(/\b(left\/right|light|heavy|special|B|grab|dodge|shield|jump|up|down|forward|back)\b(?! runs| connects)|[←→↑↓]/g, k => `<kbd>${KEYS[k] || k}</kbd>`);
+// plain-words frame data as [big value, label] tiles: how fast, how much, which way it sends them
+const LAUNCH = ['→ forward', '↗ up and forward', '↑ straight up', '↖ up and behind', '← behind you', '↙ down and behind', '↓ straight down', '↘ down and forward'];
+function facts(m) {
+  const out = [];
+  if (Number.isFinite(m.startup)) out.push([m.startup <= 5 ? 'fast' : m.startup <= 10 ? 'medium' : 'slow', `speed · hits on frame ${m.startup + 1}`]);
+  if (typeof m.damage === 'number') out.push([`${m.damage}%`, 'damage']);
+  if (Number.isFinite(m.kb?.angle)) out.push([LAUNCH[Math.round((m.kb.angle % 360 + 360) % 360 / 45) % 8], 'sends them']);
+  if (Array.isArray(m.intangible)) out.push([`frames ${m.intangible[0] + 1}–${m.intangible[1]}`, "can't be hit"]);
+  if (m.grab) out.push(['beats shields', 'grab']);
+  return out;
+}
+
 // flatten the fighter's moveset into one list for ↑↓ browsing
 let F, fid, list = [];
 function pick(id) {
   F = FIGHTERS[id]; fid = id; list = []; $('nav').replaceChildren();
   $('who').replaceChildren(portrait(id), F.name);
   IDS.forEach(i => $('who-' + i).setAttribute('aria-selected', i === id));
-  for (const [group, moves] of Object.entries(F.moves)) {
-    const h = document.createElement('h2'); h.textContent = title(group); $('nav').append(h);
-    for (const [key, m] of Object.entries(moves)) {
+  const groups = Object.entries(F.moves);
+  if (learn) groups.sort(([a], [b]) => rank(a) - rank(b));
+  for (const [group, moves] of groups) {
+    const keep = Object.entries(moves).filter(([, m]) => !learn || ((m.anim || m.preview) && m.input && m.input !== 'none'));
+    if (!keep.length) continue;
+    const h = document.createElement('h2'); h.textContent = learn ? CHAPTERS[group]?.[0] ?? title(group) : title(group); $('nav').append(h);
+    for (const [key, m] of keep) {
       const move = m.preview ? { ...m, anim: m.preview } : m; // a move the game plays in parts (Grok's Starship) previews as one run
       const b = document.createElement('button');
       b.textContent = title(key);
-      if (move.anim) b.classList.add('done');
+      if (learn ? seen.has(id + '/' + key) : move.anim) b.classList.add('done');
       const item = { group, key, move, el: b };
       b.onclick = () => select(list.indexOf(item));
       list.push(item); $('nav').append(b);
     }
   }
+  if (learn) $('chapters').replaceChildren(...[...new Set(list.map(it => it.group))].map(g => {
+    const b = document.createElement('button'); b.dataset.g = g; b.textContent = CHAPTERS[g]?.[0] ?? title(g);
+    b.onclick = () => select(list.findIndex(it => it.group === g)); return b;
+  }));
 }
 
-let cur = 0, f = 0, playing = true, phases = [], total = 60;
+let cur = 0, f = 0, playing = true, phases = [], total = 60, hold = 0, bag = null; // hold = frames the loop rests on the last pose (learn: the bag's flight)
 
 function select(i) {
   cur = (i + list.length) % list.length; f = 0;
   const { group, key, move, el } = list[cur];
   list.forEach(it => it.el.toggleAttribute('aria-current', it === list[cur]));
-  el.scrollIntoView({ block: 'nearest' });
-  history.replaceState(null, '', `#${fid}/${key}`);
+  if (!learn) el.scrollIntoView({ block: 'nearest' });
+  history.replaceState(null, '', `${learn ? location.pathname : '?storybook'}#${fid}/${key}`);
   $('name').textContent = title(key);
   $('sub').textContent = `${F.name} · ${title(group)}${move.input ? ' · ' + move.input : ''}`;
-
   const { startup, active, endlag } = move;
   phases = !move.previewFrames && [startup, active, endlag].every(Number.isFinite)
     ? [['startup', startup], ['active', active], ['endlag', endlag]]
@@ -183,6 +268,57 @@ function select(i) {
   const show = v => Array.isArray(v) || typeof v !== 'object' || v == null ? v ?? '—' : Object.entries(v).map(([a, b]) => `${a}: ${typeof b === 'function' ? 'ƒ' : typeof b === 'object' && !Array.isArray(b) && b ? `(${show(b)})` : b ?? '—'}`).join(' · '); // nested data in brackets
   $('data').innerHTML = Object.entries(move).filter(([k]) => k !== 'input').map(([k, v]) =>
     `<dt>${k}</dt><dd>${v == null ? '<span class="empty">—</span>' : typeof v === 'function' ? (k === 'anim' ? 'ƒ animation' : 'ƒ changes over the move') : typeof v === 'object' ? show(v) : v}</dd>`).join('');
+
+  bag = null; hold = 0;
+  if (!learn) return;
+  seen.add(fid + '/' + key); el.classList.add('done');
+  const mine = list.filter(it => it.group === group), done = it => seen.has(fid + '/' + it.key);
+  $('stepno').textContent = `${mine.indexOf(list[cur]) + 1}/${mine.length}`;
+  $('lname').textContent = title(key);
+  $('intro').textContent = CHAPTERS[group]?.[1] ?? '';
+  $('how').innerHTML = how(move.input);
+  $('stats').innerHTML = facts(move).map(([v, l]) => `<div><b>${v}</b><small>${l}</small></div>`).join('');
+  $('dots').replaceChildren(...mine.map(it => {
+    const d = document.createElement('button'); d.title = title(it.key); d.classList.toggle('done', done(it)); d.toggleAttribute('aria-current', it === list[cur]);
+    d.onclick = () => select(list.indexOf(it)); return d;
+  }));
+  for (const b of $('chapters').children) { b.toggleAttribute('aria-current', b.dataset.g === group); b.classList.toggle('done', list.every(it => it.group !== b.dataset.g || done(it))); }
+  $('back').disabled = cur === 0;
+  $('fwd').textContent = cur === list.length - 1 ? 'start over ↺' : 'next →';
+  playing = true; $('play').textContent = 'pause';
+
+  // an attack gets the training bag, standing where its hitbox (or the thing it throws) lands; grabs already carry theirs
+  if (group === 'grabs' || !Number.isFinite(startup)) return;
+  const p = move.anim(startup, total) || {}, ay = (p.y || 0) + (p.air || 0);
+  const pr = move.projectile && { ...move.projectile, ...move.projectile.pick?.[0] }, hb = typeof move.hitbox === 'function' ? move.hitbox(startup) : move.hitbox;
+  if (pr?.speed > 0) { const x = pr.x + Math.min(120, pr.speed * (active + endlag) / 60 * 0.8); bag = { x: x + 22, y: Math.min(0, ay + pr.y + 38), at: startup + (x - pr.x) / pr.speed * 60 }; }
+  else if (hb) { const cx = (p.x || 0) + hb.x + hb.w / 2, side = Math.sign(cx) || 1; bag = { x: side * Math.max(Math.abs(cx), (halfBox() || 28) + 22), y: Math.min(0, ay + hb.y + hb.h / 2 + 38), at: startup }; }
+  if (!bag) return;
+  const a = (move.kb?.angle ?? 0) * Math.PI / 180, D = move.kb ? 30 + move.kb.base * 0.6 + move.kb.growth * 0.7 : 0; // how far it flies: the knockback, roughly
+  Object.assign(bag, { dx: Math.cos(a) * D, dy: -Math.sin(a) * D, dmg: typeof move.damage === 'number' ? move.damage : 0 });
+  hold = 50;
+}
+
+// the bag at frame fr: still until the hit, then a shudder, a flight along the launch angle, and a drop back to the floor
+function bagAt(fr) {
+  const s = (fr - bag.at) / 60;
+  if (s < 0) return { x: bag.x, y: bag.y, rot: 0, s };
+  const e = 1 - (1 - Math.min(1, Math.max(0, s - 0.08) / 0.35)) ** 2, drop = Math.max(0, s - 0.45), y = Math.min(0, bag.y + bag.dy * e + 900 * drop * drop);
+  return { x: bag.x + bag.dx * e + (s < 0.08 ? Math.sin(fr * 3) * 3 : 0), y, rot: y < 0 ? Math.sign(bag.dx) * 0.6 * e : 0, s };
+}
+function drawBag(fr) {
+  const b = bagAt(fr), sh = Math.max(0.35, 1 + b.y / 160);
+  ctx.fillStyle = 'rgba(42,38,34,0.12)'; ctx.beginPath(); ctx.ellipse(b.x, 0, 26 * sh, 4 * sh, 0, 0, 6.28); ctx.fill();
+  drawSack(b.x, b.y, b.rot);
+}
+function drawPow(fr) { // on top of everything: a burst where it connected, and the damage floating up
+  const { s } = bagAt(fr);
+  if (s < 0 || s > 0.7) return;
+  const cx = bag.x - Math.sign(bag.x) * 18, cy = bag.y - 40, k = Math.min(1, s / 0.1);
+  ctx.save(); ctx.globalAlpha = 1 - s / 0.7; ctx.strokeStyle = BOX; ctx.lineWidth = 3;
+  if (s < 0.25) for (let i = 0; i < 8; i++) { const t = i / 8 * 6.283 + 0.2; line(cx + Math.cos(t) * 10 * k, cy + Math.sin(t) * 10 * k, cx + Math.cos(t) * 28 * k, cy + Math.sin(t) * 28 * k, 1, 1); }
+  if (bag.dmg) { ctx.fillStyle = INK; ctx.font = '700 26px Caveat, cursive'; ctx.textAlign = 'center'; ctx.fillText(`+${bag.dmg}%`, bag.x, bag.y - 92 - s * 40); }
+  ctx.restore();
 }
 
 const phaseAt = fr => { let end = 0; for (const [n, v] of phases) if (fr < (end += v)) return n; return null; };
@@ -211,7 +347,7 @@ function drawFigure(fr) {
   F.draw(0, air, pose);
   const pr = move.projectile && { ...move.projectile, ...move.projectile.pick?.[0] }, st = (fr - move.startup) / 60; // thrown thing (a picked one: the first), flying from the release frame
   const wy = pr?.wave ? pr.wave[0] * Math.sin(2 * Math.PI * st / pr.wave[1]) : 0; // a projectile that bobs as it flies
-  if (pr && st >= 0) move.shotArt ? move.shotArt(pr.x + pr.speed * st, air + pr.y, Math.min(1, st / 0.1), 1) : (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
+  if (pr && st >= 0 && !(bag && fr >= bag.at)) move.shotArt ? move.shotArt(pr.x + pr.speed * st, air + pr.y, Math.min(1, st / 0.1), 1) : (pr.draw || drawSpark)(pr.x + pr.speed * st, air + pr.y + wy, pr.r ?? SPARK_R, st * 14, { t: st, vx: pr.speed, m: move });
   if (move.toss && st >= 0) { const T = move.toss, tb = T.speed / T.decel, u = Math.min(st, 2 * tb); if (st < 2 * tb) drawLegoHead({ x: T.x + T.speed * u - T.decel * u * u / 2, y: air + T.y, rot: st * 22, face: 1 }); } // out and (preview: straight) back
   if (move.builds) drawLegoBooklet(0, air - 84, move.builds.map(k => LEGO_MOVESET.specials[k]), Math.floor(fr / 20) % move.builds.length, Math.min(1, fr / move.open), 45); // Lego Man's pick list (with 45 studs), the pick stepping down
   if (move.fire && st >= 0) { const L = move.fire, v = Math.min(L.speed[1], L.speed[0] + L.accel * st), tt = (v - L.speed[0]) / L.accel; drawLegoRocket({ x: L.x + L.speed[0] * tt + L.accel * tt * tt / 2 + v * (st - tt), y: air + L.y, dir: 1 }); } // flying off (no target to burst on here)
@@ -219,7 +355,7 @@ function drawFigure(fr) {
     const [vx, vy] = scatterVel(k, 0), g = 2300, tl = (-vy + Math.sqrt(vy * vy + 2 * g * 19)) / g, ts = Math.max(0, Math.min(st - tl, vx / 1800)), t = Math.min(st, tl);
     drawLooseBrick({ x: 14 + vx * t + vx * ts - 900 * ts * ts, y: Math.min(-7, -26 + vy * t + g * t * t / 2), w: 12, h: 7, rot: st < tl ? (8 + 5 * (k % 3)) * st : 0, col: k % 4 });
   }
-  if (!$('boxes').checked || !F.hurt) return;
+  if (learn || !$('boxes').checked || !F.hurt) return;
   const rad = pr?.r ?? SPARK_R;
   if (pr && st >= 0) drawRect({ x: pr.x + pr.speed * st - rad, y: air + pr.y + wy - rad, w: 2 * rad, h: 2 * rad }, BOX, 'rgba(224,82,58,0.18)');
   const hurt = F.hurt(pose); hurt.y += air;
@@ -276,7 +412,11 @@ function render(t) {
   hatch([[lip ?? 100, GROUND], [380, GROUND], [365, GROUND + 20], [lip ?? 115, GROUND + 20]], 8, 0.3);
   ctx.lineWidth = 2; line(lip ?? 92, GROUND, 388, GROUND, 1.2);
 
-  ctx.save(); ctx.translate(VW / 2, GROUND); drawFigure(Math.floor(f)); ctx.restore();
+  ctx.save(); ctx.translate(VW / 2, GROUND);
+  if (bag) drawBag(Math.floor(f));
+  drawFigure(Math.min(Math.floor(f), total - 1));
+  if (bag) drawPow(Math.floor(f));
+  ctx.restore();
 
   if (!move.anim) {
     ctx.save(); ctx.translate(VW / 2, 70); ctx.rotate(-0.05);
@@ -286,7 +426,7 @@ function render(t) {
     ctx.restore();
   }
 
-  if (move.anim) renderBoard();
+  if (move.anim && !learn) renderBoard();
   $('head').style.left = (f / total * 100) + '%';
   $('frame').textContent = `frame ${Math.floor(f) + 1} / ${total}`;
 }
@@ -296,6 +436,16 @@ $('play').onclick = () => { playing = !playing; $('play').textContent = playing 
 $('prev').onclick = () => step(-1);
 $('boxes').onchange = e => e.target.blur(); // keep Space/H shortcuts from also hitting the focused checkbox
 $('next').onclick = () => step(1);
+$('back').onclick = () => select(cur - 1);
+$('fwd').onclick = () => select(cur + 1);
+function setMode(on) { // learn ⇄ advanced, staying on the same move when the new list has it
+  learn = on; document.body.classList.toggle('learn', on); $(on ? 'stage' : 'slot').append(cv);
+  $('learnBtn').setAttribute('aria-pressed', on); $('storyBtn').setAttribute('aria-pressed', !on);
+  const key = list[cur]?.key; pick(fid); select(Math.max(0, list.findIndex(it => it.key === key)));
+}
+$('slow').onclick = () => { const slow = $('speed').value === '1'; $('speed').value = slow ? '0.25' : '1'; $('slow').textContent = slow ? 'normal speed' : 'slow-mo'; $('slow').blur(); };
+$('learnBtn').onclick = () => setMode(true);
+$('storyBtn').onclick = () => setMode(false);
 addEventListener('keydown', e => {
   if (!$('whoList').hidden) { // the character list is open: ↑↓ pick, Enter / Space choose, Esc close
     const k = { ArrowUp: () => { hi = (hi + IDS.length - 1) % IDS.length; highlight(); }, ArrowDown: () => { hi = (hi + 1) % IDS.length; highlight(); },
@@ -303,20 +453,21 @@ addEventListener('keydown', e => {
     if (k) { e.preventDefault(); k(); }
     return;
   }
-  const act = { ArrowUp: () => select(cur - 1), ArrowDown: () => select(cur + 1), ArrowLeft: () => step(-1), ArrowRight: () => step(1), Space: () => $('play').click(), KeyH: () => $('boxes').click() }[e.code];
+  if (e.code === 'Escape') return void $('exit').click(); // leave for the game's home screen
+  const act = learn ? { ArrowLeft: () => cur && select(cur - 1), ArrowUp: () => cur && select(cur - 1), ArrowRight: () => select(cur + 1), ArrowDown: () => select(cur + 1), Space: () => $('play').click() }
+    : { ArrowUp: () => select(cur - 1), ArrowDown: () => select(cur + 1), ArrowLeft: () => step(-1), ArrowRight: () => step(1), Space: () => $('play').click(), KeyH: () => $('boxes').click() }[e.code];
   if (act) { e.preventDefault(); act(); }
 });
 
 let last = performance.now();
 function frame(now) {
-  if (playing) f = (f + (now - last) / 1000 * 60 * +$('speed').value) % total;
+  if (playing) f = (f + (now - last) / 1000 * 60 * +$('speed').value) % (total + hold);
   last = now;
   render(now / 1000);
   requestAnimationFrame(frame);
 }
 const [who, at] = location.hash.slice(1).includes('/') ? location.hash.slice(1).split('/') : ['clawd', location.hash.slice(1)]; // #fighter/move (a bare #move is Claw'd's)
-pick(FIGHTERS[who] ? who : 'clawd');
-select(Math.max(0, list.findIndex(it => it.key === at)));
+fid = FIGHTERS[who] ? who : 'clawd'; list = [{ key: at }]; setMode(learn);
 requestAnimationFrame(frame);
 </script>
 </body>

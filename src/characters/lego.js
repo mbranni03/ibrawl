@@ -89,12 +89,12 @@ function drawLegoStuds(x, y, n) {
   ctx.restore();
 }
 // "no studs!": a paper tag over his head, bottom-centred on x, y, with a crossed-out stud; k = 0 … 1 of its time (pops in, floats up, fades)
-function drawLegoWarn(x, y, text, k) {
+function drawLegoWarn(x, y, text, k, icon) { // icon(x, y) = something else crossed out than a stud (Duo's streak flame)
   ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.globalAlpha = Math.min(1, k / 0.08, (1 - k) / 0.25);
   ctx.font = '700 17px Caveat, cursive'; const w = ctx.measureText(text).width + 32, s = Math.min(1, 0.6 + k / 0.08 * 0.4);
   ctx.translate(x, y - 8 * k); ctx.scale(s, s); ctx.translate(-w / 2, -22);
   legoPart(() => ctx.roundRect(0, 0, w, 22, 5), '#fbfaf6', 1.6);
-  legoStud(13, 11, 6.5); ctx.strokeStyle = '#d8150a'; ctx.lineWidth = 2.2; legoLine(7, 17, 19, 5);
+  if (icon) icon(13, 11); else legoStud(13, 11, 6.5); ctx.strokeStyle = '#d8150a'; ctx.lineWidth = 2.2; legoLine(7, 17, 19, 5);
   ctx.fillStyle = '#b8120a'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, 24, 12);
   ctx.restore();
 }

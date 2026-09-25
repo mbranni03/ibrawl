@@ -354,18 +354,27 @@ const DUO_MOVESET = {
         say: f >= 8 && f < 36 ? [...duoSay('🧊 streak freeze equipped', f, 8, 36), 16] : null,
       }),
     },
-    downSpecial: { // Duo is watching: set a little Duo plush down in front. It sits there staring, and pounces on anything that comes close.
-      // One out at a time; it gives up after a while. sub: scale of Duo · set down px ahead · seconds it waits · pounce = how close is close
-      input: 'down + B (V / L), ground or air · one plush out at a time', startup: 14, active: 2, endlag: 16, damage: 6,
-      kb: { base: 30, growth: 45, angle: 50 }, hitbox: null, landingLag: 10, sub: { scale: 0.5, x: 44, speed: 0, life: 8, report: 0, pounce: 170 },
+    downSpecial: { // streak mode: a streak meter fills while Duo fights (streak.fill s, a flame bursting up behind it when it's full). Full,
+      // this strains, swells and bursts it into buff Duo for streak.time s, the meter draining as it goes: its hits do mult × damage and kb × knockback out of
+      // hitboxes size × as big, it takes heavy × the knockback, and its attacks turn into punches (buffed, below). Not full: a warning.
+      // Losing a stock loses the streak
+      input: 'down + B (V / L), ground or air · once the streak meter is full', startup: 36, active: 1, endlag: 30, hitbox: null, landingLag: 10,
+      streak: { fill: 35, time: 12, mult: 1.5, kb: 1.2, size: 1.4, heavy: 0.6, lift: 44 }, // lift = px buff Duo stands over its box (the P1 mark, captions, warnings go up by it)
       anim: f => ({
         ...tween(f, [
           [0, {}],
-          [8, { x: -2, rot: 0.3, sx: 1.04, sy: 0.94, arm: [-6, -26], legs: duoFeet([2, 0], [-1, 0]) }],
-          [14, { x: 4, rot: 0.42, sx: 1.06, sy: 0.92, arm: [-4, -14], legs: duoFeet([-4, 0], [2, 0]) }],
-          [32, {}],
+          [6, { y: 1, sx: 1.06, sy: 0.9, rot: 0.05, arm: [6, 6], curl: [1, 1], legs: duoFeet([-3, 0], [3, 0]) }], // hunched, straining
+          [34, { y: 2, sx: 1.1, sy: 0.86, rot: 0.08, arm: [8, 8], curl: [1, 1], legs: duoFeet([-5, 0], [5, 0]) }],
+          [37, { y: -4, sx: 0.96, sy: 1.08, arm: [-34, -34], curl: [1, 1], legs: duoFeet([-4, 0], [4, 0]) }], // burst: double biceps
+          [56, { arm: [-32, -32], curl: [1, 1], legs: duoFeet([-4, 0], [4, 0]) }],
+          [67, {}],
         ]),
-        say: duoSay('Duo is watching 👀', f, 12, 32),
+        x: f < 36 ? Math.sin(f * 2.3) * f / 18 : 0, // shaking harder and harder
+        blink: f >= 4 && f < 36 ? 0.7 : 0,
+        buff: f < 4 ? 0 : f < 36 ? (f - 4) / 32 : 1 + 0.15 * Math.max(0, Math.sin(Math.PI * (f - 36) / 14)) * (f < 50), // pumped for a moment
+        flame: f < 4 ? null : f < 36 ? [30 + 40 * (f - 4) / 32, Math.min(1, (f - 4) / 4)] : [110 * Math.min(1, (f - 35) / 3), Math.max(0, Math.min(1, 1 - (f - 46) / 20))],
+        puff: f === 36 ? 0 : null,
+        say: f >= 36 && f < 67 ? [...duoSay('💪 BUFF DUO', f, 36, 67), 46] : f >= 67 ? null : duoSay('hnnngh…', f, 6, 36),
       }),
     },
   },
@@ -496,4 +505,92 @@ const DUO_MOVESET = {
       anim: f => ({ ...duoize(MOVESET.reactions.respawn.anim)(f), say: ['🔧 streak repaired', f < 100 ? Math.min(1, f / 10) : 0] }),
     },
   },
+};
+
+// buff Duo's attacks (the down special's streak mode): the same moves, frame data and hitboxes, animated as punches. The game swaps these
+// anims in while Duo is buff; buff: 1 draws them buff here (the moves page). arm swings are buff Duo's arms, curl their elbows (drawBuffDuo)
+const DUO_GUARD = { arm: [-8, -12], curl: [0.8, 0.85] }; // fists up
+const duoBuffed = (g, k, say, keys, more) => ({ ...DUO_MOVESET[g][k], input: 'while buff · ' + (DUO_MOVESET[g][k].input || ''),
+  anim: f => ({ ...tween(f, keys), buff: 1, say: duoSay(say[0], f, say[1], say[2]), ...more?.(f) }) });
+DUO_MOVESET.buffed = {
+  jab1: duoBuffed('groundAttacks', 'jab1', ['¡uno!', 3, 19], [ // a quick straight with the front fist
+    [0, {}], [2, { x: -2, rot: -0.05, ...DUO_GUARD }],
+    [3, { x: 6, rot: 0.12, sx: 1.04, arm: [-8, -27], curl: [0.8, -1], legs: duoFeet([-4, 0], [3, 0]) }],
+    [6, { x: 6, rot: 0.12, sx: 1.04, arm: [-8, -27], curl: [0.8, -1], legs: duoFeet([-4, 0], [3, 0]) }],
+    [12, { x: 2, ...DUO_GUARD }], [19, {}],
+  ], f => ({ speed: f >= 3 && f < 6 ? 0.4 : 0 })),
+  jab2: duoBuffed('groundAttacks', 'jab2', ['¡dos!', 3, 21], [ // a rising hook
+    [0, { x: 2, ...DUO_GUARD }], [2, { x: 0, rot: -0.1, arm: [-8, -6], curl: [0.8, 0.6] }],
+    [3, { x: 5, y: -2, rot: 0.08, sy: 1.05, arm: [-8, -40], curl: [0.8, 0.3], legs: duoFeet([-3, 0], [3, 0]) }],
+    [7, { x: 5, y: -2, rot: 0.08, sy: 1.05, arm: [-8, -42], curl: [0.8, 0.3], legs: duoFeet([-3, 0], [3, 0]) }],
+    [13, { x: 2, ...DUO_GUARD }], [21, {}],
+  ]),
+  jab3: duoBuffed('groundAttacks', 'jab3', ['¡tres! 💪', 5, 32], [ // wind up and throw the whole body behind a straight
+    [0, { x: 2, ...DUO_GUARD }], [4, { x: -4, rot: -0.15, sx: 0.95, arm: [-4, 4], curl: [0.8, 1] }],
+    [5, { x: 10, rot: 0.25, sx: 1.1, sy: 0.94, arm: [-12, -28], curl: [0.6, -1], legs: duoFeet([-8, 0], [6, 0]) }],
+    [10, { x: 10, rot: 0.22, sx: 1.08, sy: 0.95, arm: [-12, -28], curl: [0.6, -1], legs: duoFeet([-8, 0], [6, 0]) }],
+    [20, { x: 4, ...DUO_GUARD }], [32, {}],
+  ], f => ({ speed: f >= 5 && f < 10 ? 0.6 : 0 })),
+  dashAttack: duoBuffed('groundAttacks', 'dashAttack', ['no days off', 6, 34], [ // a shoulder charge
+    [0, {}], [5, { x: -2, rot: 0.1, sy: 0.95, arm: [4, 2], curl: [1, 1] }],
+    [6, { x: 8, rot: 0.35, sx: 1.08, sy: 0.9, arm: [6, 4], curl: [1, 1], legs: duoFeet([-8, 0], [4, 0]) }],
+    [14, { x: 8, rot: 0.32, sx: 1.08, sy: 0.9, arm: [6, 4], curl: [1, 1], legs: duoFeet([-8, 0], [4, 0]) }],
+    [24, { x: 3, rot: 0.1 }], [34, {}],
+  ], f => ({ speed: f >= 6 && f < 14 ? 0.8 : 0 })),
+  forwardTilt: duoBuffed('groundAttacks', 'forwardTilt', ['form check.', 6, 27], [ // step in behind a long straight
+    [0, {}], [4, { x: -3, rot: -0.1, arm: [-6, 2], curl: [0.8, 1] }],
+    [6, { x: 9, rot: 0.16, sx: 1.06, arm: [-10, -29], curl: [0.7, -1], legs: duoFeet([-6, 0], [5, 0]) }],
+    [10, { x: 9, rot: 0.16, sx: 1.06, arm: [-10, -29], curl: [0.7, -1], legs: duoFeet([-6, 0], [5, 0]) }],
+    [18, { x: 3, ...DUO_GUARD }], [27, {}],
+  ]),
+  upTilt: duoBuffed('groundAttacks', 'upTilt', ['+10 XP 💪', 5, 25], [ // dip, then an uppercut straight up
+    [0, {}], [4, { y: 2, sy: 0.88, arm: [-6, 4], curl: [0.8, 1] }],
+    [5, { y: -3, sy: 1.1, rot: -0.05, arm: [-6, -58], curl: [0.8, -0.6] }],
+    [10, { y: -3, sy: 1.08, rot: -0.05, arm: [-6, -58], curl: [0.8, -0.6] }],
+    [17, { ...DUO_GUARD }], [25, {}],
+  ]),
+  downTilt: duoBuffed('groundAttacks', 'downTilt', ['leg day.', 5, 20], [ // a low stomp out in front
+    [0, {}], [3, { y: 2, sy: 0.9, rot: -0.08, legs: duoFeet([0, 0], [4, -8]), ...DUO_GUARD }],
+    [5, { y: 2, sy: 0.9, rot: 0.1, legs: duoFeet([-3, 0], [16, -2]), ...DUO_GUARD }],
+    [8, { y: 2, sy: 0.9, rot: 0.1, legs: duoFeet([-3, 0], [16, -2]), ...DUO_GUARD }],
+    [14, { ...DUO_GUARD }], [20, {}],
+  ]),
+  forwardSmash: duoBuffed('smashAttacks', 'forwardSmash', ['💥 FLAWLESS', 14, 48], [ // cock the fist back (charge holds at 10), then a haymaker
+    [0, {}], [10, { x: -5, rot: -0.2, sx: 0.95, sy: 1.03, arm: [-14, 8], curl: [0.8, 1], legs: duoFeet([-2, 0], [4, 0]) }],
+    [14, { x: 12, rot: 0.25, sx: 1.12, sy: 0.92, arm: [-16, -28], curl: [0.5, -1], legs: duoFeet([-10, 0], [6, 0]) }],
+    [20, { x: 12, rot: 0.22, sx: 1.1, sy: 0.93, arm: [-16, -26], curl: [0.5, -1], legs: duoFeet([-10, 0], [6, 0]) }],
+    [34, { x: 4, ...DUO_GUARD }], [48, {}],
+  ], f => ({ speed: f >= 14 && f < 20 ? 0.8 : 0 })),
+  upSmash: duoBuffed('smashAttacks', 'upSmash', ['🙌 LEVEL UP', 12, 40], [ // crouch with both fists cocked (charge holds at 8), then a double uppercut
+    [0, {}], [8, { y: 3, sx: 1.08, sy: 0.84, arm: [4, 4], curl: [1, 1], legs: duoFeet([-4, 0], [4, 0]) }],
+    [12, { y: -6, sx: 0.94, sy: 1.14, arm: [-56, -56], curl: [-1, -1] }],
+    [18, { y: -6, sx: 0.94, sy: 1.12, arm: [-56, -56], curl: [-1, -1] }],
+    [30, { ...DUO_GUARD }], [40, {}],
+  ]),
+  downSmash: duoBuffed('smashAttacks', 'downSmash', ['🌋 DAILY GOAL', 12, 38], [ // both fists overhead (charge holds at 8), then pounded into the floor either side
+    [0, {}], [8, { y: -2, sy: 1.06, arm: [-50, -50], curl: [0.6, 0.6] }],
+    [12, { y: 3, sx: 1.12, sy: 0.84, rot: 0, arm: [-16, -16], curl: [-1, -1], legs: duoFeet([-5, 0], [5, 0]) }],
+    [18, { y: 3, sx: 1.1, sy: 0.86, arm: [-16, -16], curl: [-1, -1], legs: duoFeet([-5, 0], [5, 0]) }],
+    [28, { ...DUO_GUARD }], [38, {}],
+  ], f => ({ puff: f === 12 ? 0 : null })),
+  neutralAir: duoBuffed('aerials', 'neutralAir', ['hoo HOO!', 4, 26], [ // spin a full turn, both fists out straight
+    [0, DUO_GUARD], [4, { arm: [-29, -29], curl: [-1, -1], rot: 0 }], [12, { arm: [-29, -29], curl: [-1, -1], rot: 6.28 }], [26, DUO_GUARD],
+  ]),
+  forwardAir: duoBuffed('aerials', 'forwardAir', ['✗ wrong.', 7, 27], [ // a hammer fist, raised high and chopped down in front
+    [0, DUO_GUARD], [6, { rot: -0.15, arm: [-10, -58], curl: [0.8, 0.4] }],
+    [7, { rot: 0.2, arm: [-10, -20], curl: [0.8, -1] }], [11, { rot: 0.2, arm: [-10, -16], curl: [0.8, -1] }], [27, DUO_GUARD],
+  ]),
+  backAir: duoBuffed('aerials', 'backAir', ['remember me?', 6, 24], [ // a straight thrown out behind with the back fist
+    [0, DUO_GUARD], [5, { rot: 0.1, arm: [2, -12], curl: [1, 0.8] }],
+    [6, { rot: -0.15, x: -4, arm: [-29, -12], curl: [-1, 0.8] }], [10, { rot: -0.15, x: -4, arm: [-29, -12], curl: [-1, 0.8] }], [24, DUO_GUARD],
+  ]),
+  upAir: duoBuffed('aerials', 'upAir', ['📈 gains', 5, 24], [ // both fists punched straight up
+    [0, DUO_GUARD], [4, { arm: [-20, -20], curl: [1, 1], sy: 0.92 }],
+    [5, { arm: [-56, -56], curl: [-1, -1], sy: 1.1 }], [10, { arm: [-56, -56], curl: [-1, -1], sy: 1.08 }], [24, DUO_GUARD],
+  ]),
+  downAir: duoBuffed('aerials', 'downAir', ['📉 streak lost.', 8, 32], [ // fists up, both feet stomped straight down. Spikes
+    [0, DUO_GUARD], [6, { y: -3, arm: [-40, -40], curl: [0.6, 0.6], legs: duoFeet([0, -6], [0, -6]) }],
+    [8, { y: 2, sy: 1.06, arm: [-46, -46], curl: [0.3, 0.3], legs: duoFeet([2, 6], [-2, 6]) }],
+    [14, { y: 2, sy: 1.06, arm: [-46, -46], curl: [0.3, 0.3], legs: duoFeet([2, 6], [-2, 6]) }], [32, DUO_GUARD],
+  ]),
 };

@@ -40,7 +40,9 @@ function cpuStep(c) {
   const B = c.brain, V = B.V, s = P.state;
   for (const k in keys) keys[k] = false;
   B.moves ||= catalog();
-  const foe = c === human ? fighters.filter(f => f !== human).sort((a, b) => Math.abs(midX(a.P) - midX(P)) - Math.abs(midX(b.P) - midX(P)))[0] : human;
+  const rivals = fighters.filter(f => f.team !== c.team), far = f => Math.abs(midX(f.P) - midX(P)) + (f.P.state === 'ko' || f.P.state === 'respawn' ? 2000 : 0); // (one on its way back in counts as far)
+  if (!rivals.includes(B.foe) || rivals.some(f => far(f) < far(B.foe) - 200)) { B.foe = rivals.sort((a, b) => far(a) - far(b))[0]; B.seen = []; } // the nearest foe, kept until another's clearly nearer
+  const foe = B.foe;
   if (!foe) return;
   B.seen.push(look(foe.P)); if (B.seen.length > 40) B.seen.shift();
   const o = B.o = present(B.seen[Math.max(0, B.seen.length - 1 - V.react)], V); // the foe as it has registered by now
@@ -377,7 +379,7 @@ function approach(B, o, fp, lag) {
   else if (lag > 8 && chance(V.combo)) tx = fp[Math.min(lag, 30)].x + o.w / 2; // to where it'll come down
   else if (B.style === 'space') tx -= dir * B.gap;
   else if (B.style === 'idle') tx = me;
-  const mate = fighters.find(f => f !== P.c && f !== human && P.c !== human && Math.abs(midX(f.P) - tx) < 60 && Math.abs(f.P.y - P.y) < 80);
+  const mate = fighters.find(f => f !== P.c && f.team === P.c.team && Math.abs(midX(f.P) - tx) < 60 && Math.abs(f.P.y - P.y) < 80);
   if (mate) tx += (midX(mate.P) < tx ? 1 : -1) * 75; // a teammate's there: come at it from beside them (or its other side)
   tx = Math.max(stage.x + 30, Math.min(stage.x + stage.w - 30, tx));
   const go = tx - me, gdir = Math.sign(go);
@@ -427,8 +429,9 @@ function zone(B, o, fp) {
   }
   return false;
 }
-// power-ups that need time (Claw'd's think, Android's fast charge, Lego Man's gold brick): only with the foe far off or out of it
+// power-ups that need time (Claw'd's think, Android's fast charge, Lego Man's gold brick, Duo's streak mode): only with the foe far off or out of it
 function buff(B, o, adx) {
+  if (DOWN_B.streak && P.streak >= 1 && !P.buff && adx > 160) { press({ B: 1, down: true }); return true; } // Duo's streak's full: go buff
   const V = B.V, far = adx > 420 || o.state === 'respawn' || o.state === 'ko' || (!o.ground && !overStage(midX(o)) && adx > 250);
   if (!far || !chance(V.buff * 0.05)) return false;
   const nb = NEUTRAL_B;

@@ -9,8 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; height: 100%; background: #26231f; overflow: hidden; }
-  body { display: grid; place-items: center; }
-  canvas { display: block; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; }
+  /* the letterbox is a dark desk the sheet sits on: faint pencil hatching, lit from the middle */
+  body { display: grid; place-items: center;
+    background: radial-gradient(ellipse at center, #3a352e 0%, #26231f 55%, #1b1916 100%),
+                repeating-linear-gradient(-45deg, #0000 0 7px, #ffffff08 7px 8px);
+    background-blend-mode: screen; }
+  canvas { display: block; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9;
+    box-shadow: 0 0 0 1px #0006, 0 10px 40px #000a; }
 </style>
 </head>
 <body>
@@ -176,7 +181,7 @@ fighter = FIGHTER.clawd;
 // plays them) with STOCKS lives each; the bag just takes hits and knockback, and drops back in where it started when it leaves the blast zone
 const BAG_SPAWN = { vx: 0, vy: 0, dmg: 0, hitT: 0, rot: 0, grabbed: false, pinned: false, carted: false, sticker: null, pinT: 0, slowT: 0 }; // what anyone who can be hit carries: grabbed = the P holding it in its claws · pinned = the P whose up special's cord it's on the end of · pinT = s left stuck under a move's pin (Wumpus) · slowT = s left in slowmode
 const SPAWN_X = [822, 435, 1000]; // centres the CPUs drop in at: the first where the bag always did, the others to either side
-let bags = [], foes = [], cpus = [], lvls = [], rolled = [], targets = []; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled), lvls = their levels (indexes into LVL / CPU_LEVELS: 0 beginner … 3 medium … 6 AI trained) · foes = the CPUs' fighters, kept for the hud once out of lives · targets = who the fighter in play can hit
+let bags = [], foes = [], cpus = [], lvls = [], sides = [], rolled = [], targets = [], mode = 'ffa'; // cpus = fighter ids picked as enemies ('random' until the vs screen rolls them into rolled), lvls = their levels (indexes into LVL / CPU_LEVELS: 0 beginner … 3 medium … 6 AI trained) · foes = the CPUs' fighters, kept for the hud once out of lives · targets = who the fighter in play can hit · mode = 'teams' (sides: each CPU with you, 0, or against you, 1) or 'ffa' (everyone for themselves)
 function spawnTarget(b) { Object.assign(b, BAG_SPAWN, { x: b.home - b.w / 2, y: -120, ground: false, on: null }); }
 const heldBag = () => targets.find(b => b.grabbed === P);
 const KB = 10; // knockback units → px/s
@@ -199,7 +204,7 @@ function newFighter(f, x, y) {
   fighter = f; M = f.set.movement; loadMoves(f.set); stocks = STOCKS;
   const [w, h] = f.box;
   P = { ...BAG_SPAWN, x: x - w / 2, y: y - h, w, h, ground: false, on: null, jumps: 1, face: x > W / 2 ? -1 : 1, drop: 0, inv: 0, state: 'air', f: 0, fastFall: false, ledge: 0, regrab: 0, shield: 1, think: 0, batt: 0,
-    hearts: NEUTRAL_B.hearts || 0, toastT: null, studs: NEUTRAL_B.studs?.start ?? 0, gold: 0, mech: 0, stairs: false, warn: null, struck: new Map() }; // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left · struck = who the attack it's doing has hit (with which hit)
+    hearts: NEUTRAL_B.hearts || 0, toastT: null, studs: NEUTRAL_B.studs?.start ?? 0, gold: 0, mech: 0, stairs: false, warn: null, streak: 0, buff: 0, struck: new Map() }; // Lego Man: studs to spend on builds, the gold brick's and mech suit's time left · Duo: its streak meter (0 … 1), buff time left · struck = who the attack it's doing has hit (with which hit)
   keys = {}; jumpQ = downQ = dropQ = ffQ = dashQ = attackQ = heavyQ = specialQ = dodgeQ = sideQ = tiltQ = false; grabQ = techQ = techLock = lastDir = 0; lastTap = { a: null, t: 0 }; pressT = {}; attackT = -1e9;
   sub = cart = wreck = nelly = thrown = null; shots = []; rockets = []; booms = []; bricks = []; targets = [];
   cur = P.c = {}; stash(cur); return cur;
@@ -234,8 +239,9 @@ function restart() {
   Object.assign(cam, camHome());
   fx.length = 0;
   for (let i = plats.length - 1; i >= 0; i--) if (plats[i].lego) plats.splice(i, 1); // Lego Man's stairs
-  cur = null; human = newFighter(fighter, W / 2, 430); // P1 in the middle, the CPUs dropping in
-  foes = rolled.map((id, i) => Object.assign(newFighter(FIGHTER[id], SPAWN_X[i], FIGHTER[id].box[1] - 120 - i * 70), { brain: cpuBrain(lvls[i] ?? 3) }));
+  cur = null; human = Object.assign(newFighter(fighter, W / 2, 430), { team: 0 }); // P1 in the middle, the CPUs dropping in
+  foes = rolled.map((id, i) => Object.assign(newFighter(FIGHTER[id], SPAWN_X[i], FIGHTER[id].box[1] - 120 - i * 70), { brain: cpuBrain(lvls[i] ?? 3), team: mode === 'ffa' ? i + 1 : sides[i] ?? 1 }));
+  if (foes.length && foes.every(c => !c.team)) foes.at(-1).team = 1; // teams with everyone on yours: the last CPU's against you anyway
   fighters = [human, ...foes];
   bags = rolled.length ? [] : [{ id: 'bag', w: FIGHTER.bag.box[0], h: FIGHTER.bag.box[1], home: SPAWN_X[0] }]; bags.forEach(spawnTarget);
   use(human);
@@ -258,6 +264,7 @@ function special(dir) {
   if (k === 'upSpecial' && m.reach != null) return tetherUp(dir); // Claw'd's MCP tether
   if (m.toss && thrown) return; // one head: not again till it's back
   if (m.step) { if (P.studs < 1) return warn('no studs!'); if (P.stairs) return; } // the staircase: once, till he's back on the stage or a normal platform
+  if (m.streak && (P.buff > 0 || P.streak < 1)) return P.buff > 0 ? undefined : warn('streak not full', drawStreakIcon); // Duo's streak mode: needs a full meter
   if (m.builds && P.studs < Math.min(...m.builds.map(b => MOVES[b].cost))) return warn('not enough studs'); // can't afford any build: the booklet stays shut
   if (dir) P.face = dir; P.held = true; P.chg = 0; // held: a charge / a roll (B) keeps going while B is held (see chargeKey)
   P.roll = m.projectile?.pick ? Math.floor(Math.random() * m.projectile.pick.length) : null; // a random outcome: I'm Feeling Lucky's app
@@ -277,7 +284,7 @@ function special(dir) {
 const bricksOf = m => Math.max(0, Math.min(m.bricks[0] + Math.round(m.bricks[1] * P.chg / m.chargeFrames), P.studs));
 const sizeOf = m => m.bricks ? (P.nb - m.bricks[0]) / m.bricks[1] : m.chargeFrames ? P.chg / m.chargeFrames : 0;
 // Lego Man tried to build without the studs: the move doesn't happen, a warning pops up over his head for WARN_T seconds instead
-const WARN_T = 1.2, warn = text => { P.warn = { text, t: 0 }; };
+const WARN_T = 1.2, warn = (text, icon) => { P.warn = { text, t: 0, icon }; }; // (icon: see drawLegoWarn)
 // the booklet's open: ↑ ↓ move the pick (a fresh press each), special / light builds it if he has the studs (else it shuts, with a
 // warning), shield / dodge / jump puts it away
 function bookletStep() {
@@ -300,7 +307,7 @@ function choose(i) {
   if (menu[i] === 'controls') showControls = true;
   else if (menu[i] === 'quit') goHome();
   else if (menu[i] === 'characters') location.href = 'pages/moves.html'; // storyboard of every move
-  else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; lvls = []; focus = 0; onBand = false; } // character select first, from scratch
+  else if (menu[i] === 'play') { picking = true; p1 = null; cpus = []; lvls = []; sides = []; focus = 0; onBand = false; } // character select first, from scratch
   else { if (menu[i] !== 'resume') restart(); setPaused(false); } // play / restart start fresh
 }
 addEventListener('keydown', e => {
@@ -361,7 +368,7 @@ cv.addEventListener('click', e => {
   if (vsT != null) { fight(); return; }
   if (picking) { // character select hot spots (drawn in drawSelect)
     const p = selectAt(...at(e));
-    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.level) lvls[p.level[0]] = lvl = p.level[1]; else if (p?.slot) { cpus.splice(p.slot - 1, 1); lvls.splice(p.slot - 1, 1); } else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
+    if (p?.back) picking = false; else if (p?.tile != null) pickTile(p.tile); else if (p?.p1) p1 = null; else if (p?.level) lvls[p.level[0]] = lvl = p.level[1]; else if (p?.mode) mode = mode === 'ffa' ? 'teams' : 'ffa'; else if (p?.side) sides[p.side - 1] ^= 1; else if (p?.slot) { cpus.splice(p.slot - 1, 1); lvls.splice(p.slot - 1, 1); sides.splice(p.slot - 1, 1); } else if (p?.ready && p1) { versus(); cv.style.cursor = ''; }
     return;
   }
   const i = menuAt(e); if (i >= 0) { choose(i); if (!paused) cv.style.cursor = ''; }
@@ -535,7 +542,7 @@ function hitClawd(dmg, kb, dir) {
   const c = MOVES[P.state]; if (c?.counter && P.f >= c.startup && P.f < c.startup + c.active) { P.counterDir = dir; setState(c.counter); hitstop = 8; return false; } // countered: the hit does nothing
   if (P.state === 'shield' && P.shield > 0) { P.shield -= SHIELD_HIT * dmg / 12; P.vx = dir * (150 + 20 * dmg); hitstop = Math.round(2 + dmg / 6); if (P.shield <= 0) breakShield(); return false; }
   hurt(dmg); hitstop = Math.round(3 + dmg / 4);
-  const k = kb.base + kb.growth * P.dmg / 100, a = kb.angle * Math.PI / 180;
+  const k = (kb.base + kb.growth * P.dmg / 100) * (P.buff > 0 ? DOWN_B.streak.heavy : 1), a = kb.angle * Math.PI / 180; // buff Duo's heavy
   P.vx = dir * k * KB * Math.cos(a); P.vy = -k * KB * Math.sin(a); camPunch(k, P.x + P.w / 2, P.y + P.h / 2); P.face = -dir; P.stun = Math.round(k * R.hitstun.perKb);
   Object.assign(P, { ground: false, on: null, ledge: 0, fastFall: false, airDodged: false, grabbed: false, pinT: 0, state: k >= R.tumble.threshold ? 'tumble' : 'hitstun', f: 0 }); // a new hit restarts it; refreshes the air dodge; knocks it out of a grab or off a pin
   return true;
@@ -550,7 +557,7 @@ function ko() {
 function respawn() {
   if (--stocks <= 0) { if (cur === human) return gameOver(); cur.out = true; fighters = fighters.filter(c => !c.out); return; }
   [P.w, P.h] = fighter.box; // out of the mech
-  Object.assign(P, { x: (cur === human ? W / 2 : clamp(SPAWN_X[foes.indexOf(cur)], stage.x + 120, stage.x + stage.w - 120)) - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, slowT: 0, sticker: null, stairs: false, gold: 0, mech: 0 });
+  Object.assign(P, { x: (cur === human ? W / 2 : clamp(SPAWN_X[foes.indexOf(cur)], stage.x + 120, stage.x + stage.w - 120)) - P.w / 2, y: RESPAWN_Y - 220, vx: 0, vy: 0, jumps: AIR_JUMPS(), inv: 0, fastFall: false, dmg: 0, hitT: 0, ledge: 0, airDodged: false, shield: 1, think: 0, batt: 0, hearts: NEUTRAL_B.hearts || 0, toastT: null, slowT: 0, sticker: null, stairs: false, gold: 0, mech: 0, streak: 0, buff: 0, lit: null }); // (a lost stock loses Duo's streak)
   P.state = 'respawn'; P.f = 0;
 }
 // on the respawn platform: lowered in, then any input (or waiting too long) drops Claw'd, flickering for a bit
@@ -569,7 +576,7 @@ function dmgColor(d) {
   return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * k))})`;
 }
 
-// a frame: each fighter in turn, with what it has out (P1 can hit the CPUs or the bag, the CPUs can hit P1; a CPU's brain works its
+// a frame: each fighter in turn, with what it has out (anyone can hit anyone not on its team, P1 the bag too; a CPU's brain works its
 // controls first), then the stage's things. Someone grabbed, on a cord, in a cart or pinned stays where that puts it; slowmode plays
 // every other frame
 let tick = 0;
@@ -578,7 +585,7 @@ function update(dt) {
   tick++;
   for (const c of fighters) {
     use(c);
-    targets = [...fighters.filter(o => (o === human) !== (c === human) && !o.P.safe).map(o => o.P), ...(c === human ? bags : [])];
+    targets = [...fighters.filter(o => o.team !== c.team && !o.P.safe).map(o => o.P), ...(c === human ? bags : [])];
     if (P.pinT > 0 && (P.pinT -= dt) <= 0) [P.vx, P.vy] = P.pop; // pinned: stuck where it was hit, then popped free
     if (P.grabbed || P.pinned || P.carted || P.pinT > 0 || (P.slowT > 0 && tick % 2)) {}
     else if (P.state !== 'ko') { if (c.brain) cpuStep(c); stepPlayer(dt); }
@@ -600,7 +607,7 @@ function update(dt) {
     if (out(b)) spawnTarget(b);
   }
   for (let i = fx.length - 1; i >= 0; i--) if ((fx[i].t += dt / (fx[i].dur || 0.25)) >= 1) fx.splice(i, 1);
-  if (foes.length && foes.every(c => c.out) && !over) gameOver(true); // last CPU out: P1 wins
+  if (foes.length && foes.every(c => c.out || c.team === human.team) && !over) gameOver(true); // last CPU against P1 out: P1's side wins (P1 out loses, ally or not)
 }
 // what's stuck on someone wears off: a sticker, slowmode
 function wear(b, dt) { if (b.sticker && (b.sticker.t += dt) > b.sticker.secs) b.sticker = null; b.slowT = Math.max(0, b.slowT - dt); }
@@ -782,6 +789,10 @@ function stepPlayer(dt) {
   P.gold = Math.max(0, (P.gold || 0) - dt);
   if (P.warn && (P.warn.t += dt) > WARN_T) P.warn = null;
   if (P.mech > 0 && (P.mech -= dt) <= 0) popMech();
+  const SK = DOWN_B.streak; // Duo's streak: fills over SK.fill s (P.lit = s since it filled, for the flame); buff, it drains instead, and he shrinks back with a puff
+  if (SK && P.buff > 0) { if ((P.buff -= dt) <= 0) { P.buff = 0; puff(); } }
+  else if (SK && P.streak < 1 && P.state !== 'respawn' && (P.streak = Math.min(1, P.streak + dt / SK.fill)) === 1) P.lit = 0;
+  if (P.lit != null) P.lit += dt;
   P.hitT = Math.max(0, P.hitT - dt);
   P.regrab = Math.max(0, P.regrab - dt);
   P.shield = Math.max(0, Math.min(1, (P.shield ?? 1) + (P.state === 'shield' ? -SHIELD_DRAIN : SHIELD_REGEN)));
@@ -797,7 +808,7 @@ function stepPlayer(dt) {
   if (m?.bricks && P.f === m.startup) P.studs -= P.nb; // pays for the bricks as it comes out
   if (m?.hitbox && !(m.hearts && !P.roll) && !(m.bricks && !P.nb)) { // out of hearts: the zap fizzles · no bricks built: nothing to hit with
     const hb0 = typeof m.hitbox === 'function' ? m.hitbox(P.f, m.chargeFrames ? P.chg / m.chargeFrames : 0) : m.hitbox; // a function = it moves or grows: (frame, charge 0 … 1) => box
-    const c = sizeOf(m), K = P.mech > 0 ? MECH_K : 1; // charging can grow it (grow); the mech suit scales it (and the lean) with him
+    const c = sizeOf(m), K = P.mech > 0 ? MECH_K : P.buff > 0 ? DOWN_B.streak.size : 1; // charging can grow it (grow); the mech suit (buff Duo) scales it (and the lean) with him
     const hb = { ...hb0, ...Object.fromEntries(['x', 'y', 'w', 'h'].map(k => [k, (hb0[k] + (m.grow?.[k] || 0) * c) * K])) };
     const ox = (P.ledge ? 0 : clawdPose().x || 0) * K; // on the ledge, ledgePlace already moved P by the pose's x
     const inWorld = r => ({ x: P.face > 0 ? cx + ox + r.x : cx - ox - r.x - r.w, y: P.y + P.h + r.y, w: r.w, h: r.h });
@@ -842,7 +853,8 @@ function stepPlayer(dt) {
     }
   }
   if (m?.nelly && P.f === m.startup) nelly = { x: cx + P.face * m.nelly.x - 16, y: P.y + P.h - 20, w: 32, h: 20, vx: 0, vy: 0, face: P.face, t: 0, ground: P.ground, on: P.on, N: m.nelly };
-  if (P.state === 'downSpecial' && DOWN_B.sub && P.f === DOWN_B.startup && !sub) { // push the subagent (Duo: its plush) out: runs on the ground, dropped in the air
+  if (P.state === 'downSpecial' && DOWN_B.streak && P.f === DOWN_B.startup) { P.buff = DOWN_B.streak.time; P.streak = 0; P.lit = null; hitstop = 6; camPunch(130, cx, P.y + P.h / 2); } // Duo bursts buff
+  if (P.state === 'downSpecial' && DOWN_B.sub && P.f === DOWN_B.startup && !sub) { // push the subagent out: runs on the ground, dropped in the air
     const S = DOWN_B.sub, w = P.w * S.scale, h = P.h * S.scale;
     sub = { x: cx + P.face * S.x - w / 2, y: P.y + P.h - h, w, h, vx: P.face * (P.ground ? S.speed : 150), vy: P.ground ? 0 : 250, face: P.face, t: 0, ground: P.ground, on: null, done: 0 };
     fx.push({ x: cx + P.face * S.x, y: P.y + P.h, dir: P.face, t: 0 });
@@ -1013,8 +1025,6 @@ function stepSub(dt) {
   if (sub.done) { if ((sub.done += dt) > S.report) sub = null; return; }
   sub.t += dt;
   if (sub.ground) sub.vx = sub.face * S.speed;
-  const prey = S.pounce && sub.ground && !sub.pounced && targets.find(b => Math.abs(b.x + b.w / 2 - sub.x - sub.w / 2) < S.pounce && Math.abs(b.y + b.h - sub.y - sub.h) < 90);
-  if (prey) { sub.face = Math.sign(prey.x + prey.w / 2 - sub.x - sub.w / 2) || sub.face; Object.assign(sub, { pounced: true, ground: false, on: null, vx: sub.face * 420, vy: -480 }); } // Duo's plush: it was watching
   sub.vy = Math.min(sub.vy + G * dt, 950);
   move(sub, dt, s => { sub.vy = 0; sub.ground = true; sub.on = s; });
   if (out(sub)) return sub = null; // ran off the stage
@@ -1063,7 +1073,8 @@ function poofCart() {
 // damage + knockback on a target from the fighter in play, growing with the target's damage; bigger hits freeze longer. A fighter
 // takes it its own way (hitClawd: its shield or counter can stop it). false = it didn't connect
 function hitBag(b, dmg, kb, dir) {
-  dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt) * (P.gold > 0 ? MOVES.goldBrick.power.mult : 1) * (P.mech > 0 ? MOVES.mech.suit.mult : 1); P.batt = 0; // (+ Lego Man's gold brick / mech suit)
+  dmg *= THINK_POWER[P.think] * (1 + (DOWN_B.power || 0) * P.batt) * (P.gold > 0 ? MOVES.goldBrick.power.mult : 1) * (P.mech > 0 ? MOVES.mech.suit.mult : 1) * (P.buff > 0 ? DOWN_B.streak.mult : 1); P.batt = 0; // (+ Lego Man's gold brick / mech suit, buff Duo)
+  if (P.buff > 0) kb = { ...kb, base: kb.base * DOWN_B.streak.kb, growth: kb.growth * DOWN_B.streak.kb }; // buff Duo hits harder
    // the attacker's effort tier scales every hit, a stored fast charge just this one
   if (b.c) { const me = cur, g = b.grabbed; use(b.c); const hit = hitClawd(dmg, kb, dir); use(me); if (g === P) b.grabbed = g; if (!hit) return false; } // (a pummel keeps the grip; anyone else's hit knocks it loose)
   else {
@@ -1105,7 +1116,7 @@ function move(b, dt, onLand) {
 function clawdPose() {
   const f = P.f, atk = MOVES[P.state], fly = FLY[P.state];
   if (fly && P.state !== fly.state) return { ...fly.chargeAnim(f, P.chg / fly.chargeFrames), tilt: P.aim }; // charging a flight (c runs past 1 into the overheat), aimed
-  if (atk) { const p = atk.anim(f, undefined, sizeOf(atk), P.roll); if (P.held && f === atk.chargeAt && atk.chargeMult) p.x += P.chg % 4 < 2 ? 1.5 : -1.5; if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging a smash · P.roll = a random outcome (Duo's quiz, Android's app)
+  if (atk) { const p = ((P.buff > 0 && fighter.set.buffed?.[P.state]) || atk).anim(f, undefined, sizeOf(atk), P.roll); if (P.held && f === atk.chargeAt && atk.chargeMult) p.x = (p.x || 0) + (P.chg % 4 < 2 ? 1.5 : -1.5); if (fly) p.tilt = P.fly.ang; return p; } // tremble while charging a smash · P.roll = a random outcome (Duo's quiz, Android's app) · buff Duo punches instead (its buffed anims)
   switch (P.state) {
     case 'idle': return M.idle.anim(f % 120, 120);
     case 'walk': return M.walk.anim(f % 40, 40);
@@ -1229,10 +1240,10 @@ function render(t) {
   for (const c of all) {
     use(c);
     // x / air in poses are preview-only root motion; here physics moves Claw'd
-    if (P.state !== 'ride' && P.state !== 'ko' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0 }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
+    if (P.state !== 'ride' && P.state !== 'ko' && !(P.inv > 0 && Math.floor(t * 14) % 2)) { const pose = clawdPose(); ctx.globalAlpha = intangible() ? 0.5 : 1; drawFighter(P.x + P.w / 2, P.y + P.h, { ...pose, x: P.state in MOVES && !P.ledge ? pose.x : 0, ...powered(pose), ...toast(), ...(P.batt || (P.state === 'downSpecial' && DOWN_B.charge) ? { batt: P.batt } : {}), headless: pose.headless || !!thrown, gold: pose.gold || (P.gold > 0 && (P.gold > 2 || Math.floor(t * 8) % 2)), mech: pose.mech || P.mech > 0, ...streakPose(pose) }, P.face); ctx.globalAlpha = 1; } // attacks lean and come back
     if (P.state === 'booklet') { const B = MOVES.booklet; drawLegoBooklet(P.x + P.w / 2, P.y - 12, B.builds.map(k => MOVES[k]), P.bk.i, Math.min(1, P.f / B.open), P.studs); } // Lego Man's pick list
-    if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14, P.warn.text, P.warn.t / WARN_T);
-    else if (foes.length && P.state !== 'ko' && P.state !== 'booklet') drawMark(c === human);
+    if (P.warn) drawLegoWarn(P.x + P.w / 2, P.y - 14 - lift(), P.warn.text, P.warn.t / WARN_T, P.warn.icon);
+    else if (foes.length && P.state !== 'ko' && P.state !== 'booklet') drawMark(c);
   }
   drawStuck();
   ctx.restore();
@@ -1252,6 +1263,15 @@ const drawFighter = (cx, b, p, face) => drawClawd(cx, b, fighter.art === drawCla
 // Claw'd does next (landing, getting up…). P.toastMsg = OOPS index or [headline, detail], P.toastOk = success style
 const TOAST = 150;
 const toast = () => P.toastT == null ? {} : { oops: Math.min(1, P.toastT / 6, (TOAST - P.toastT) / 12), oopsMsg: P.toastMsg, oopsOk: P.toastOk };
+
+// Duo's streak: buff (flickering back to the owl over its last half second; the down special draws its own way in), and the flame
+// that bursts up behind it, with a shout, when the meter fills
+function streakPose(pose) {
+  if (!DOWN_B.streak || P.state === 'downSpecial') return {};
+  const lit = P.lit != null && P.lit < 1.2 && !pose.flame ? { flame: [100 * Math.min(1, P.lit / 0.12), Math.min(1, (1.2 - P.lit) / 0.5)], say: pose.say || ['🔥 streak full!', Math.min(1, (1.2 - P.lit) / 0.3)] } : {};
+  return { buff: P.buff > 0 ? Math.min(1, P.buff / 0.5) : 0, eyeFire: P.streak >= 1, ...lit, ...(pose.say && lift() ? { say: [pose.say[0], pose.say[1], (pose.say[2] || 0) + lift()] } : {}) }; // captions over buff Duo's head
+}
+const lift = () => P.buff > 0 ? DOWN_B.streak.lift : 0; // how far buff Duo stands over its box
 
 // effort tiers stay on Claw'd until KO: its aura, and 5% more size per tier (the neutral special's own pose already has both)
 function powered(pose) {
@@ -1292,28 +1312,29 @@ function drawOn(b, bx) {
   if (b.sticker) b.sticker.draw(bx, b.y + b.h * 0.45, b.rot, Math.min(1, (b.sticker.secs - b.sticker.t) / 0.3)); // fades at the end
   const g = b.grabbed; if (g?.ratio) g.c.GR.hold.ratio.draw(bx, b.y - 44, g.ratio); // the holder's ratio meter over whoever it's holding
 }
-// over a fighter's head when there are CPUs: whose is whose (P1 orange, a CPU grey, like their tags on the select screen)
-function drawMark(you) {
-  const x = P.x + P.w / 2, y = P.y - 16, text = you ? 'P1' : 'CPU';
+// under a fighter's feet when there are CPUs: whose is whose (P1 and its allies orange, a CPU against it grey, like their tags on the select screen); overhead is left to the moves' own text
+function drawMark(c) {
+  const x = P.x + P.w / 2, y = P.y + P.h + 8, you = c.team === human.team, text = c === human ? 'P1' : you ? 'ALLY' : 'CPU';
   ctx.font = '700 17px Caveat, cursive'; ctx.textAlign = 'center'; const w = ctx.measureText(text).width + 12;
-  ctx.fillStyle = you ? CLAWD : '#6b7280'; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 17, w, 17, 4); ctx.moveTo(x - 5, y - 1); ctx.lineTo(x, y + 5); ctx.lineTo(x + 5, y - 1); ctx.fill();
-  ctx.fillStyle = PAPER; ctx.fillText(text, x, y - 4); ctx.textAlign = 'left';
+  ctx.fillStyle = you ? CLAWD : '#6b7280'; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, 17, 4); ctx.moveTo(x - 5, y + 1); ctx.lineTo(x, y - 5); ctx.lineTo(x + 5, y + 1); ctx.fill();
+  ctx.fillStyle = PAPER; ctx.fillText(text, x, y + 13); ctx.textAlign = 'left';
 }
 
 // hud: P1's badge top right, the CPUs' in a row to its left (the training bag keeps its % overhead instead)
 function drawHealth(t) {
-  const portrait = (F, face) => () => { const h = F.box[1], k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, {}, face, t); }; // fit the taller fighters in the circle
-  badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1), stocks);
+  const portrait = (F, face, p = {}, up = 0) => () => { const h = F.box[1] + up, k = Math.min(1, 44 / h / 0.8); ctx.scale(k, k); F.draw(0, h / 2, p, face, t); }; // fit the taller fighters in the circle
+  const meter = (Q, S) => S && (Q.buff > 0 ? [Q.buff / S.time, true] : [Q.streak, false]); // Duo's streak meter: filling, or draining while buff
+  badge(W - 120, P.dmg, P.hitT, portrait(fighter, 1, { buff: P.buff > 0 ? 1 : 0, eyeFire: P.streak >= 1 }, lift()), stocks, meter(P, DOWN_B.streak), t);
   if (NEUTRAL_B.studs) drawLegoStuds(W - 66, 44, P.studs); // Lego Man's studs, by his badge
   foes.forEach((c, i) => {
     ctx.globalAlpha = c.out ? 0.35 : 1; // faded once out
-    badge(W - 120 - (foes.length - i) * 150, c.P.dmg, c.P.hitT, portrait(c.fighter, -1), c.stocks);
+    badge(W - 120 - (foes.length - i) * 150, c.P.dmg, c.P.hitT, portrait(c.fighter, -1, { buff: c.P.buff > 0 ? 1 : 0, eyeFire: c.P.streak >= 1 }, c.P.buff > 0 ? c.DOWN_B.streak.lift : 0), c.stocks, meter(c.P, c.DOWN_B.streak), t);
   });
   ctx.globalAlpha = 1;
 }
 
 // a fighter's damage badge: its portrait in a circle coloured by damage, the % overlapping it, and stock pips if it has lives
-function badge(x, dmg, hitT, portrait, lives) {
+function badge(x, dmg, hitT, portrait, lives, streak, t) {
   const sh = hitT * 16, bx = x + (Math.random() - 0.5) * sh, by = 70 + (Math.random() - 0.5) * sh, R = 38; // shakes when hit
   ctx.fillStyle = dmgColor(dmg); ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.28); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ellipse(bx, by, R, R, 1.2);
@@ -1328,6 +1349,25 @@ function badge(x, dmg, hitT, portrait, lives) {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.28); ctx.fill();
     ctx.lineWidth = 1.6; ellipse(px, py, 5, 5, 0.5);
   }
+  if (streak) drawStreakMeter(bx, by, R + 12, ...streak, t);
+}
+
+// Duo's streak meter, curved over the top of its badge like Little Mac's KO meter: an orange flame fill from the left, a flame riding its
+// tip. Full, it throbs and glows; buff (on), it's the time left, draining
+function drawStreakMeter(x, y, r, v, on, t) {
+  const a0 = Math.PI * 1.1, a1 = Math.PI * 1.9, at = a0 + (a1 - a0) * v, hot = on || v >= 1, pulse = hot ? 0.5 + 0.5 * Math.sin(t * 10) : 0;
+  const arc = (a, b) => { ctx.beginPath(); ctx.arc(x, y, r, a, b); ctx.stroke(); };
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = 11; arc(a0, a1); // the track
+  ctx.strokeStyle = '#e5ddcb'; ctx.lineWidth = 6; arc(a0, a1);
+  if (v > 0.01) {
+    if (hot) { ctx.shadowColor = '#ff9600'; ctx.shadowBlur = 8 + 10 * pulse; }
+    ctx.strokeStyle = '#ff9600'; ctx.lineWidth = 6 + 1.5 * pulse; arc(a0, at);
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#ffc800'; ctx.lineWidth = 2.5; arc(a0, at); // a hot yellow core
+  }
+  ctx.translate(x + r * Math.cos(at), y + r * Math.sin(at) + 5); ctx.scale(0.3 + 0.08 * pulse, 0.3 + 0.08 * pulse);
+  drawStreakFlame(0, 0, 44, v > 0.01 ? 1 : 0.35); // the flame on its tip (grey-faint when empty)
+  ctx.restore();
 }
 
 const menuY = () => home ? H / 2 + 160 : H / 2 + 10; // first menu row's baseline (home: below the title and lineup)
@@ -1449,6 +1489,7 @@ const LOGOS = [
 // No CPUs: the fight is against the training bag, shown faded in the first CPU slot once P1 has picked
 const MAX_CPUS = 3, TILES = ROSTER.length + 1, TILE_STEP = Math.min(172, (W - 28) / TILES), TILE = { w: TILE_STEP - 12, h: 150, y: 104 }, tileX = i => W / 2 + (i - (TILES - 1) / 2) * TILE_STEP - TILE.w / 2; // the last tile is Random; spacing shrinks to fit the row
 const BAND = { y: 280, h: 50 }, SLOT = { w: 280, h: 320, y: 368 }, slotX = i => W / 2 + (i - 1.5) * 300 - SLOT.w / 2;
+const MODE = { x: W - 290, y: 30, w: 250, h: 40 }; // teams / free-for-all switch, once there's more than one CPU
 let focus = 0, onBand = false; // keyboard focus: a roster tile, or the READY band
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function selectAt(x, y) {
@@ -1457,20 +1498,23 @@ function selectAt(x, y) {
   if (y > BAND.y && y < BAND.y + BAND.h) return { ready: true };
   if (p1 && x > slotX(0) && x < slotX(0) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { p1: true }; // clears the pick
   for (let i = 1; i <= cpus.length; i++) if (x > pillX(i) && x < pillX(i) + PILL.w && y > PILL.y && y < PILL.y + PILL.h) return { level: [i - 1, (lvls[i - 1] + (x < pillX(i) + PILL.w / 2 ? -1 : 1) + LVL.length) % LVL.length] }; // left half ‹ / right half ›, wrapping
+  if (cpus.length > 1 && x > MODE.x && x < MODE.x + MODE.w && y > MODE.y && y < MODE.y + MODE.h) return { mode: true };
+  if (cpus.length > 1 && mode === 'teams') for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + 170 && y > SLOT.y && y < SLOT.y + 44) return { side: i }; // its tag
   for (let i = 1; i <= cpus.length; i++) if (x > slotX(i) && x < slotX(i) + SLOT.w && y > SLOT.y && y < SLOT.y + SLOT.h) return { slot: i };
   return null;
 }
 // CPU levels (what they mean: CPU_LEVELS in src/cpu.js): a ‹ level › switch on each CPU's slot picks its own; a new CPU gets the last one picked (lvl)
 const LVL = [['beginner', '#9cc3e6'], ['easy', '#8fb573'], ['casual', '#c9c55a'], ['medium', '#e9b949'], ['skilled', '#e8833a'], ['hard', '#d9442e'], ['AI trained', '#8b5cf6']], PILL = { w: 200, h: 34, y: SLOT.y + SLOT.h - 104 }, pillX = i => slotX(i) + (SLOT.w - PILL.w) / 2; // AI trained = the one tuned against CPUs: fast, relentless
 let lvl = 3; // medium
-const addCpu = id => { if (cpus.length < MAX_CPUS) { cpus.push(id); lvls.push(lvl); } };
+const addCpu = id => { if (cpus.length < MAX_CPUS) { cpus.push(id); lvls.push(lvl); sides.push(1); } };
 const pickTile = i => { const id = i === ROSTER.length ? 'random' : ROSTER[i]; p1 ? addCpu(id) : p1 = id; }; // the first pick is P1's fighter, the rest are CPUs
-function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick · 1 2 3 every CPU's level
+function pickKey(code, a) { // ← → roster · ↓ ↑ to / from the band · Enter / Space pick (P1 first, then CPUs) or fight · Backspace undoes the last pick · 1 2 3 every CPU's level · M teams / free-for-all
   const n = TILES;
   if (a === 'left' || a === 'right') { focus = (focus + (a === 'left' ? n - 1 : 1)) % n; onBand = false; }
   else if (a === 'down' || a === 'up') onBand = a === 'down';
   else if (code === 'Enter' || code === 'Space') onBand ? p1 && versus() : pickTile(focus);
-  else if (code === 'Backspace' || code === 'Delete') cpus.length ? (cpus.pop(), lvls.pop()) : p1 = null;
+  else if (code === 'Backspace' || code === 'Delete') cpus.length ? (cpus.pop(), lvls.pop(), sides.pop()) : p1 = null;
+  else if (code === 'KeyM') mode = mode === 'ffa' ? 'teams' : 'ffa';
   else if (/^Digit[1-7]$/.test(code)) lvls.fill(lvl = +code[5] - 1);
   else return false;
   return true;
@@ -1496,6 +1540,10 @@ function drawSelect(t) {
   ctx.fillStyle = ctx.strokeStyle = INK; ctx.textAlign = 'center';
   ctx.font = '700 56px Caveat, cursive'; ctx.fillText(p1 ? 'now pick your opponents' : 'choose your fighter', W / 2, 74);
   ctx.font = '600 32px Caveat, cursive'; ctx.textAlign = 'left'; ctx.fillText('‹ back', 40, 60);
+  if (cpus.length > 1) { // the mode switch
+    ctx.fillStyle = mode === 'ffa' ? '#6b7280' : CLAWD; ctx.beginPath(); ctx.roundRect(MODE.x, MODE.y, MODE.w, MODE.h, 20); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.fillStyle = PAPER; ctx.textAlign = 'center'; ctx.font = '700 28px Caveat, cursive'; ctx.fillText(mode === 'ffa' ? '‹ free-for-all ›' : '‹ teams ›', MODE.x + MODE.w / 2, MODE.y + 29); ctx.textAlign = 'left';
+  }
 
   ROSTER.forEach((id, i) => { // roster tiles: portrait, name, logo, and a P1 / CPU badge once picked
     const x = tileX(i), y = TILE.y, on = !onBand && focus === i, r = rect(x, y, TILE.w, TILE.h);
@@ -1538,7 +1586,8 @@ function drawSelect(t) {
     ctx.fillStyle = INK; path(rect(x, y + SLOT.h - 62, SLOT.w, 62)); ctx.fill(); // name plate
     ctx.fillStyle = PAPER; ctx.font = '700 40px Caveat, cursive'; ctx.fillText(FIGHTER[id].name, x + SLOT.w / 2, y + SLOT.h - 18);
     ctx.strokeStyle = i ? INK : CLAWD; ctx.lineWidth = i ? 2.4 : 3.4; poly(r, 1.2);
-    tag(x + 10, y + 10, i ? (ghost ? 'no CPUs' : `CPU ${i}`) : 'P1', i ? '#6b7280' : CLAWD);
+    const ally = i && !ghost && cpus.length > 1 && mode === 'teams' && !sides[i - 1], teamed = i && !ghost && cpus.length > 1 && mode === 'teams';
+    tag(x + 10, y + 10, i ? (ghost ? 'no CPUs' : teamed ? `CPU ${i} · ${ally ? 'with you' : 'against you'}` : `CPU ${i}`) : 'P1', i && !ally ? '#6b7280' : CLAWD);
     if (!ghost) { ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.font = '700 34px Caveat, cursive'; ctx.fillText('×', x + SLOT.w - 20, y + 32); }
     if (cpu) { // its level: ‹ name ›
       const [name, col] = LVL[lvls[i - 1]], px = pillX(i), cy = PILL.y + 25;
@@ -1547,7 +1596,7 @@ function drawSelect(t) {
       ctx.font = '700 34px Caveat, cursive'; ctx.fillText('‹', px + 18, cy + 2); ctx.fillText('›', px + PILL.w - 18, cy + 2);
     }
   }
-  if (cpus.length) { ctx.fillStyle = INK; ctx.globalAlpha = 0.6; ctx.textAlign = 'center'; ctx.font = '600 22px Caveat, cursive'; ctx.fillText('click ‹ › on a CPU to change its level · 1–7 set them all · AI trained = tuned against other AIs', W / 2, H - 9); ctx.globalAlpha = 1; }
+  if (cpus.length) { ctx.fillStyle = INK; ctx.globalAlpha = 0.6; ctx.textAlign = 'center'; ctx.font = '600 22px Caveat, cursive'; ctx.fillText('click ‹ › on a CPU to change its level · 1–7 set them all · AI trained = tuned against other AIs' + (cpus.length > 1 ? mode === 'teams' ? ' · click a CPU\'s tag to switch its side' : ' · everyone fights everyone' : ''), W / 2, H - 9); ctx.globalAlpha = 1; }
   ctx.textAlign = 'left';
 }
 
