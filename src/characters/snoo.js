@@ -15,11 +15,13 @@
 //   gone = 0 … 1 shrinks Snoo away into its middle (1 = not drawn) · deleted = 0 … 1 size of a grey [deleted] tag in its place,
 //          streaking when full size · poof = 0 … 1 a ring bursting off its middle (popping back in)
 //   bigvote = 0 … 1 a giant upvote bursting up out of the floor behind Snoo (up smash): shoots up, holds, drifts up and fades
+//   shield = 0 … 1 size of the green mod shield it crouches behind · wear = 0 … 1 how worn it is: cracks + fading
+//   shatter = 0 … 1 the mod shield bursting into green shards
 //   removed = 0 … 1 two grey [removed] tags bursting out along the floor both ways, fading
 //   vote = [x, y, t, dir] a Reddit vote arrow popping up at x, y (px from bottom-centre, like hitboxes) and fading as t goes 0 … 1;
 //          dir 1 = orange upvote, -1 = blue downvote
 const SNOO = '#fbf9f4', SNOO_EYE = '#ff4500', SNOO_DOWN = '#7193ff';
-const SNOO_WOOD = '#b07a45', SNOO_STEEL = '#8a8f99', SNOO_GREY = '#878a8c', SNOO_BEAM = '#fff3a8', SNOO_GLASS = '#cfe6f5';
+const SNOO_MOD = '#46d160', SNOO_WOOD = '#b07a45', SNOO_STEEL = '#8a8f99', SNOO_GREY = '#878a8c', SNOO_BEAM = '#fff3a8', SNOO_GLASS = '#cfe6f5';
 const VOTE = [[0, -1], [0.95, -0.05], [0.42, -0.05], [0.42, 0.85], [-0.42, 0.85], [-0.42, -0.05], [-0.95, -0.05]]; // the arrow, pointing up
 
 // a filled, sketch-outlined ellipse
@@ -75,6 +77,9 @@ function drawSnoo(cx, bottom, pose = {}, face = 1) {
   }
   ctx.restore();
   const mx = cx + (pose.x || 0) * face, my = bottom + (pose.y || 0) - 36; // its middle
+  const sx = mx + 18 * face, sy = bottom + (pose.y || 0) - 17; // the mod shield: held out in front, low, so its head peeks over
+  if (pose.shield > 0.05) snooShield(sx, sy, 0.62 * pose.shield, pose.wear || 0);
+  if (pose.shatter != null) snooShards(sx, sy, pose.shatter);
   if (pose.deleted > 0.02) snooDeleted(mx, my, face, pose.deleted);
   if (pose.poof != null) snooPoof(mx, my, pose.poof);
   if (pose.ufo) snooUfo(cx, bottom, face, ...pose.ufo);
@@ -218,5 +223,32 @@ function snooPing(x, y, t) {
   ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 22 * t, 10 + 26 * t, 0, 6.28); ctx.stroke();
   ctx.scale(k, k); ctx.fillStyle = SNOO_EYE; ctx.beginPath(); ctx.arc(0, 0, 9, 0, 6.28); ctx.fill(); ctx.lineWidth = 1.8; ctx.stroke();
   ctx.fillStyle = '#fff'; ctx.font = '700 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('1', 0, 0.5);
+  ctx.restore();
+}
+
+// the mod shield: Reddit's green moderator badge, held up in front, a white rim inset. k = size, wear = 0 … 1: cracks run in and it fades
+const MOD_CRACKS = [[0.2, [[8, -34], [3, -20], [11, -9], [5, 4]]], [0.45, [[-26, -4], [-13, -1], [-8, 11]]], [0.7, [[26, 8], [13, 13], [9, 27]]]];
+const modShieldPath = s => { // flat-ish top, straight sides curving in to a point at the bottom, 52 x 72 at s = 1
+  ctx.beginPath(); ctx.moveTo(-26 * s, -30 * s); ctx.quadraticCurveTo(0, -38 * s, 26 * s, -30 * s); ctx.lineTo(26 * s, 0);
+  ctx.quadraticCurveTo(24 * s, 22 * s, 0, 36 * s); ctx.quadraticCurveTo(-24 * s, 22 * s, -26 * s, 0); ctx.closePath();
+};
+function snooShield(x, y, k, wear) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.globalAlpha *= 1 - 0.35 * wear; ctx.strokeStyle = INK; ctx.lineJoin = 'round';
+  ctx.fillStyle = SNOO_MOD; modShieldPath(1); ctx.fill(); ctx.lineWidth = 2.4; ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2; modShieldPath(0.76); ctx.stroke();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+  for (const [at, pts] of MOD_CRACKS) if (wear >= at) for (let i = 1; i < pts.length; i++) line(...pts[i - 1], ...pts[i], 0.4, 1);
+  ctx.restore();
+}
+
+// the mod shield breaking: seven green shards bursting up and out from where it was held, tumbling, falling and fading
+function snooShards(x, y, t) {
+  ctx.save(); ctx.globalAlpha *= 1 - t; ctx.fillStyle = SNOO_MOD; ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.lineJoin = 'round';
+  for (let i = 0; i < 7; i++) {
+    const a = -Math.PI / 2 + (i - 3) * 0.45, sp = 50 + 12 * (i % 3);
+    ctx.save(); ctx.translate(x + Math.cos(a) * sp * t, y + Math.sin(a) * sp * t + 70 * t * t); ctx.rotate((i % 2 ? 1 : -1) * 6 * t + i);
+    path([[-6, -5], [7, -3], [1, 7]]); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }

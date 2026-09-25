@@ -548,7 +548,21 @@ const SNOO_MOVESET = {
     },
   },
 
-  defense: { // dodges only, so far: no shield yet (the game won't raise one), so no shield break either
+  defense: {
+    shield: { // hold: crouches behind a big green mod shield, eyes squeezed shut (in the game it shrinks and cracks as it wears down)
+      input: 'hold I', frames: 60,
+      anim: f => {
+        const brace = { sx: 1.05, sy: 0.9, blink: 1, swing: [0.4, 1.3], reach: [0, 6], ant: -0.4, legs: [[-3, 0], [0, 0], [0, 0], [3, 0]], shield: 1 };
+        const p = tween(f, [[0, {}], [4, brace], [50, brace], [57, {}], [60, {}]]);
+        if (f > 4 && f < 50) p.sy += 0.01 * Math.sin((f - 4) / 46 * Math.PI * 4); // breathing behind it
+        return { ...p, wear: Math.min(1, Math.max(0, (f - 4) / 46)) }; // preview wears it out over the hold (the game uses the real shield health)
+      },
+    },
+    shieldBreak: snooOver(MOVESET.defense.shieldBreak, f => ({ // the mod shield shatters, Snoo pops up flailing and lands dizzy, rate-limited
+      ...tween(f, [[0, { swing: [-1.9, 1.9], ant: -0.8 }], [14, { swing: [-1.4, 1.4], ant: -0.4 }], [28, { swing: [-1.7, 1.7] }], [32, { swing: [-0.6, 0.6], ant: 0.5 }]]),
+      ...(f >= 32 && f < 144 ? { ant: 0.5 * Math.sin((f - 32) / 6) } : {}), // antenna wobbling with the dizziness
+      oopsMsg: ['you are doing that too much', 'try again in 9 minutes'],
+    })),
     spotDodge: snooOver(MOVESET.defense.spotDodge, f => tween(f, [ // shrinks into the page, arms and antenna pulled in
       [0, {}], [3, { swing: [-0.4, 0.4] }], [6, SNOO_TUCK], [16, SNOO_TUCK], [21, { swing: [-0.3, 0.3], ant: 0.2 }], [26, {}]])),
     rollForward: snooOver(MOVESET.defense.rollForward, f => tween(f, [[0, {}], [5, SNOO_TUCK], [22, SNOO_TUCK], [30, {}]])), // balled up
