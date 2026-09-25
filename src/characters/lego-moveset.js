@@ -218,7 +218,7 @@ const LEGO_MOVESET = {
       // cost), shield / dodge / jump closes it. Stands still on the ground; in the air the pages slow his fall to `fall` px/s. The
       // last pick is remembered. studs: he earns one per % of damage his hits do, up to max, starting each game with start
       input: 'special (B), then ↑ ↓ to pick, B / light to build', frames: 60, open: 10, fall: 160,
-      builds: ['wreckingBall', 'rocket', 'goldBrick', 'mech'], studs: { start: 20, max: 99 },
+      builds: ['wreckingBall', 'rocket', 'goldBrick', 'mech'], studs: { start: 30, max: 99 }, // enough to build the wrecking ball or rocket straight away
       anim: f => {
         const o = Math.min(1, f / 10), b = f > 10 ? Math.sin((f - 10) / 25 * Math.PI) : 0;
         return { ...tween(Math.min(f, 10), [[0, {}], [10, { rot: 0.04, swing: [0.25, 1.15], blink: 0 }]]), y: -0.6 * Math.abs(b), book: o, swing: [0.25, 1.15 + 0.04 * b] };
