@@ -77,6 +77,19 @@ if (matchMedia('(pointer: coarse)').matches || location.search.includes('touch')
     sync();
   });
 
+  // iOS still zooms on a double tap or a pinch whatever touch-action says, and touch-action: none then blocks the pinch back
+  // out. So a quick second tap is cancelled (re-sent as a plain click off the pad, where the menus need it), and the pinch is
+  // WebKit's own gesture events. Double jumps and dashes are double taps, so this comes up all the time.
+  let lastTap = 0;
+  addEventListener('touchend', e => {
+    const quick = e.timeStamp - lastTap < 350; lastTap = e.timeStamp;
+    if (!quick) return;
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    if (!pad.contains(e.target)) e.target.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: t.clientX, clientY: t.clientY }));
+  }, { passive: false });
+  for (const t of ['gesturestart', 'gesturechange']) addEventListener(t, e => e.preventDefault());
+
   // the pad is only up during a fight; menus and character select are already tap-driven (the canvas click handler)
   (function show() {
     requestAnimationFrame(show);

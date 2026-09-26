@@ -28,9 +28,21 @@ const ok = (n, c) => console.log((c ? 'PASS ' : 'FAIL ') + n);
 ok(`drag holds right (got ${mid.join(' ') || 'nothing'})`, mid.includes('+KeyD') && !mid.includes('CANCEL'));
 ok(`lift releases it (got ${end.join(' ')})`, end.at(-1) === '-KeyD');
 
+// a quick double tap on jump is two jumps (the second tap's touchend is cancelled so iOS can't zoom on it)
+const jb = await js(`(r => [r.left + r.width / 2, r.top + r.height / 2])(document.querySelector('[data-act=jump]').getBoundingClientRect())`);
+await js('log.length = 0');
+for (let k = 0; k < 2; k++) { await touch('touchStart', ...jb); await wait(40); await touch('touchEnd'); await wait(60); }
+const jumps = await js('log.slice()');
+ok(`double tap jump is two jumps (got ${jumps.join(' ')})`, jumps.join() === '+Space,-Space,+Space,-Space');
+
 // a tap on the home menu still clicks through to the game (touch-action: none only stops pans / zooms, not taps)
 await js('goHome(); 0'); await wait(100);
 const [tx, ty] = await js(`(r => [r.left + r.width / 2, r.top + (menuY() - 10) * r.height / H])(cv.getBoundingClientRect())`);
 await touch('touchStart', tx, ty); await touch('touchEnd'); await wait(100);
 ok(`menu tap picks "${await js('HOME_MENU[0]')}"`, await js('picking'));
+
+// two quick taps on a menu are still two clicks, even though the second touchend is cancelled
+await js(`picking = false; window.clicks = 0; cv.addEventListener('click', () => clicks++); 0`);
+for (let k = 0; k < 2; k++) { await touch('touchStart', tx, ty + 4 * 46 * await js('cv.getBoundingClientRect().height / H')); await touch('touchEnd'); await wait(80); } // "music", which just steps the volume
+ok(`double tap on a menu is two clicks (got ${await js('clicks')})`, await js('clicks') === 2);
 ws.close(); chrome.kill();
