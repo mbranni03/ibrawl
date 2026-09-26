@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>…</title>
+<body style="margin:0">
+<!-- run: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu \
+     --virtual-time-budget=3000 --dump-dom "file://$PWD/tools/touch-check.html?touch" | grep -o '<title>[^<]*</title>' -->
+<script>
+// stubs for the two globals touch.js reads out of index.html
+let paused = false;
+let binds = [{ left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', jump: 'Space', attack: 'KeyJ', heavy: 'KeyK', special: 'KeyL', grab: 'KeyI', dodge: 'ShiftLeft' }, {}];
+const log = [];
+addEventListener('error', e => document.title = 'ERROR ' + e.message + ' @' + e.lineno);
+addEventListener('keydown', e => log.push('+' + e.code));
+addEventListener('keyup', e => log.push('-' + e.code));
+</script>
+<script src="../src/touch.js"></script>
+<script>
+const out = [], ok = (n, c) => out.push((c ? 'PASS' : 'FAIL') + ' ' + n);
+const hit = sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+const fire = (type, id, [x, y]) => document.elementFromPoint(x, y).dispatchEvent(
+  new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+
+ok('pad rendered', document.querySelectorAll('#pad .b').length === 6 && document.getElementById('knob'));
+
+// press â the bound keydown, release â keyup
+fire('pointerdown', 1, hit('[data-act=attack]'));
+const pressed = log.slice(); log.length = 0;
+fire('pointerup', 1, hit('[data-act=attack]'));
+ok('press fires keydown', pressed.join() === '+KeyJ');
+ok('release fires keyup', log.join() === '-KeyJ');
+
+// the stick: centre is a rest zone, leaning holds a direction, a corner holds two
+const stick = document.getElementById('stick'), sr = stick.getBoundingClientRect();
+const lean = (type, id, fx, fy) => stick.dispatchEvent(new PointerEvent(type, { pointerId: id, bubbles: true, cancelable: true,
+  clientX: sr.left + sr.width * fx, clientY: sr.top + sr.height * fy }));
+log.length = 0;
+lean('pointerdown', 2, 0.5, 0.5);
+ok('stick centre holds nothing', log.length === 0);
+lean('pointermove', 2, 1, 0.5);
+ok('stick right holds right', log.join() === '+KeyD');
+log.length = 0;
+lean('pointermove', 2, 1, 0);
+ok('stick corner holds a diagonal', log.join() === '+KeyW');
+log.length = 0;
+lean('pointerup', 2, 1, 0);
+ok('lifting releases both', new Set(log).size === 2 && log.every(k => k[0] === '-'));
+
+// two fingers at once, and a pause drops whatever is held
+log.length = 0;
+fire('pointerdown', 3, hit('[data-act=jump]'));
+fire('pointerdown', 4, hit('[data-act=grab]'));
+ok('multi-touch holds both', log.join() === '+Space,+KeyI' && document.querySelectorAll('#pad .b.on').length === 2);
+paused = true;
+requestAnimationFrame(() => {
+  ok('pause hides pad and releases keys', document.getElementById('pad').style.display === 'none'
+    && !document.querySelector('#pad .b.on') && !document.getElementById('knob').style.transform);
+  document.title = out.join(' | ');
+});
+</script>
