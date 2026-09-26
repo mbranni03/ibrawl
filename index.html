@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Supa Smackdown</title>
 <link rel="icon" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,7 @@
     background: radial-gradient(ellipse at center, #3a352e 0%, #26231f 55%, #1b1916 100%),
                 repeating-linear-gradient(-45deg, #0000 0 7px, #ffffff08 7px 8px);
     background-blend-mode: screen; }
-  canvas { display: block; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9;
+  canvas { display: block; width: min(100vw, calc(100vh * 16 / 9)); width: min(100vw, calc(100dvh * 16 / 9)); aspect-ratio: 16 / 9; /* dvh: fit what the browser bars leave */
     box-shadow: 0 0 0 1px #0006, 0 10px 40px #000a; }
 </style>
 </head>

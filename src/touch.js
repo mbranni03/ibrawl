@@ -7,8 +7,8 @@ if (matchMedia('(pointer: coarse)').matches || location.search.includes('touch')
   const DEAD = 0.35; // how far off centre the stick has to lean before a direction registers (so 8-way, with a rest zone)
 
   document.head.appendChild(document.createElement('style')).textContent = `
-    body { touch-action: manipulation; }
-    #pad { position: fixed; inset: 0; z-index: 9; pointer-events: none; user-select: none; -webkit-user-select: none;
+    html, body { touch-action: none; overscroll-behavior: none; } /* the page never scrolls or zooms: a drag is the game's, not a pan (which would cancel it) */
+    #pad { position: fixed; inset: 0; z-index: 9; pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; /* no iOS long-press menu on a held button */
       font: 700 14px Caveat, cursive; color: #f2ede2; }
     #pad .cl { position: absolute; bottom: max(3vh, env(safe-area-inset-bottom)); display: grid; gap: 7px; }
     #pad .cl.l { left: max(3vw, env(safe-area-inset-left)); }
@@ -22,9 +22,11 @@ if (matchMedia('(pointer: coarse)').matches || location.search.includes('touch')
     #knob.on { background: #e0523add; border-color: #f2ede2; }
     #pad .pb { position: absolute; top: max(2vh, env(safe-area-inset-top)); right: max(3vw, env(safe-area-inset-right));
       width: 42px; height: 42px; font-size: 18px; }
-    #rotate { display: none; position: fixed; z-index: 9; left: 50%; bottom: 6vh; transform: translateX(-50%);
-      padding: 8px 16px; border-radius: 20px; background: #26231fdd; color: #f2ede2; font: 700 18px Caveat, cursive; }
-    @media (orientation: portrait) { #rotate { display: block } }`;
+    @media (orientation: portrait) { /* held upright: the game across the top, the controls in the space under it */
+      body { place-items: start center; }
+      #pad { top: calc(100vw * 9 / 16); }
+      #pad .cl { bottom: auto; top: 50%; transform: translateY(-50%); }
+    }`;
 
   const pad = Object.assign(document.createElement('div'), { id: 'pad' });
   const el = (tag, parent, props) => parent.appendChild(Object.assign(document.createElement(tag), props));
@@ -36,7 +38,6 @@ if (matchMedia('(pointer: coarse)').matches || location.search.includes('touch')
   el('div', pad, { className: 'pb', textContent: '⏸' })
     .addEventListener('pointerdown', e => { e.preventDefault(); dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' })); });
   document.body.appendChild(pad);
-  el('div', document.body, { id: 'rotate', textContent: '↻ turn your phone sideways' });
 
   // one finger on the stick (→ up to two directions at once, for diagonals), one finger per button;
   // `down` is what's currently held, so the diff against it decides which key events to fire.
